@@ -99,6 +99,16 @@ func (p *parser) expect(k Kind) Token {
 	return tok
 }
 
+// peekKind returns the Kind of the token n positions ahead of the current one,
+// or EOF if that position is past the end of the token stream.
+func (p *parser) peekKind(n int) Kind {
+	i := p.i + n
+	if i >= len(p.toks) {
+		return EOF
+	}
+	return p.toks[i].Kind
+}
+
 // ensureProgress guarantees a parsing loop makes forward progress: if the token
 // index has not advanced past start (and we are not at EOF), it records a
 // recovery error and force-advances one token. Every loop that calls a
@@ -344,7 +354,7 @@ func (p *parser) parseFile() *DesignFile {
 		switch p.cur().Kind {
 		case PACKAGE:
 			// Peek: PACKAGE BODY → deferred
-			if p.i+1 < len(p.toks) && p.toks[p.i+1].Kind == BODY {
+			if p.peekKind(1) == BODY {
 				p.errorf(p.cur().Pos, "P1a: package body not yet parsed")
 				return df
 			}
@@ -727,13 +737,10 @@ func (p *parser) parseName() Expr {
 	// Attribute tick: 'attrname sequences.  TICK must be followed by an
 	// identifier or keyword to be an attribute (not a character literal).
 	for p.at(TICK) {
-		// Peek at the token after the tick.
-		if p.i+1 >= len(p.toks) {
-			break
-		}
-		after := p.toks[p.i+1]
-		isAttrName := after.Kind == IDENT || after.Kind == EXTIDENT ||
-			(after.Kind > kwStart && after.Kind < kwEnd)
+		// Peek at the token after the tick. peekKind returns EOF past the end,
+		// and EOF is not an attr-name kind, so the loop still breaks correctly.
+		ak := p.peekKind(1)
+		isAttrName := ak == IDENT || ak == EXTIDENT || (ak > kwStart && ak < kwEnd)
 		if !isAttrName {
 			break
 		}
@@ -751,7 +758,7 @@ func (p *parser) parseName() Expr {
 	// Qualified expression: mark'(...). The attribute loop above already
 	// consumed any 'attr; a remaining tick directly before '(' is qualification,
 	// not an attribute or a character literal.
-	if p.at(TICK) && p.i+1 < len(p.toks) && p.toks[p.i+1].Kind == LPAREN {
+	if p.at(TICK) && p.peekKind(1) == LPAREN {
 		tick := p.advance() // consume '
 		return &QualifiedExpr{Mark: name, Tick: tick.Pos, X: p.parseParenOrAggregate()}
 	}

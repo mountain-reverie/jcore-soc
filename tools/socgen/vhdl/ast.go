@@ -166,6 +166,7 @@ func (n *ParenExpr)  End() Pos { return n.Rparen + 1 }
 
 // QualifiedExpr is a qualified expression: Mark'(X), where X is a *ParenExpr or
 // *Aggregate. (The tick distinguishes it from an attribute name and a char literal.)
+// Tick is the apostrophe's position, retained for diagnostics.
 type QualifiedExpr struct{ Mark Expr; Tick Pos; X Expr }
 
 func (n *QualifiedExpr) Pos() Pos { return n.Mark.Pos() }

@@ -217,6 +217,18 @@ func TestQualifiedExpr(t *testing.T) {
 	if id, ok := mustParseExpr(t, "x'high").(*Ident); !ok || id.Name != "x'high" {
 		t.Fatalf("expected Ident x'high, got %#v", mustParseExpr(t, "x'high"))
 	}
+
+	// round-trip: print the parsed qualified expr and reparse to an equal AST.
+	src := "std_logic_vector'(others => '0')"
+	q3 := mustParseExpr(t, src)
+	var b strings.Builder
+	printExpr(&b, q3)
+	if out := b.String(); out != src {
+		t.Fatalf("print mismatch: got %q want %q", out, src)
+	}
+	if !equalAST(q3, mustParseExpr(t, b.String())) {
+		t.Fatal("qualified expr not AST-stable across print/reparse")
+	}
 }
 
 func TestDeferredUnitTagged(t *testing.T) {
