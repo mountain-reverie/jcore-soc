@@ -8,6 +8,7 @@ type DesignUnit interface{ Node; unitNode() }
 type Decl interface{ Node; declNode() }
 type Expr interface{ Node; exprNode() }
 type TypeDef interface{ Node; typeDefNode() }
+type Stmt interface{ Node; stmtNode() }
 
 type DesignFile struct {
 	Context []Node // *LibraryClause / *UseClause
@@ -56,6 +57,48 @@ func (n *EntityDecl)  End() Pos {
 	if k := len(n.Generics); k > 0 { return n.Generics[k-1].End() }
 	return n.P
 }
+
+// ArchitectureBody is `architecture name of entity is <decls> begin <stmts> end;`.
+type ArchitectureBody struct {
+	P      Pos
+	Name   string
+	Entity string
+	Decls  []Decl
+	Stmts  []Stmt
+}
+
+func (n *ArchitectureBody) Pos() Pos { return n.P }
+func (n *ArchitectureBody) End() Pos {
+	if k := len(n.Stmts); k > 0 { return n.Stmts[k-1].End() }
+	if k := len(n.Decls); k > 0 { return n.Decls[k-1].End() }
+	return n.P
+}
+func (n *ArchitectureBody) unitNode() {}
+
+// CondWaveform is one `value when cond` arm of a conditional signal assignment.
+// The final `else value` arm has Cond == nil. (Populated in a later task.)
+type CondWaveform struct {
+	Value Expr
+	Cond  Expr
+}
+
+// ConcurrentSignalAssign is `[label:] target <= ... ;`. A simple assignment sets
+// Waveform (Conds nil); a conditional assignment sets Conds (Waveform nil).
+type ConcurrentSignalAssign struct {
+	P        Pos
+	Label    string
+	Target   Expr
+	Waveform Expr
+	Conds    []*CondWaveform
+}
+
+func (n *ConcurrentSignalAssign) Pos() Pos { return n.P }
+func (n *ConcurrentSignalAssign) End() Pos {
+	if n.Waveform != nil { return n.Waveform.End() }
+	if k := len(n.Conds); k > 0 && n.Conds[k-1].Value != nil { return n.Conds[k-1].Value.End() }
+	return n.Target.End()
+}
+func (n *ConcurrentSignalAssign) stmtNode() {}
 
 // declarations
 type ConstantDecl  struct{ P Pos; Names []string; SubtypeMark string; Constraint Expr; Default Expr }

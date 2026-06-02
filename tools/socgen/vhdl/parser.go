@@ -368,8 +368,10 @@ func (p *parser) parseFile() *DesignFile {
 				df.Units = append(df.Units, u)
 			}
 		case ARCHITECTURE:
-			p.errorf(p.cur().Pos, "deferred: architecture body not yet parsed")
-			return df
+			u := p.parseArchitectureBody()
+			if u != nil {
+				df.Units = append(df.Units, u)
+			}
 		case CONFIGURATION:
 			p.errorf(p.cur().Pos, "deferred: configuration not yet parsed")
 			return df
@@ -493,6 +495,74 @@ func (p *parser) parseEntityDecl() *EntityDecl {
 	}
 	p.expect(SEMICOLON)
 	return &EntityDecl{P: pos, Name: name, Generics: generics, Ports: ports, Decls: decls}
+}
+
+// parseArchitectureBody parses `architecture name of entity is <decls> begin
+// <concurrent stmts> end [architecture] [name] ;`.
+func (p *parser) parseArchitectureBody() *ArchitectureBody {
+	pos := p.expect(ARCHITECTURE).Pos
+	name := p.expect(IDENT).Lit
+	p.expect(OF)
+	entity := p.expect(IDENT).Lit
+	p.expect(IS)
+	// declarative part
+	var decls []Decl
+	for !p.at(BEGIN) && !p.at(END) && !p.at(EOF) {
+		start := p.i
+		if d := p.parseDecl(); d != nil {
+			decls = append(decls, d)
+		}
+		p.ensureProgress(start, "architecture declaration")
+	}
+	p.expect(BEGIN)
+	// concurrent statement part
+	var stmts []Stmt
+	for !p.at(END) && !p.at(EOF) {
+		start := p.i
+		if s := p.parseConcurrentStmt(); s != nil {
+			stmts = append(stmts, s)
+		}
+		p.ensureProgress(start, "concurrent statement")
+	}
+	p.expect(END)
+	p.accept(ARCHITECTURE)
+	if p.at(IDENT) {
+		p.advance()
+	}
+	p.expect(SEMICOLON)
+	return &ArchitectureBody{P: pos, Name: name, Entity: entity, Decls: decls, Stmts: stmts}
+}
+
+// parseConcurrentStmt parses ONE concurrent statement. For P1c-1 Task 1 it
+// supports only simple concurrent signal assignment ([label:] target <= expr ;);
+// any other concurrent statement is deferred (file excluded). Later tasks extend
+// the dispatch (instantiation, conditional assignment, generate).
+func (p *parser) parseConcurrentStmt() Stmt {
+	pos := p.cur().Pos
+	label := ""
+	// optional `label :` (an IDENT directly followed by COLON)
+	if p.at(IDENT) && p.peekKind(1) == COLON {
+		label = p.advance().Lit
+		p.advance() // consume COLON
+	}
+	// statements introduced by a keyword (process/generate/block/...) or a
+	// labelled instantiation (entity/component/configuration) are deferred here.
+	switch p.cur().Kind {
+	case PROCESS, GENERATE, BLOCK, ENTITY, COMPONENT, CONFIGURATION, FOR, IF, ASSERT, WITH, POSTPONED:
+		p.errorf(p.cur().Pos, "deferred: %v concurrent statement not yet parsed", p.cur().Kind)
+		return nil
+	}
+	// otherwise: a name. If `<=` follows, it's a simple concurrent signal
+	// assignment; otherwise defer (instantiation etc. — later tasks).
+	target := p.parseName()
+	if p.at(LE) {
+		p.advance() // consume '<='
+		wave := p.parseExpr()
+		p.expect(SEMICOLON)
+		return &ConcurrentSignalAssign{P: pos, Label: label, Target: target, Waveform: wave}
+	}
+	p.errorf(p.cur().Pos, "deferred: concurrent statement not yet parsed")
+	return nil
 }
 
 // parseDecl dispatches to the appropriate declaration parser.

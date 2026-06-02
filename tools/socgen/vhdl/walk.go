@@ -46,6 +46,28 @@ func Walk(v Visitor, node Node) {
 		for _, d := range n.Decls {
 			Walk(v, d)
 		}
+	case *ArchitectureBody:
+		for _, d := range n.Decls {
+			Walk(v, d)
+		}
+		for _, s := range n.Stmts {
+			Walk(v, s)
+		}
+
+	// statements
+	case *ConcurrentSignalAssign:
+		Walk(v, n.Target)
+		if n.Waveform != nil {
+			Walk(v, n.Waveform)
+		}
+		for _, c := range n.Conds {
+			if c.Value != nil {
+				Walk(v, c.Value)
+			}
+			if c.Cond != nil {
+				Walk(v, c.Cond)
+			}
+		}
 
 	// declarations
 	case *ConstantDecl:

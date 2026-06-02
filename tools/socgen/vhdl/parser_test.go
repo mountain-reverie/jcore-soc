@@ -376,7 +376,7 @@ func TestParseGroupDecls(t *testing.T) {
 }
 
 func TestDeferredUnitTagged(t *testing.T) {
-	_, errs := parse(t, "architecture a of e is\nbegin\nend architecture;")
+	_, errs := parse(t, "configuration c of e is\nend configuration;")
 	if len(errs) == 0 {
 		t.Fatal("expected a deferred-unit error")
 	}
@@ -422,6 +422,58 @@ func TestEntityStatementPartDeferred(t *testing.T) {
 	_, errs := ParseFile(NewFileSet(), "t.vhd", []byte("entity e is\nbegin\n  assert true;\nend entity;"))
 	if len(errs) == 0 {
 		t.Fatal("expected a deferred error for entity statement part")
+	}
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Error(), "deferred") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("want a 'deferred' error, got %v", errs)
+	}
+}
+
+func TestParseArchitectureSimple(t *testing.T) {
+	src := `architecture rtl of e is
+  signal x : std_logic;
+begin
+  x <= a;
+  y <= a and b;
+end architecture rtl;`
+	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
+	}
+	arch, ok := df.Units[0].(*ArchitectureBody)
+	if !ok || arch.Name != "rtl" || arch.Entity != "e" {
+		t.Fatalf("arch: %#v", df.Units[0])
+	}
+	if len(arch.Decls) != 1 {
+		t.Fatalf("decls: %d", len(arch.Decls))
+	}
+	if len(arch.Stmts) != 2 {
+		t.Fatalf("stmts: %d", len(arch.Stmts))
+	}
+	if _, ok := arch.Stmts[0].(*ConcurrentSignalAssign); !ok {
+		t.Fatalf("stmt0: %#v", arch.Stmts[0])
+	}
+	// round-trip
+	out := Print(df)
+	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
+	if len(errs2) != 0 || !equalAST(df, df2) {
+		t.Fatalf("architecture not AST-stable: errs=%v\n%s", errs2, out)
+	}
+}
+
+func TestParseArchitectureWithProcessDeferred(t *testing.T) {
+	src := `architecture rtl of e is
+begin
+  process(clk) begin x <= a; end process;
+end architecture;`
+	_, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
+	if len(errs) == 0 {
+		t.Fatal("expected a deferred error for a process")
 	}
 	found := false
 	for _, e := range errs {

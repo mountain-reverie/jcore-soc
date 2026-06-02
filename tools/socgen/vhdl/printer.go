@@ -36,6 +36,46 @@ func printUnit(b *strings.Builder, u DesignUnit) {
 		printPackageDecl(b, n)
 	case *EntityDecl:
 		printEntityDecl(b, n)
+	case *ArchitectureBody:
+		printArchitectureBody(b, n)
+	}
+}
+
+func printArchitectureBody(b *strings.Builder, n *ArchitectureBody) {
+	b.WriteString("architecture ")
+	b.WriteString(n.Name)
+	b.WriteString(" of ")
+	b.WriteString(n.Entity)
+	b.WriteString(" is\n")
+	for _, d := range n.Decls {
+		b.WriteString("  ")
+		printDecl(b, d, "  ")
+		b.WriteByte('\n')
+	}
+	b.WriteString("begin\n")
+	for _, s := range n.Stmts {
+		b.WriteString("  ")
+		printStmt(b, s, "  ")
+		b.WriteByte('\n')
+	}
+	b.WriteString("end architecture;\n")
+}
+
+// printStmt prints a concurrent (or, later, sequential) statement.
+func printStmt(b *strings.Builder, s Stmt, indent string) {
+	switch n := s.(type) {
+	case *ConcurrentSignalAssign:
+		if n.Label != "" {
+			b.WriteString(n.Label)
+			b.WriteString(" : ")
+		}
+		printExpr(b, n.Target)
+		b.WriteString(" <= ")
+		if n.Waveform != nil {
+			printExpr(b, n.Waveform)
+		}
+		// (conditional Conds form is added in a later task)
+		b.WriteByte(';')
 	}
 }
 
