@@ -493,11 +493,61 @@ func (p *parser) parseDecl() Decl {
 		return p.parseTypeDecl()
 	case COMPONENT:
 		return p.parseComponentDecl()
+	case FUNCTION, PROCEDURE, PURE, IMPURE:
+		return p.parseSubprogramDecl()
 	default:
 		p.errorf(tok.Pos, "unexpected token %v %q in declaration", tok.Kind, tok.Lit)
 		p.advance() // avoid infinite loop
 		return nil
 	}
+}
+
+// parseSubprogramDecl parses a subprogram SPECIFICATION:
+//
+//	[pure|impure] function designator [(params)] return mark ;
+//	procedure designator [(params)] ;
+//
+// A body (`... is ...`) is deferred.
+func (p *parser) parseSubprogramDecl() Decl {
+	pos := p.cur().Pos
+	var pure, impure bool
+	if p.accept(PURE) {
+		pure = true
+	} else if p.accept(IMPURE) {
+		impure = true
+	}
+	isProc := false
+	if p.accept(PROCEDURE) {
+		isProc = true
+	} else {
+		p.expect(FUNCTION)
+	}
+	// designator: identifier or operator-symbol string literal
+	var desig string
+	switch p.cur().Kind {
+	case IDENT, STRINGLIT:
+		desig = p.advance().Lit
+	default:
+		t := p.cur()
+		p.errorf(t.Pos, "expected subprogram designator, got %v %q", t.Kind, t.Lit)
+	}
+	var params []*InterfaceDecl
+	if p.at(LPAREN) {
+		params = p.parseInterfaceList()
+	}
+	var ret string
+	if !isProc {
+		p.expect(RETURN)
+		ret = p.parseDottedName()
+	}
+	d := &SubprogramDecl{P: pos, IsProcedure: isProc, Pure: pure, Impure: impure, Designator: desig, Params: params, ReturnMark: ret}
+	if p.at(IS) {
+		// subprogram body — deferred (not parsed in this phase)
+		p.errorf(p.cur().Pos, "deferred: subprogram body not yet parsed")
+		return d
+	}
+	p.expect(SEMICOLON)
+	return d
 }
 
 // parseConstantOrSignal parses CONSTANT or SIGNAL declarations.

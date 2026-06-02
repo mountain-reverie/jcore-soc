@@ -126,6 +126,33 @@ func printDecl(b *strings.Builder, d Decl, indent string) {
 		printTypeDecl(b, n, indent)
 	case *ComponentDecl:
 		printComponentDecl(b, n, indent)
+	case *SubprogramDecl:
+		if n.Pure {
+			b.WriteString("pure ")
+		} else if n.Impure {
+			b.WriteString("impure ")
+		}
+		if n.IsProcedure {
+			b.WriteString("procedure ")
+		} else {
+			b.WriteString("function ")
+		}
+		b.WriteString(n.Designator)
+		if len(n.Params) > 0 {
+			b.WriteByte('(')
+			for i, prm := range n.Params {
+				if i > 0 {
+					b.WriteString("; ")
+				}
+				printInterfaceDecl(b, prm)
+			}
+			b.WriteByte(')')
+		}
+		if !n.IsProcedure {
+			b.WriteString(" return ")
+			b.WriteString(n.ReturnMark)
+		}
+		b.WriteByte(';')
 	}
 }
 

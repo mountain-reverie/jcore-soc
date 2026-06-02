@@ -64,18 +64,32 @@ type TypeDecl      struct{ P Pos; Name string; Def TypeDef }
 type ComponentDecl struct{ P Pos; Name string; Generics []*InterfaceDecl; Ports []*InterfaceDecl }
 type InterfaceDecl struct{ P Pos; Names []string; Mode string; SubtypeMark string; Constraint Expr; Default Expr } // Mode: "" | "in" | "out" | "inout" | "buffer"
 
-func (n *ConstantDecl)  Pos() Pos { return n.P }
-func (n *SignalDecl)    Pos() Pos { return n.P }
-func (n *SubtypeDecl)   Pos() Pos { return n.P }
-func (n *TypeDecl)      Pos() Pos { return n.P }
-func (n *ComponentDecl) Pos() Pos { return n.P }
-func (n *InterfaceDecl) Pos() Pos { return n.P }
+// SubprogramDecl is a function/procedure specification (declaration). Bodies are
+// deferred. Designator is an identifier or a string-literal operator symbol.
+type SubprogramDecl struct {
+	P           Pos
+	IsProcedure bool
+	Pure        bool
+	Impure      bool
+	Designator  string
+	Params      []*InterfaceDecl
+	ReturnMark  string // function return type mark; "" for procedures
+}
 
-func (n *ConstantDecl)  declNode() {}
-func (n *SignalDecl)    declNode() {}
-func (n *SubtypeDecl)   declNode() {}
-func (n *TypeDecl)      declNode() {}
-func (n *ComponentDecl) declNode() {}
+func (n *ConstantDecl)   Pos() Pos { return n.P }
+func (n *SignalDecl)     Pos() Pos { return n.P }
+func (n *SubtypeDecl)    Pos() Pos { return n.P }
+func (n *TypeDecl)       Pos() Pos { return n.P }
+func (n *ComponentDecl)  Pos() Pos { return n.P }
+func (n *InterfaceDecl)  Pos() Pos { return n.P }
+func (n *SubprogramDecl) Pos() Pos { return n.P }
+
+func (n *ConstantDecl)   declNode() {}
+func (n *SignalDecl)     declNode() {}
+func (n *SubtypeDecl)    declNode() {}
+func (n *TypeDecl)       declNode() {}
+func (n *ComponentDecl)  declNode() {}
+func (n *SubprogramDecl) declNode() {}
 
 func (n *ConstantDecl) End() Pos {
 	if n.Default != nil { return n.Default.End() }
@@ -92,6 +106,12 @@ func (n *TypeDecl)    End() Pos { if n.Def != nil { return n.Def.End() }; return
 func (n *ComponentDecl) End() Pos {
 	if k := len(n.Ports); k > 0 { return n.Ports[k-1].End() }
 	if k := len(n.Generics); k > 0 { return n.Generics[k-1].End() }
+	return n.P
+}
+func (n *SubprogramDecl) End() Pos {
+	if k := len(n.Params); k > 0 {
+		return n.Params[k-1].End()
+	}
 	return n.P
 }
 func (n *InterfaceDecl) End() Pos {

@@ -231,6 +231,45 @@ func TestQualifiedExpr(t *testing.T) {
 	}
 }
 
+func TestParseSubprogramDecls(t *testing.T) {
+	ds := parseDecls(t, `
+		function to_slv(b : std_logic; s : integer) return std_logic_vector;
+		procedure read(M : inout ram_t; P : in integer);
+		pure function f return integer;
+		impure function g(x : integer) return bit;`)
+	if len(ds) != 4 {
+		t.Fatalf("got %d decls", len(ds))
+	}
+	f0, ok := ds[0].(*SubprogramDecl)
+	if !ok || f0.IsProcedure || f0.Designator != "to_slv" || len(f0.Params) != 2 || f0.ReturnMark != "std_logic_vector" {
+		t.Fatalf("func0: %#v", ds[0])
+	}
+	p1, ok := ds[1].(*SubprogramDecl)
+	if !ok || !p1.IsProcedure || p1.Designator != "read" || len(p1.Params) != 2 {
+		t.Fatalf("proc1: %#v", ds[1])
+	}
+	if f2, ok := ds[2].(*SubprogramDecl); !ok || !f2.Pure || len(f2.Params) != 0 || f2.ReturnMark != "integer" {
+		t.Fatalf("pure func2: %#v", ds[2])
+	}
+	if f3, ok := ds[3].(*SubprogramDecl); !ok || !f3.Impure || f3.Designator != "g" {
+		t.Fatalf("impure func3: %#v", ds[3])
+	}
+
+	// round-trip: the parsed decls must survive print->reparse.
+	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte("package p is\nfunction to_slv(b : std_logic; s : integer) return std_logic_vector;\nend package;"))
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
+	}
+	out := Print(df)
+	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
+	if len(errs2) != 0 {
+		t.Fatalf("reparse errs: %v\n%s", errs2, out)
+	}
+	if !equalAST(df, df2) {
+		t.Fatalf("subprogram decl not AST-stable:\n%s", out)
+	}
+}
+
 func TestDeferredUnitTagged(t *testing.T) {
 	_, errs := parse(t, "architecture a of e is\nbegin\nend architecture;")
 	if len(errs) == 0 {

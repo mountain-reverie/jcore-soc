@@ -81,6 +81,10 @@ func Walk(v Visitor, node Node) {
 		if n.Default != nil {
 			Walk(v, n.Default)
 		}
+	case *SubprogramDecl:
+		for _, prm := range n.Params {
+			Walk(v, prm)
+		}
 
 	// type definitions
 	case *EnumDef:
