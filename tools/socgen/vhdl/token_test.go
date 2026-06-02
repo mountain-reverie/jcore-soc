@@ -21,3 +21,12 @@ func TestKindString(t *testing.T) {
 		t.Fatalf("IDENT.String() = %q", IDENT.String())
 	}
 }
+
+func TestFileSetPosition(t *testing.T) {
+	fs := NewFileSet()
+	f := fs.AddFile("t.vhd", len("ab\ncd"))
+	f.AddLine(3) // line 2 starts at offset 3
+	if got := fs.Position(f.Pos(4)); got.Line != 2 || got.Column != 2 {
+		t.Fatalf("Pos(4) -> %+v; want line 2 col 2", got)
+	}
+}

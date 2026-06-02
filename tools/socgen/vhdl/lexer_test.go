@@ -4,7 +4,8 @@ import "testing"
 
 // kinds runs the lexer to EOF and returns the kind sequence (sans EOF).
 func kinds(src string) []Kind {
-	l := NewLexer([]byte(src), "t.vhd")
+	b := []byte(src)
+	l := NewLexer(b, NewFileSet().AddFile("t.vhd", len(b)))
 	var ks []Kind
 	for {
 		tok := l.Next()
@@ -47,7 +48,8 @@ func TestLexCompoundDelims(t *testing.T) {
 }
 
 func TestLexIntAndComment(t *testing.T) {
-	l := NewLexer([]byte("123 -- hi\n"), "t.vhd")
+	src := []byte("123 -- hi\n")
+	l := NewLexer(src, NewFileSet().AddFile("t.vhd", len(src)))
 	if tok := l.Next(); tok.Kind != INT || tok.Lit != "123" {
 		t.Fatalf("got %v %q", tok.Kind, tok.Lit)
 	}
@@ -73,7 +75,8 @@ func TestLexLiterals(t *testing.T) {
 		{`\ext id\`, EXTIDENT, `\ext id\`},
 	}
 	for _, c := range cases {
-		l := NewLexer([]byte(c.src), "t.vhd")
+		b := []byte(c.src)
+		l := NewLexer(b, NewFileSet().AddFile("t.vhd", len(b)))
 		tok := l.Next()
 		if tok.Kind != c.kind || tok.Lit != c.lit {
 			t.Fatalf("%q -> %v %q; want %v %q", c.src, tok.Kind, tok.Lit, c.kind, c.lit)
@@ -89,7 +92,7 @@ func TestLexTickVsChar(t *testing.T) {
 		t.Fatalf("clk'event -> %v", got)
 	}
 	// char literal in expression context
-	if l := NewLexer([]byte(`'0'`), "t"); l.Next().Kind != CHARLIT {
+	if l := NewLexer([]byte(`'0'`), nil); l.Next().Kind != CHARLIT {
 		t.Fatalf("'0' should be CHARLIT")
 	}
 }

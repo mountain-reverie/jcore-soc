@@ -2,17 +2,19 @@ package vhdl
 
 // Lexer holds the state for lexing a single VHDL source file.
 type Lexer struct {
-	src     []byte
-	file    string
-	off     int  // current byte offset into src
-	line    int  // 1-based
-	col     int  // 1-based
-	prevKind Kind // Kind of the last emitted token (used for tick disambiguation)
+	src      []byte
+	off      int   // current byte offset into src
+	prevKind Kind  // Kind of the last emitted token (used for tick disambiguation)
+	file     *File // tracks line starts and base offset for Pos encoding
 }
 
-// NewLexer returns a new Lexer for the given source bytes.
-func NewLexer(src []byte, file string) *Lexer {
-	return &Lexer{src: src, file: file, line: 1, col: 1}
+// NewLexer returns a new Lexer for the given source bytes and File.
+// If f is nil, a throwaway FileSet/File is created so the lexer never nil-derefs.
+func NewLexer(src []byte, f *File) *Lexer {
+	if f == nil {
+		f = NewFileSet().AddFile("", len(src))
+	}
+	return &Lexer{src: src, file: f}
 }
 
 // peek returns the byte at the current offset, or 0 if at end.
@@ -32,7 +34,7 @@ func (l *Lexer) peekAt(n int) byte {
 	return l.src[i]
 }
 
-// advance consumes one byte, updating line/col tracking.
+// advance consumes one byte, recording line starts in the File.
 func (l *Lexer) advance() byte {
 	if l.off >= len(l.src) {
 		return 0
@@ -40,10 +42,7 @@ func (l *Lexer) advance() byte {
 	c := l.src[l.off]
 	l.off++
 	if c == '\n' {
-		l.line++
-		l.col = 1
-	} else {
-		l.col++
+		l.file.AddLine(l.off) // first byte of the new line
 	}
 	return c
 }
@@ -94,10 +93,10 @@ func (l *Lexer) Next() Token {
 	}
 
 	if l.off >= len(l.src) {
-		return l.emit(Token{Kind: EOF, Pos: Pos{Line: l.line, Col: l.col, Offset: l.off}})
+		return l.emit(Token{Kind: EOF, Pos: l.file.Pos(l.off)})
 	}
 
-	startPos := Pos{Line: l.line, Col: l.col, Offset: l.off}
+	startPos := l.file.Pos(l.off)
 	c := l.peek()
 
 	// -- comment

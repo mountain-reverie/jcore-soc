@@ -15,7 +15,7 @@ func (n *DesignFile) Pos() Pos {
 	if len(n.Units) > 0 {
 		return n.Units[0].Pos()
 	}
-	return Pos{}
+	return NoPos
 }
 
 type LibraryClause struct{ P Pos; Names []string }

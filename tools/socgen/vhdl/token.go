@@ -1,6 +1,9 @@
 package vhdl
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
 
 // Kind is the lexical category of a token.
 type Kind int
@@ -232,9 +235,67 @@ func lower(s string) string {
 	return string(b)
 }
 
-// Pos is a source position.
-type Pos struct {
-	Line, Col, Offset int
+// Pos is a compact encoding of a source position (a 1-based byte offset into a
+// File within a FileSet). NoPos is the zero value.
+type Pos int
+
+const NoPos Pos = 0
+
+// Position is a resolved, human-readable source position.
+type Position struct {
+	Filename string
+	Offset   int // 0-based byte offset
+	Line     int // 1-based
+	Column   int // 1-based, in bytes
+}
+
+func (p Position) String() string {
+	if p.Filename == "" {
+		return fmt.Sprintf("%d:%d", p.Line, p.Column)
+	}
+	return fmt.Sprintf("%s:%d:%d", p.Filename, p.Line, p.Column)
+}
+
+// File tracks one source file's base offset and line starts.
+type File struct {
+	name  string
+	base  int   // Pos of the first byte (1-based across the FileSet)
+	size  int
+	lines []int // byte offset of the start of each line (lines[0]==0)
+}
+
+func (f *File) AddLine(offset int) { f.lines = append(f.lines, offset) }
+func (f *File) Pos(offset int) Pos { return Pos(f.base + offset) }
+func (f *File) Position(p Pos) Position {
+	off := int(p) - f.base
+	// binary-search lines for the greatest start <= off
+	i := sort.Search(len(f.lines), func(i int) bool { return f.lines[i] > off }) - 1
+	if i < 0 {
+		i = 0
+	}
+	return Position{Filename: f.name, Offset: off, Line: i + 1, Column: off - f.lines[i] + 1}
+}
+
+// FileSet maps Pos values back to Files.
+type FileSet struct {
+	base  int
+	files []*File
+}
+
+func NewFileSet() *FileSet { return &FileSet{base: 1} }
+func (s *FileSet) AddFile(name string, size int) *File {
+	f := &File{name: name, base: s.base, size: size, lines: []int{0}}
+	s.base += size + 1
+	s.files = append(s.files, f)
+	return f
+}
+func (s *FileSet) Position(p Pos) Position {
+	for _, f := range s.files {
+		if int(p) >= f.base && int(p) <= f.base+f.size {
+			return f.Position(p)
+		}
+	}
+	return Position{}
 }
 
 // Token is a lexed token.

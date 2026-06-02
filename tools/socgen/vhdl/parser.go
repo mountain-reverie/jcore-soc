@@ -15,7 +15,7 @@ type parser struct {
 // newParser lexes all tokens from src, dropping COMMENT tokens, and returns a
 // parser ready to consume the stream. The final EOF token is retained.
 func newParser(src []byte) *parser {
-	l := NewLexer(src, "")
+	l := NewLexer(src, nil)
 	toks := make([]Token, 0, len(src)/3+8) // rough capacity hint; minimise re-alloc
 	// Hard progress bound: every non-EOF token consumes >=1 source byte, so the
 	// total number of Next() calls cannot exceed len(src)+1. The cap is a
