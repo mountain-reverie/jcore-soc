@@ -307,6 +307,12 @@ func TestParseAttributeDecls(t *testing.T) {
 	if len(errs2) != 0 || !equalAST(df, df2) {
 		t.Fatalf("attr spec not AST-stable: errs=%v\n%s", errs2, out)
 	}
+
+	// malformed entity class (not a reserved word) must be rejected.
+	_, errs3 := ParseFile(NewFileSet(), "t.vhd", []byte("package p is\nattribute foo of x : notakeyword is 1;\nend package;"))
+	if len(errs3) == 0 {
+		t.Fatal("expected an error for non-keyword entity class")
+	}
 }
 
 func TestParseAliasDecls(t *testing.T) {

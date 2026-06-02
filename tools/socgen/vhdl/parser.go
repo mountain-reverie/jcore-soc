@@ -800,7 +800,13 @@ func (p *parser) parseAttribute() Decl {
 			entities = append(entities, p.parseEntityName())
 		}
 		p.expect(COLON)
-		class := p.advance().Kind // entity_class keyword (signal/subtype/variable/...)
+		classTok := p.advance()
+		class := classTok.Kind
+		if class <= kwStart || class >= kwEnd {
+			// entity_class must be a reserved word (signal/subtype/variable/...);
+			// reject non-keywords so malformed specs are excluded, not mis-parsed.
+			p.errorf(classTok.Pos, "expected entity class keyword, got %v %q", class, classTok.Lit)
+		}
 		p.expect(IS)
 		val := p.parseExpr()
 		p.expect(SEMICOLON)
