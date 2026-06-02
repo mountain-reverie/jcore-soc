@@ -255,6 +255,13 @@ func TestParseSubprogramDecls(t *testing.T) {
 		t.Fatalf("impure func3: %#v", ds[3])
 	}
 
+	// operator-symbol designator (string literal, quotes retained)
+	ds2 := parseDecls(t, `function "+"(a : bit; b : bit) return bit;`)
+	op, ok := ds2[0].(*SubprogramDecl)
+	if !ok || op.Designator != `"+"` {
+		t.Fatalf("operator designator: %#v", ds2[0])
+	}
+
 	// round-trip: the parsed decls must survive print->reparse.
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte("package p is\nfunction to_slv(b : std_logic; s : integer) return std_logic_vector;\nend package;"))
 	if len(errs) != 0 {

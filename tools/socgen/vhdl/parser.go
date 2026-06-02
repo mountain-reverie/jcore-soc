@@ -530,7 +530,11 @@ func (p *parser) parseSubprogramDecl() Decl {
 	default:
 		t := p.cur()
 		p.errorf(t.Pos, "expected subprogram designator, got %v %q", t.Kind, t.Lit)
+		p.advance() // consume the bad token so downstream steps do not re-error on it
 	}
+	// Params reuse parseInterfaceList (name : [mode] subtype). Object-class
+	// prefixes (constant/signal/variable) on a parameter are not handled; such
+	// a subprogram would error and its file be excluded. Not seen in the corpus.
 	var params []*InterfaceDecl
 	if p.at(LPAREN) {
 		params = p.parseInterfaceList()
@@ -542,7 +546,10 @@ func (p *parser) parseSubprogramDecl() Decl {
 	}
 	d := &SubprogramDecl{P: pos, IsProcedure: isProc, Pure: pure, Impure: impure, Designator: desig, Params: params, ReturnMark: ret}
 	if p.at(IS) {
-		// subprogram body — deferred (not parsed in this phase)
+		// Subprogram body: deferred in this phase. The `is` and body tokens are
+		// left unconsumed; the enclosing declarative loop's ensureProgress skips
+		// them (with further errors), so files containing subprogram bodies are
+		// excluded from round-trip rather than parsed. TODO: parse bodies in P1d.
 		p.errorf(p.cur().Pos, "deferred: subprogram body not yet parsed")
 		return d
 	}
