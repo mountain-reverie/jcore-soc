@@ -178,22 +178,22 @@ func printComponentDecl(b *strings.Builder, n *ComponentDecl, indent string) {
 	b.WriteString("end component;")
 }
 
-// printSubtypeIndication prints "mark" or "mark(constraint)" canonically.
-// For a ParenExpr constraint, the inner literal text is emitted directly so the result
-// is mark(inner) rather than mark((inner)).
+// printSubtypeIndication prints "mark", "mark(constraint)", or
+// "mark range <expr>" canonically. A ParenExpr or Aggregate constraint emits its
+// OWN surrounding parentheses, so we must not add a second pair here.
 func printSubtypeIndication(b *strings.Builder, mark string, constraint Expr) {
 	b.WriteString(mark)
-	if constraint == nil {
-		return
+	switch c := constraint.(type) {
+	case nil:
+		// no constraint
+	case *ParenExpr, *Aggregate:
+		printExpr(b, c) // c prints its own surrounding parentheses: mark(...)
+	default:
+		// a `range` constraint: `mark range <expr>` (parseSubtypeIndication's
+		// RANGE case stores a bare expr here)
+		b.WriteString(" range ")
+		printExpr(b, c)
 	}
-	b.WriteByte('(')
-	if p, ok := constraint.(*ParenExpr); ok {
-		// Unwrap: emit the inner literal directly.
-		printExpr(b, p.X)
-	} else {
-		printExpr(b, constraint)
-	}
-	b.WriteByte(')')
 }
 
 func printExpr(b *strings.Builder, e Expr) {
@@ -236,7 +236,29 @@ func printExpr(b *strings.Builder, e Expr) {
 		b.WriteByte('(')
 		printExpr(b, n.X)
 		b.WriteByte(')')
+	case *Aggregate:
+		b.WriteByte('(')
+		for i, e := range n.Elems {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			printElementAssoc(b, e)
+		}
+		b.WriteByte(')')
 	}
+}
+
+func printElementAssoc(b *strings.Builder, e *ElementAssoc) {
+	for i, c := range e.Choices {
+		if i > 0 {
+			b.WriteString(" | ")
+		}
+		printExpr(b, c)
+	}
+	if e.Choices != nil {
+		b.WriteString(" => ")
+	}
+	printExpr(b, e.X)
 }
 
 // equalAST reports structural equality between two AST nodes, ignoring Pos fields.

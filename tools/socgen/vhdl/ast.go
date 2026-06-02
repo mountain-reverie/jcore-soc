@@ -127,6 +127,27 @@ type BinaryExpr  struct{ X Expr; OpPos Pos; Op Kind; Y Expr }
 type UnaryExpr   struct{ OpPos Pos; Op Kind; X Expr } // abs / not / unary + / unary -
 type ParenExpr   struct{ Lparen Pos; X Expr; Rparen Pos }
 
+// Aggregate is a parenthesized element-association list: (e1, choice => e2, ...).
+type Aggregate struct{ Lparen Pos; Elems []*ElementAssoc; Rparen Pos }
+
+// ElementAssoc is one element of an Aggregate. Choices == nil means a positional
+// element; otherwise it is `choice {| choice} => X`. (`others` appears as an
+// *Ident in Choices.) ElementAssoc is a Node but not an Expr — it appears only
+// inside Aggregate.Elems.
+type ElementAssoc struct{ Choices []Expr; ArrowPos Pos; X Expr }
+
+func (n *Aggregate)    Pos() Pos { return n.Lparen }
+func (n *Aggregate)    End() Pos { return n.Rparen + 1 }
+func (n *Aggregate)    exprNode() {}
+
+func (n *ElementAssoc) Pos() Pos {
+	if len(n.Choices) > 0 {
+		return n.Choices[0].Pos()
+	}
+	return n.X.Pos()
+}
+func (n *ElementAssoc) End() Pos { return n.X.End() }
+
 func (n *BasicLit)   Pos() Pos { return n.ValuePos }
 func (n *Ident)      Pos() Pos { return n.NamePos }
 func (n *Range)      Pos() Pos { return n.Left.Pos() }

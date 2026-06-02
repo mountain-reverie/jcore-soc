@@ -250,7 +250,7 @@ func (p *parser) parsePrimary() Expr {
 		return &BasicLit{ValuePos: tok.Pos, Kind: tok.Kind, Value: tok.Lit}
 
 	case LPAREN:
-		return p.parseParen()
+		return p.parseParenOrAggregate()
 
 	case IDENT, EXTIDENT:
 		return p.parseName()
@@ -270,45 +270,42 @@ func (p *parser) parsePrimary() Expr {
 	}
 }
 
-// parseParen parses a parenthesized expression.  For P1a the interior is
-// captured verbatim as a BasicLit (with tokens joined by spaces) and wrapped in
-// a ParenExpr node. This keeps the round-trip stable without needing full aggregate
-// parsing, which is deferred to P1b.
-func (p *parser) parseParen() Expr {
+// parseParenOrAggregate parses a parenthesized construct: either a single
+// parenthesized expression -> *ParenExpr, or an element-association list ->
+// *Aggregate. The decision: exactly one positional element (no `=>`) is a
+// ParenExpr; anything else (named element, or >1 element) is an Aggregate.
+func (p *parser) parseParenOrAggregate() Expr {
 	open := p.expect(LPAREN)
-	pos := open.Pos
-
-	// Collect inner tokens at any nesting depth, stopping at the matching ')'.
-	// advance() moves on every iteration (or returns the retained EOF, caught by
-	// the guard), so this loop always terminates.
-	depth := 1
-	var b strings.Builder
-	var closePos Pos
-	for depth > 0 && !p.at(EOF) {
-		tok := p.advance()
-		if tok.Kind == LPAREN {
-			depth++
-		} else if tok.Kind == RPAREN {
-			depth--
-			if depth == 0 {
-				closePos = tok.Pos
-				break // closing paren — not included
+	var elems []*ElementAssoc
+	if !p.at(RPAREN) {
+		elems = append(elems, p.parseElementAssoc())
+		for p.accept(COMMA) { // each iteration consumes the comma -> always advances
+			if p.at(RPAREN) {
+				break // tolerate a trailing comma defensively
 			}
+			elems = append(elems, p.parseElementAssoc())
 		}
-		text := tok.Lit
-		if text == "" {
-			text = tok.Kind.String()
-		}
-		if b.Len() > 0 {
-			b.WriteByte(' ')
-		}
-		b.WriteString(text)
 	}
-	if depth > 0 {
-		// EOF without a closing paren — best-effort end position.
-		closePos = p.cur().Pos
+	closeTok := p.expect(RPAREN)
+	if len(elems) == 1 && elems[0].Choices == nil {
+		return &ParenExpr{Lparen: open.Pos, X: elems[0].X, Rparen: closeTok.Pos}
 	}
-	return &ParenExpr{Lparen: open.Pos, X: &BasicLit{ValuePos: pos, Kind: IDENT, Value: b.String()}, Rparen: closePos}
+	return &Aggregate{Lparen: open.Pos, Elems: elems, Rparen: closeTok.Pos}
+}
+
+// parseElementAssoc parses one aggregate element: either a positional expr, or
+// `choice {| choice} => expr`.
+func (p *parser) parseElementAssoc() *ElementAssoc {
+	first := p.parseExpr()
+	if p.at(BAR) || p.at(ARROW) {
+		choices := []Expr{first}
+		for p.accept(BAR) { // each iteration consumes a '|' -> always advances
+			choices = append(choices, p.parseExpr())
+		}
+		arrow := p.expect(ARROW)
+		return &ElementAssoc{Choices: choices, ArrowPos: arrow.Pos, X: p.parseExpr()}
+	}
+	return &ElementAssoc{X: first} // positional (Choices == nil)
 }
 
 // parseFile parses a complete VHDL design file: optional context clauses
@@ -694,7 +691,7 @@ func (p *parser) parseSubtypeIndication() (mark string, constraint Expr) {
 	switch p.cur().Kind {
 	case LPAREN:
 		// Index or range constraint — parse as an expression
-		constraint = p.parseParen()
+		constraint = p.parseParenOrAggregate()
 	case RANGE:
 		p.advance() // consume RANGE keyword
 		constraint = p.parseExpr()

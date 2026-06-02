@@ -111,6 +111,15 @@ func Walk(v Visitor, node Node) {
 		Walk(v, n.X)
 	case *ParenExpr:
 		Walk(v, n.X)
+	case *Aggregate:
+		for _, e := range n.Elems {
+			Walk(v, e)
+		}
+	case *ElementAssoc:
+		for _, c := range n.Choices {
+			Walk(v, c)
+		}
+		Walk(v, n.X)
 
 	default:
 		// A node type with no case is a traversal gap. Panic loudly so it is

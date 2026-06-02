@@ -25,8 +25,27 @@ func TestParseMinimalExpr(t *testing.T) {
 	if _, ok := mustParseExpr(t, "a + b").(*BinaryExpr); !ok {
 		t.Fatalf("binary")
 	}
-	if _, ok := mustParseExpr(t, "(others => '0')").(*ParenExpr); !ok {
+	if _, ok := mustParseExpr(t, "(others => '0')").(*Aggregate); !ok {
 		t.Fatalf("paren/aggregate")
+	}
+}
+
+func TestParenVsAggregate(t *testing.T) {
+	if _, ok := mustParseExpr(t, "(a + b)").(*ParenExpr); !ok {
+		t.Fatal("expected ParenExpr for single positional element")
+	}
+	ag, ok := mustParseExpr(t, "(others => '0')").(*Aggregate)
+	if !ok || len(ag.Elems) != 1 || ag.Elems[0].Choices == nil {
+		t.Fatalf("expected 1-element named aggregate: %#v", ag)
+	}
+	ag2, ok := mustParseExpr(t, "(1, 2, 3)").(*Aggregate)
+	if !ok || len(ag2.Elems) != 3 || ag2.Elems[0].Choices != nil {
+		t.Fatalf("expected 3-element positional aggregate: %#v", ag2)
+	}
+	// named with choice
+	ag3, ok := mustParseExpr(t, "(0 => '1', others => '0')").(*Aggregate)
+	if !ok || len(ag3.Elems) != 2 {
+		t.Fatalf("expected 2-element aggregate: %#v", ag3)
 	}
 }
 
