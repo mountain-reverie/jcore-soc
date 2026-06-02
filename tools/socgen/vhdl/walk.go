@@ -1,5 +1,7 @@
 package vhdl
 
+import "fmt"
+
 // A Visitor's Visit method is invoked for each node encountered by Walk. If the
 // result visitor w is non-nil, Walk visits each of the children of node with w,
 // then calls w.Visit(nil).
@@ -111,7 +113,7 @@ func Walk(v Visitor, node Node) {
 	default:
 		// A node type with no case is a traversal gap. Panic loudly so it is
 		// caught in tests rather than silently skipped.
-		panic("vhdl.Walk: unexpected node type")
+		panic(fmt.Sprintf("vhdl.Walk: unexpected node type %T", node))
 	}
 	v.Visit(nil)
 }
