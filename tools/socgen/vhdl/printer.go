@@ -245,6 +245,10 @@ func printExpr(b *strings.Builder, e Expr) {
 			printElementAssoc(b, e)
 		}
 		b.WriteByte(')')
+	case *QualifiedExpr:
+		printExpr(b, n.Mark)
+		b.WriteByte('\'')
+		printExpr(b, n.X) // X is a ParenExpr/Aggregate that prints its own parens
 	}
 }
 

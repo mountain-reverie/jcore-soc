@@ -164,6 +164,14 @@ func (n *BinaryExpr) End() Pos { return n.Y.End() }
 func (n *UnaryExpr)  End() Pos { return n.X.End() }
 func (n *ParenExpr)  End() Pos { return n.Rparen + 1 }
 
+// QualifiedExpr is a qualified expression: Mark'(X), where X is a *ParenExpr or
+// *Aggregate. (The tick distinguishes it from an attribute name and a char literal.)
+type QualifiedExpr struct{ Mark Expr; Tick Pos; X Expr }
+
+func (n *QualifiedExpr) Pos() Pos { return n.Mark.Pos() }
+func (n *QualifiedExpr) End() Pos { return n.X.End() }
+func (n *QualifiedExpr) exprNode() {}
+
 func (n *BasicLit)   exprNode() {}
 func (n *Ident)      exprNode() {}
 func (n *Range)      exprNode() {}

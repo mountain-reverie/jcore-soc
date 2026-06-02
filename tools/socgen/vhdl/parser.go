@@ -748,6 +748,14 @@ func (p *parser) parseName() Expr {
 
 	name := &Ident{NamePos: pos, Name: text}
 
+	// Qualified expression: mark'(...). The attribute loop above already
+	// consumed any 'attr; a remaining tick directly before '(' is qualification,
+	// not an attribute or a character literal.
+	if p.at(TICK) && p.i+1 < len(p.toks) && p.toks[p.i+1].Kind == LPAREN {
+		tick := p.advance() // consume '
+		return &QualifiedExpr{Mark: name, Tick: tick.Pos, X: p.parseParenOrAggregate()}
+	}
+
 	// Call or index: name ( args ).
 	if p.at(LPAREN) {
 		lparen := p.advance() // consume '('

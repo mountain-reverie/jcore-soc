@@ -198,6 +198,27 @@ end entity cpu;`)
 	}
 }
 
+func TestQualifiedExpr(t *testing.T) {
+	q, ok := mustParseExpr(t, "std_logic_vector'(others => '0')").(*QualifiedExpr)
+	if !ok {
+		t.Fatalf("expected QualifiedExpr, got %#v", q)
+	}
+	if _, ok := q.X.(*Aggregate); !ok {
+		t.Fatalf("expected aggregate operand, got %#v", q.X)
+	}
+	q2, ok := mustParseExpr(t, "integer'(5)").(*QualifiedExpr)
+	if !ok {
+		t.Fatalf("expected QualifiedExpr, got %#v", q2)
+	}
+	if _, ok := q2.X.(*ParenExpr); !ok {
+		t.Fatalf("expected paren operand, got %#v", q2.X)
+	}
+	// attribute tick must STILL parse as a (flattened) Ident, not a qualified expr
+	if id, ok := mustParseExpr(t, "x'high").(*Ident); !ok || id.Name != "x'high" {
+		t.Fatalf("expected Ident x'high, got %#v", mustParseExpr(t, "x'high"))
+	}
+}
+
 func TestDeferredUnitTagged(t *testing.T) {
 	_, errs := parse(t, "architecture a of e is\nbegin\nend architecture;")
 	if len(errs) == 0 {
