@@ -49,7 +49,6 @@ func TestCorpusRoundTrip(t *testing.T) {
 	}
 	t.Logf("P1b corpus: %d declaration-only files round-trip", len(rels))
 	for _, rel := range rels {
-		rel := rel
 		t.Run(rel, func(t *testing.T) {
 			src, err := os.ReadFile(filepath.Join(root, rel))
 			if err != nil {
@@ -69,7 +68,6 @@ func TestCorpusGhdlReanalyze(t *testing.T) {
 	}
 	root := corpusRoot(t)
 	for _, rel := range readList(t, "testdata/p1b_corpus.txt") {
-		rel := rel
 		t.Run(rel, func(t *testing.T) {
 			src, err := os.ReadFile(filepath.Join(root, rel))
 			if err != nil {
