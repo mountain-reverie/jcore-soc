@@ -10,12 +10,16 @@ type parser struct {
 	toks []Token
 	i    int
 	errs []error
+	file *File
 }
 
 // newParser lexes all tokens from src, dropping COMMENT tokens, and returns a
 // parser ready to consume the stream. The final EOF token is retained.
-func newParser(src []byte) *parser {
-	l := NewLexer(src, nil)
+func newParser(src []byte, f *File) *parser {
+	if f == nil {
+		f = NewFileSet().AddFile("", len(src))
+	}
+	l := NewLexer(src, f)
 	toks := make([]Token, 0, len(src)/3+8) // rough capacity hint; minimise re-alloc
 	// Hard progress bound: every non-EOF token consumes >=1 source byte, so the
 	// total number of Next() calls cannot exceed len(src)+1. The cap is a
@@ -36,12 +40,18 @@ func newParser(src []byte) *parser {
 			break
 		}
 	}
-	return &parser{toks: toks}
+	return &parser{toks: toks, file: f}
 }
 
 // newParserFromExpr is a test seam — identical to newParser for P1a.
 func newParserFromExpr(src []byte) *parser {
-	return newParser(src)
+	return newParser(src, nil)
+}
+
+// errorf records a parse error at the given source position, rendered through
+// the file's position table (file:line:col).
+func (p *parser) errorf(at Pos, format string, args ...any) {
+	p.errs = append(p.errs, fmt.Errorf("%s: "+format, append([]any{p.file.Position(at)}, args...)...))
 }
 
 // cur returns the current token. If the index is past the end of the slice
@@ -85,7 +95,7 @@ func (p *parser) expect(k Kind) Token {
 		p.advance()
 		return tok
 	}
-	p.errs = append(p.errs, fmt.Errorf("%v: expected %v, got %v %q", tok.Pos, k, tok.Kind, tok.Lit))
+	p.errorf(tok.Pos, "expected %v, got %v %q", k, tok.Kind, tok.Lit)
 	return tok
 }
 
@@ -97,7 +107,7 @@ func (p *parser) expect(k Kind) Token {
 func (p *parser) ensureProgress(start int, where string) {
 	if p.i == start && !p.at(EOF) {
 		t := p.cur()
-		p.errs = append(p.errs, fmt.Errorf("%v: skipping unexpected %v %q in %s", t.Pos, t.Kind, t.Lit, where))
+		p.errorf(t.Pos, "skipping unexpected %v %q in %s", t.Kind, t.Lit, where)
 		p.advance()
 	}
 }
@@ -181,7 +191,7 @@ func (p *parser) parsePrimary() Expr {
 		}
 		// Unrecognised primary — record an error and return an empty literal so
 		// the caller can continue.
-		p.errs = append(p.errs, fmt.Errorf("%v: unexpected token %v %q in primary", tok.Pos, tok.Kind, tok.Lit))
+		p.errorf(tok.Pos, "unexpected token %v %q in primary", tok.Kind, tok.Lit)
 		return &Lit{P: tok.Pos, Text: ""}
 	}
 }
@@ -221,9 +231,9 @@ func (p *parser) parseParen() Expr {
 	return &Paren{P: pos, X: &Lit{P: pos, Text: b.String()}}
 }
 
-// ParseFile parses a complete VHDL design file: optional context clauses
+// parseFile parses a complete VHDL design file: optional context clauses
 // followed by one or more design units.
-func (p *parser) ParseFile() *DesignFile {
+func (p *parser) parseFile() *DesignFile {
 	df := &DesignFile{}
 
 	// Context clauses: library / use
@@ -257,7 +267,7 @@ func (p *parser) ParseFile() *DesignFile {
 		case PACKAGE:
 			// Peek: PACKAGE BODY → deferred
 			if p.i+1 < len(p.toks) && p.toks[p.i+1].Kind == BODY {
-				p.errs = append(p.errs, fmt.Errorf("%v: P1a: package body not yet parsed", p.cur().Pos))
+				p.errorf(p.cur().Pos, "P1a: package body not yet parsed")
 				return df
 			}
 			u := p.parsePackageDecl()
@@ -270,18 +280,28 @@ func (p *parser) ParseFile() *DesignFile {
 				df.Units = append(df.Units, u)
 			}
 		case ARCHITECTURE:
-			p.errs = append(p.errs, fmt.Errorf("%v: P1a: architecture body not yet parsed", p.cur().Pos))
+			p.errorf(p.cur().Pos, "P1a: architecture body not yet parsed")
 			return df
 		case CONFIGURATION:
-			p.errs = append(p.errs, fmt.Errorf("%v: P1a: configuration not yet parsed", p.cur().Pos))
+			p.errorf(p.cur().Pos, "P1a: configuration not yet parsed")
 			return df
 		default:
-			p.errs = append(p.errs, fmt.Errorf("%v: unexpected token %v %q at top level", p.cur().Pos, p.cur().Kind, p.cur().Lit))
+			p.errorf(p.cur().Pos, "unexpected token %v %q at top level", p.cur().Kind, p.cur().Lit)
 			return df
 		}
 		p.ensureProgress(start, "design unit")
 	}
 	return df
+}
+
+// ParseFile parses src (named filename) into a DesignFile. fset records source
+// positions; returned errors are rendered via fset.Position. A nil or empty
+// error slice means a clean parse.
+func ParseFile(fset *FileSet, filename string, src []byte) (*DesignFile, []error) {
+	f := fset.AddFile(filename, len(src))
+	p := newParser(src, f)
+	df := p.parseFile()
+	return df, p.errs
 }
 
 // parseDottedName reads a possibly-dotted name (e.g. ieee.std_logic_1164.all)
@@ -296,7 +316,7 @@ func (p *parser) parseDottedName() string {
 		p.advance()
 		text = tok.Kind.String()
 	} else {
-		p.errs = append(p.errs, fmt.Errorf("%v: expected name, got %v %q", tok.Pos, tok.Kind, tok.Lit))
+		p.errorf(tok.Pos, "expected name, got %v %q", tok.Kind, tok.Lit)
 		return ""
 	}
 	for p.at(DOT) {
@@ -386,7 +406,7 @@ func (p *parser) parseDecl() Decl {
 	case COMPONENT:
 		return p.parseComponentDecl()
 	default:
-		p.errs = append(p.errs, fmt.Errorf("%v: unexpected token %v %q in declaration", tok.Pos, tok.Kind, tok.Lit))
+		p.errorf(tok.Pos, "unexpected token %v %q in declaration", tok.Kind, tok.Lit)
 		p.advance() // avoid infinite loop
 		return nil
 	}
@@ -474,7 +494,7 @@ func (p *parser) parseTypeDecl() *TypeDecl {
 		def = &ArrayDef{P: apos, Text: strings.Join(parts, " ")}
 
 	default:
-		p.errs = append(p.errs, fmt.Errorf("%v: unsupported type definition starting with %v", p.cur().Pos, p.cur().Kind))
+		p.errorf(p.cur().Pos, "unsupported type definition starting with %v", p.cur().Kind)
 		// consume until semicolon
 		for !p.at(SEMICOLON) && !p.at(EOF) {
 			p.advance()
@@ -491,7 +511,7 @@ func (p *parser) parseEnumLit() string {
 		p.advance()
 		return tok.Lit
 	}
-	p.errs = append(p.errs, fmt.Errorf("%v: expected enum literal, got %v %q", tok.Pos, tok.Kind, tok.Lit))
+	p.errorf(tok.Pos, "expected enum literal, got %v %q", tok.Kind, tok.Lit)
 	p.advance()
 	return ""
 }

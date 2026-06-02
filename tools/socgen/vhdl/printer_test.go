@@ -9,16 +9,14 @@ func TestPrintReparseStable(t *testing.T) {
 		"package q is\n  type rec_t is record\n    a : std_logic;\n    b : std_logic_vector(7 downto 0);\n  end record;\nend package;",
 	}
 	for _, s := range srcs {
-		p1 := newParser([]byte(s))
-		f1 := p1.ParseFile()
-		if len(p1.errs) != 0 {
-			t.Fatalf("parse1 %q: %v", s, p1.errs)
+		f1, errs1 := ParseFile(NewFileSet(), "t.vhd", []byte(s))
+		if len(errs1) != 0 {
+			t.Fatalf("parse1 %q: %v", s, errs1)
 		}
 		out := Print(f1)
-		p2 := newParser([]byte(out))
-		f2 := p2.ParseFile()
-		if len(p2.errs) != 0 {
-			t.Fatalf("reparse %q -> %q: %v", s, out, p2.errs)
+		f2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
+		if len(errs2) != 0 {
+			t.Fatalf("reparse %q -> %q: %v", s, out, errs2)
 		}
 		if !equalAST(f1, f2) {
 			t.Fatalf("AST changed across round-trip:\nin:  %q\nout: %q", s, out)

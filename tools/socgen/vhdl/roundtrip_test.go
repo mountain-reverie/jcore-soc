@@ -20,15 +20,13 @@ func corpusRoot(t *testing.T) string {
 // roundTrips reports whether src parses with no errors and is AST-stable across
 // parse -> print -> reparse.
 func roundTrips(src []byte) bool {
-	p1 := newParser(src)
-	f1 := p1.ParseFile()
-	if len(p1.errs) != 0 {
+	f1, errs1 := ParseFile(NewFileSet(), "t.vhd", src)
+	if len(errs1) != 0 {
 		return false
 	}
 	out := Print(f1)
-	p2 := newParser([]byte(out))
-	f2 := p2.ParseFile()
-	if len(p2.errs) != 0 {
+	f2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
+	if len(errs2) != 0 {
 		return false
 	}
 	return equalAST(f1, f2)
@@ -57,9 +55,8 @@ func TestCorpusRoundTrip(t *testing.T) {
 				t.Fatal(err)
 			}
 			if !roundTrips(src) {
-				p := newParser(src)
-				p.ParseFile()
-				t.Fatalf("round-trip failed; parse errs: %v", p.errs)
+				_, errs := ParseFile(NewFileSet(), rel, src)
+				t.Fatalf("round-trip failed; parse errs: %v", errs)
 			}
 		})
 	}
@@ -77,10 +74,9 @@ func TestCorpusGhdlReanalyze(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			p := newParser(src)
-			f := p.ParseFile()
-			if len(p.errs) != 0 {
-				t.Fatalf("parse: %v", p.errs)
+			f, errs := ParseFile(NewFileSet(), rel, src)
+			if len(errs) != 0 {
+				t.Fatalf("parse: %v", errs)
 			}
 			out := Print(f)
 			dir := t.TempDir()

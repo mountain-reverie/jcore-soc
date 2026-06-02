@@ -30,14 +30,18 @@ func TestParseMinimalExpr(t *testing.T) {
 	}
 }
 
+func parse(t *testing.T, src string) (*DesignFile, []error) {
+	t.Helper()
+	return ParseFile(NewFileSet(), "t.vhd", []byte(src))
+}
+
 func parseDecls(t *testing.T, src string) []Decl {
 	t.Helper()
-	p := newParser([]byte("package p is\n" + src + "\nend package;"))
-	f := p.ParseFile()
-	if len(p.errs) != 0 {
-		t.Fatalf("errs: %v", p.errs)
+	df, errs := parse(t, "package p is\n"+src+"\nend package;")
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
 	}
-	return f.Units[0].(*PackageDecl).Decls
+	return df.Units[0].(*PackageDecl).Decls
 }
 
 func TestParseDecls(t *testing.T) {
@@ -73,18 +77,17 @@ func TestParseDecls(t *testing.T) {
 }
 
 func TestParseEntity(t *testing.T) {
-	p := newParser([]byte(`
+	df, errs := parse(t, `
 entity cpu is
   generic (W : integer := 32);
   port (
     clk : in  std_logic;
     d   : out std_logic_vector(W-1 downto 0));
-end entity cpu;`))
-	f := p.ParseFile()
-	if len(p.errs) != 0 {
-		t.Fatalf("errs: %v", p.errs)
+end entity cpu;`)
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
 	}
-	e := f.Units[0].(*EntityDecl)
+	e := df.Units[0].(*EntityDecl)
 	if e.Name != "cpu" || len(e.Generics) != 1 || len(e.Ports) != 2 {
 		t.Fatalf("%#v", e)
 	}
@@ -94,18 +97,17 @@ end entity cpu;`))
 }
 
 func TestDeferredUnitTagged(t *testing.T) {
-	p := newParser([]byte("architecture a of e is\nbegin\nend architecture;"))
-	p.ParseFile()
-	if len(p.errs) == 0 {
+	_, errs := parse(t, "architecture a of e is\nbegin\nend architecture;")
+	if len(errs) == 0 {
 		t.Fatal("expected a deferred-unit error")
 	}
 	found := false
-	for _, e := range p.errs {
+	for _, e := range errs {
 		if strings.Contains(e.Error(), "P1a") {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("want a P1a-tagged deferred error, got %v", p.errs)
+		t.Fatalf("want a P1a-tagged deferred error, got %v", errs)
 	}
 }
