@@ -1,4 +1,7 @@
+components/clk/clkin10_clkgen.vhd
+components/clk/clkin25_clkgen.vhd
 components/cpu/core/datapath_pkg.vhd
+components/cpu/decode/decode_pkg.vhd
 components/cpu/decode/decode_table.vhd
 components/cpu/sim/monitor_pkg.vhd
 components/ddr/ddr_pkg.vhd
@@ -8,8 +11,10 @@ components/gps_if2/rbus_pkg.vhd
 components/misc/bus_mux_ff_pkg.vhd
 components/misc/bus_mux_lock_pkg.vhd
 components/misc/bus_mux_pkg.vhd
+components/ring_bus/ring_bus_pkg.vhd
 components/uartlite/uart_pkg.vhd
 lib/fixed_dsm_pkg/ieee/fixed_float_types_c.vhd
+lib/hwutils/attr_pkg.vhd
 lib/memory_tech_lib/ram_18x2048_1rw.vhd
 lib/memory_tech_lib/ram_2x8x2048_2rw.vhd
 lib/memory_tech_lib/ram_2x8x256_1rw.vhd
@@ -17,3 +22,5 @@ lib/memory_tech_lib/ram_32x1x512_2rw.vhd
 lib/memory_tech_lib/rom_32x2048_1r.vhd
 lib/reg_file_struct/rf_pkg.vhd
 targets/clk_config.vhd
+targets/cpus.vhd
+targets/ddr_ram_mux/ddr_ram_mux.vhd
