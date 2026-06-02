@@ -124,6 +124,7 @@ type Ident       struct{ NamePos Pos; Name string }              // a (possibly 
 type Range       struct{ Left Expr; DirPos Pos; Dir Kind; Right Expr } // Dir is TO or DOWNTO
 type CallExpr     struct{ Fun Expr; Lparen Pos; Args []Expr; Rparen Pos } // also indexed-name / slice / type-conversion — VHDL can't disambiguate syntactically
 type BinaryExpr  struct{ X Expr; OpPos Pos; Op Kind; Y Expr }
+type UnaryExpr   struct{ OpPos Pos; Op Kind; X Expr } // abs / not / unary + / unary -
 type ParenExpr   struct{ Lparen Pos; X Expr; Rparen Pos }
 
 func (n *BasicLit)   Pos() Pos { return n.ValuePos }
@@ -131,6 +132,7 @@ func (n *Ident)      Pos() Pos { return n.NamePos }
 func (n *Range)      Pos() Pos { return n.Left.Pos() }
 func (n *CallExpr)   Pos() Pos { return n.Fun.Pos() }
 func (n *BinaryExpr) Pos() Pos { return n.X.Pos() }
+func (n *UnaryExpr)  Pos() Pos { return n.OpPos }
 func (n *ParenExpr)  Pos() Pos { return n.Lparen }
 
 func (n *BasicLit)   End() Pos { return n.ValuePos + Pos(len(n.Value)) }
@@ -138,6 +140,7 @@ func (n *Ident)      End() Pos { return n.NamePos + Pos(len(n.Name)) }
 func (n *Range)      End() Pos { return n.Right.End() }
 func (n *CallExpr)   End() Pos { return n.Rparen + 1 }
 func (n *BinaryExpr) End() Pos { return n.Y.End() }
+func (n *UnaryExpr)  End() Pos { return n.X.End() }
 func (n *ParenExpr)  End() Pos { return n.Rparen + 1 }
 
 func (n *BasicLit)   exprNode() {}
@@ -145,4 +148,5 @@ func (n *Ident)      exprNode() {}
 func (n *Range)      exprNode() {}
 func (n *CallExpr)   exprNode() {}
 func (n *BinaryExpr) exprNode() {}
+func (n *UnaryExpr)  exprNode() {}
 func (n *ParenExpr)  exprNode() {}

@@ -112,43 +112,121 @@ func (p *parser) ensureProgress(start int, where string) {
 	}
 }
 
-// isBinaryOp reports whether kind k is one of the P1a binary operator tokens.
-func isBinaryOp(k Kind) bool {
-	switch k {
-	case PLUS, MINUS, STAR, SLASH, AMP,
-		EQ, NE, LT, LE, GT, GE,
-		AND, OR, NAND, NOR, XOR, XNOR,
-		MOD, REM, SLL, SRL, SLA, SRA, ROL, ROR:
-		return true
-	}
-	return false
-}
+// The expression grammar is a VHDL-93 precedence-climbing tier ladder. From
+// lowest to highest precedence: logical < relational < shift < adding (simple) <
+// multiplying (term) < (sign/abs/not + **) (factor) < primary. Each tier
+// left-folds its operator set into LEFT-ASSOCIATIVE BinaryExpr nodes and
+// delegates to the next-higher tier. Every fold loop calls advance() on the
+// operator token before recursing, so each iteration consumes ≥1 token and the
+// loop provably terminates — no runaway risk.
 
-// parseExpr parses a P1a expression (single-precedence binary ops + optional
-// range direction suffix).
+// parseExpr is the expression entry point: the logical tier, then an optional
+// range direction suffix (to/downto).
 func (p *parser) parseExpr() Expr {
-	left := p.parsePrimary()
-
-	// Left-fold binary operators.
-	for isBinaryOp(p.cur().Kind) {
-		op := p.advance()
-		right := p.parsePrimary()
-		left = &BinaryExpr{X: left, OpPos: op.Pos, Op: op.Kind, Y: right}
-	}
-
-	// Optional range suffix.
+	left := p.parseLogical()
 	if p.at(TO) || p.at(DOWNTO) {
 		dir := p.advance()
-		right := p.parsePrimary()
-		// Also fold any binary ops on the right side.
-		for isBinaryOp(p.cur().Kind) {
-			op := p.advance()
-			rr := p.parsePrimary()
-			right = &BinaryExpr{X: right, OpPos: op.Pos, Op: op.Kind, Y: rr}
-		}
+		right := p.parseLogical()
 		return &Range{Left: left, DirPos: dir.Pos, Dir: dir.Kind, Right: right}
 	}
+	return left
+}
 
+// parseLogical handles the lowest-precedence logical operators.
+func (p *parser) parseLogical() Expr {
+	left := p.parseRelation()
+	for {
+		switch p.cur().Kind {
+		case AND, OR, NAND, NOR, XOR, XNOR:
+			op := p.advance()
+			right := p.parseRelation()
+			left = &BinaryExpr{X: left, OpPos: op.Pos, Op: op.Kind, Y: right}
+		default:
+			return left
+		}
+	}
+}
+
+// parseRelation handles relational operators.
+func (p *parser) parseRelation() Expr {
+	left := p.parseShift()
+	for {
+		switch p.cur().Kind {
+		case EQ, NE, LT, LE, GT, GE:
+			op := p.advance()
+			right := p.parseShift()
+			left = &BinaryExpr{X: left, OpPos: op.Pos, Op: op.Kind, Y: right}
+		default:
+			return left
+		}
+	}
+}
+
+// parseShift handles shift/rotate operators.
+func (p *parser) parseShift() Expr {
+	left := p.parseSimple()
+	for {
+		switch p.cur().Kind {
+		case SLL, SRL, SLA, SRA, ROL, ROR:
+			op := p.advance()
+			right := p.parseSimple()
+			left = &BinaryExpr{X: left, OpPos: op.Pos, Op: op.Kind, Y: right}
+		default:
+			return left
+		}
+	}
+}
+
+// parseSimple handles a simple expression: an optional leading sign followed by
+// terms joined by adding operators (+ - &).
+func (p *parser) parseSimple() Expr {
+	var left Expr
+	if p.at(PLUS) || p.at(MINUS) {
+		op := p.advance()
+		left = &UnaryExpr{OpPos: op.Pos, Op: op.Kind, X: p.parseTerm()}
+	} else {
+		left = p.parseTerm()
+	}
+	for {
+		switch p.cur().Kind {
+		case PLUS, MINUS, AMP:
+			op := p.advance()
+			right := p.parseTerm()
+			left = &BinaryExpr{X: left, OpPos: op.Pos, Op: op.Kind, Y: right}
+		default:
+			return left
+		}
+	}
+}
+
+// parseTerm handles multiplying operators.
+func (p *parser) parseTerm() Expr {
+	left := p.parseFactor()
+	for {
+		switch p.cur().Kind {
+		case STAR, SLASH, MOD, REM:
+			op := p.advance()
+			right := p.parseFactor()
+			left = &BinaryExpr{X: left, OpPos: op.Pos, Op: op.Kind, Y: right}
+		default:
+			return left
+		}
+	}
+}
+
+// parseFactor handles abs/not unary operators and the (non-associative) **
+// operator, both of which bind tightly around a primary.
+func (p *parser) parseFactor() Expr {
+	if p.at(ABS) || p.at(NOT) {
+		op := p.advance()
+		return &UnaryExpr{OpPos: op.Pos, Op: op.Kind, X: p.parsePrimary()}
+	}
+	left := p.parsePrimary()
+	if p.at(EXP) {
+		op := p.advance()
+		right := p.parsePrimary()
+		return &BinaryExpr{X: left, OpPos: op.Pos, Op: op.Kind, Y: right}
+	}
 	return left
 }
 

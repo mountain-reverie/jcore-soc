@@ -214,6 +214,14 @@ func printExpr(b *strings.Builder, e Expr) {
 		b.WriteString(n.Op.String())
 		b.WriteByte(' ')
 		printExpr(b, n.Y)
+	case *UnaryExpr:
+		// Always emit a space after the unary operator. This is mandatory for
+		// "-"/"+": it avoids "- -a" printing as "--a" (a comment to the lexer)
+		// and "**"-adjacency hazards. Reparsing "- a" yields the same tree as
+		// "-a", so round-trip equality holds.
+		b.WriteString(n.Op.String())
+		b.WriteByte(' ')
+		printExpr(b, n.X)
 	case *CallExpr:
 		printExpr(b, n.Fun)
 		b.WriteByte('(')

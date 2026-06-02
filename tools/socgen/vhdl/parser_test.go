@@ -44,6 +44,59 @@ func TestExprTokenTypedOps(t *testing.T) {
 	}
 }
 
+func TestExprPrecedence(t *testing.T) {
+	// a + b * c  =>  a + (b*c): top is + with right-child *
+	e := mustParseExpr(t, "a + b * c")
+	be, ok := e.(*BinaryExpr)
+	if !ok || be.Op != PLUS {
+		t.Fatalf("top: %#v", e)
+	}
+	r, ok := be.Y.(*BinaryExpr)
+	if !ok || r.Op != STAR {
+		t.Fatalf("right: %#v", be.Y)
+	}
+}
+
+func TestExprLeftAssoc(t *testing.T) {
+	// a - b - c  =>  (a-b)-c: top is - with left-child -
+	be, ok := mustParseExpr(t, "a - b - c").(*BinaryExpr)
+	if !ok || be.Op != MINUS {
+		t.Fatalf("top: %#v", be)
+	}
+	if l, ok := be.X.(*BinaryExpr); !ok || l.Op != MINUS {
+		t.Fatalf("left: %#v", be.X)
+	}
+}
+
+func TestExprUnary(t *testing.T) {
+	if u, ok := mustParseExpr(t, "not a").(*UnaryExpr); !ok || u.Op != NOT {
+		t.Fatalf("not: %#v", u)
+	}
+	if u, ok := mustParseExpr(t, "-b").(*UnaryExpr); !ok || u.Op != MINUS {
+		t.Fatalf("neg: %#v", u)
+	}
+	if u, ok := mustParseExpr(t, "abs x").(*UnaryExpr); !ok || u.Op != ABS {
+		t.Fatalf("abs: %#v", u)
+	}
+}
+
+func TestExprPow(t *testing.T) {
+	if b, ok := mustParseExpr(t, "2 ** n").(*BinaryExpr); !ok || b.Op != EXP {
+		t.Fatalf("pow: %#v", b)
+	}
+}
+
+func TestExprRelationalAndLogical(t *testing.T) {
+	// a = b and c  =>  (a=b) and c : top AND, left is relational =
+	be, ok := mustParseExpr(t, "a = b and c").(*BinaryExpr)
+	if !ok || be.Op != AND {
+		t.Fatalf("top: %#v", be)
+	}
+	if l, ok := be.X.(*BinaryExpr); !ok || l.Op != EQ {
+		t.Fatalf("left: %#v", be.X)
+	}
+}
+
 func parse(t *testing.T, src string) (*DesignFile, []error) {
 	t.Helper()
 	return ParseFile(NewFileSet(), "t.vhd", []byte(src))

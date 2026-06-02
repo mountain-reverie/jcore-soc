@@ -107,6 +107,8 @@ func Walk(v Visitor, node Node) {
 	case *BinaryExpr:
 		Walk(v, n.X)
 		Walk(v, n.Y)
+	case *UnaryExpr:
+		Walk(v, n.X)
 	case *ParenExpr:
 		Walk(v, n.X)
 
