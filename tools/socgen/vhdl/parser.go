@@ -273,7 +273,8 @@ func (p *parser) parsePrimary() Expr {
 // parseParenOrAggregate parses a parenthesized construct: either a single
 // parenthesized expression -> *ParenExpr, or an element-association list ->
 // *Aggregate. The decision: exactly one positional element (no `=>`) is a
-// ParenExpr; anything else (named element, or >1 element) is an Aggregate.
+// ParenExpr; anything else (named element, or >1 element) is an Aggregate. Zero
+// elements (empty "()") also produces an empty *Aggregate.
 func (p *parser) parseParenOrAggregate() Expr {
 	open := p.expect(LPAREN)
 	var elems []*ElementAssoc

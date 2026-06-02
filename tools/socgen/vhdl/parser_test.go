@@ -47,6 +47,19 @@ func TestParenVsAggregate(t *testing.T) {
 	if !ok || len(ag3.Elems) != 2 {
 		t.Fatalf("expected 2-element aggregate: %#v", ag3)
 	}
+	// multi-choice with '|'
+	ag4, ok := mustParseExpr(t, "(1 | 2 => x)").(*Aggregate)
+	if !ok || len(ag4.Elems) != 1 || len(ag4.Elems[0].Choices) != 2 {
+		t.Fatalf("expected 1-element aggregate with 2 choices: %#v", ag4)
+	}
+	// discrete-range choice
+	ag5, ok := mustParseExpr(t, "(1 to 3 => x)").(*Aggregate)
+	if !ok || len(ag5.Elems) != 1 {
+		t.Fatalf("expected 1-element aggregate with range choice: %#v", ag5)
+	}
+	if _, ok := ag5.Elems[0].Choices[0].(*Range); !ok {
+		t.Fatalf("expected range choice, got %#v", ag5.Elems[0].Choices[0])
+	}
 }
 
 func TestExprTokenTypedOps(t *testing.T) {
