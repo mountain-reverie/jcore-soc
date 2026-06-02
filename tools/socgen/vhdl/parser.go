@@ -470,13 +470,29 @@ func (p *parser) parseEntityDecl() *EntityDecl {
 		p.expect(SEMICOLON)
 	}
 
+	// Entity declarative part: declarations until END/BEGIN/EOF.
+	var decls []Decl
+	for !p.at(END) && !p.at(BEGIN) && !p.at(EOF) {
+		start := p.i
+		if d := p.parseDecl(); d != nil {
+			decls = append(decls, d)
+		}
+		p.ensureProgress(start, "entity declaration")
+	}
+	if p.at(BEGIN) {
+		// Entity passive statement part: deferred in this phase. The file is
+		// excluded from round-trip rather than parsed. TODO: parse it in P1c.
+		p.errorf(p.cur().Pos, "deferred: entity statement part not yet parsed")
+		return &EntityDecl{P: pos, Name: name, Generics: generics, Ports: ports, Decls: decls}
+	}
+
 	p.expect(END)
 	p.accept(ENTITY)
 	if p.at(IDENT) {
 		p.advance()
 	}
 	p.expect(SEMICOLON)
-	return &EntityDecl{P: pos, Name: name, Generics: generics, Ports: ports}
+	return &EntityDecl{P: pos, Name: name, Generics: generics, Ports: ports, Decls: decls}
 }
 
 // parseDecl dispatches to the appropriate declaration parser.

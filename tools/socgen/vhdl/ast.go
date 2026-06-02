@@ -42,7 +42,7 @@ func (n *UseClause)     End() Pos { return n.P }
 
 // design units
 type PackageDecl struct{ P Pos; Name string; Decls []Decl }
-type EntityDecl  struct{ P Pos; Name string; Generics []*InterfaceDecl; Ports []*InterfaceDecl }
+type EntityDecl  struct{ P Pos; Name string; Generics []*InterfaceDecl; Ports []*InterfaceDecl; Decls []Decl }
 
 func (n *PackageDecl) Pos() Pos { return n.P }
 func (n *EntityDecl)  Pos() Pos { return n.P }
@@ -51,6 +51,7 @@ func (n *EntityDecl)  unitNode()  {}
 
 func (n *PackageDecl) End() Pos { if k := len(n.Decls); k > 0 { return n.Decls[k-1].End() }; return n.P }
 func (n *EntityDecl)  End() Pos {
+	if k := len(n.Decls); k > 0 { return n.Decls[k-1].End() }
 	if k := len(n.Ports); k > 0 { return n.Ports[k-1].End() }
 	if k := len(n.Generics); k > 0 { return n.Generics[k-1].End() }
 	return n.P

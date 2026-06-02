@@ -65,6 +65,11 @@ func printEntityDecl(b *strings.Builder, n *EntityDecl) {
 		printInterfaceList(b, n.Ports, "    ")
 		b.WriteString("  );\n")
 	}
+	for _, d := range n.Decls {
+		b.WriteString("  ")
+		printDecl(b, d, "  ")
+		b.WriteByte('\n')
+	}
 	b.WriteString("end entity;\n")
 }
 

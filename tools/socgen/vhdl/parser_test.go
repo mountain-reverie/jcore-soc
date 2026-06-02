@@ -384,3 +384,46 @@ func TestDeferredUnitTagged(t *testing.T) {
 		t.Fatalf("want a deferred-unit error, got %v", errs)
 	}
 }
+
+func TestParseEntityDeclarativePart(t *testing.T) {
+	src := `entity e is
+  port (clk : in std_logic);
+  type ram_t is array(7 downto 0) of std_logic;
+  attribute ram_style of clk : signal is "block";
+  subtype word_t is std_logic;
+end entity e;`
+	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
+	}
+	e := df.Units[0].(*EntityDecl)
+	if len(e.Ports) != 1 {
+		t.Fatalf("ports: %#v", e)
+	}
+	if len(e.Decls) != 3 {
+		t.Fatalf("entity decls: got %d: %#v", len(e.Decls), e.Decls)
+	}
+	// round-trip
+	out := Print(df)
+	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
+	if len(errs2) != 0 || !equalAST(df, df2) {
+		t.Fatalf("entity declarative part not AST-stable: errs=%v\n%s", errs2, out)
+	}
+}
+
+func TestEntityStatementPartDeferred(t *testing.T) {
+	// An entity with a passive statement part (begin) is deferred (errors).
+	_, errs := ParseFile(NewFileSet(), "t.vhd", []byte("entity e is\nbegin\n  assert true;\nend entity;"))
+	if len(errs) == 0 {
+		t.Fatal("expected a deferred error for entity statement part")
+	}
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Error(), "deferred") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("want a 'deferred' error, got %v", errs)
+	}
+}

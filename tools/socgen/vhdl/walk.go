@@ -43,6 +43,9 @@ func Walk(v Visitor, node Node) {
 		for _, p := range n.Ports {
 			Walk(v, p)
 		}
+		for _, d := range n.Decls {
+			Walk(v, d)
+		}
 
 	// declarations
 	case *ConstantDecl:
