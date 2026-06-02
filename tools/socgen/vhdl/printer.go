@@ -126,6 +126,22 @@ func printDecl(b *strings.Builder, d Decl, indent string) {
 		printTypeDecl(b, n, indent)
 	case *ComponentDecl:
 		printComponentDecl(b, n, indent)
+	case *AttributeDecl:
+		b.WriteString("attribute ")
+		b.WriteString(n.Name)
+		b.WriteString(" : ")
+		b.WriteString(n.TypeMark)
+		b.WriteByte(';')
+	case *AttributeSpec:
+		b.WriteString("attribute ")
+		b.WriteString(n.Name)
+		b.WriteString(" of ")
+		b.WriteString(strings.Join(n.Entities, ", "))
+		b.WriteString(" : ")
+		b.WriteString(n.EntityClass.String())
+		b.WriteString(" is ")
+		printExpr(b, n.Value)
+		b.WriteByte(';')
 	case *SubprogramDecl:
 		if n.Pure {
 			b.WriteString("pure ")

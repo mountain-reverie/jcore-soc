@@ -277,6 +277,38 @@ func TestParseSubprogramDecls(t *testing.T) {
 	}
 }
 
+func TestParseAttributeDecls(t *testing.T) {
+	ds := parseDecls(t, `
+		attribute num_words : natural;
+		attribute num_words of reg8x4_data : subtype is 4;
+		attribute keep of a, b : signal is true;`)
+	if len(ds) != 3 {
+		t.Fatalf("got %d decls", len(ds))
+	}
+	d0, ok := ds[0].(*AttributeDecl)
+	if !ok || d0.Name != "num_words" || d0.TypeMark != "natural" {
+		t.Fatalf("attr decl: %#v", ds[0])
+	}
+	s1, ok := ds[1].(*AttributeSpec)
+	if !ok || s1.Name != "num_words" || len(s1.Entities) != 1 || s1.Entities[0] != "reg8x4_data" || s1.EntityClass != SUBTYPE {
+		t.Fatalf("attr spec: %#v", ds[1])
+	}
+	s2, ok := ds[2].(*AttributeSpec)
+	if !ok || len(s2.Entities) != 2 || s2.EntityClass != SIGNAL {
+		t.Fatalf("attr spec 2: %#v", ds[2])
+	}
+	// round-trip
+	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte("package p is\nattribute num_words of reg8x4_data : subtype is 4;\nend package;"))
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
+	}
+	out := Print(df)
+	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
+	if len(errs2) != 0 || !equalAST(df, df2) {
+		t.Fatalf("attr spec not AST-stable: errs=%v\n%s", errs2, out)
+	}
+}
+
 func TestDeferredUnitTagged(t *testing.T) {
 	_, errs := parse(t, "architecture a of e is\nbegin\nend architecture;")
 	if len(errs) == 0 {

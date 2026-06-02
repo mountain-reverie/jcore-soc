@@ -114,6 +114,33 @@ func (n *SubprogramDecl) End() Pos {
 	}
 	return n.P
 }
+
+// AttributeDecl is `attribute name : type_mark ;`.
+type AttributeDecl struct{ P Pos; Name, TypeMark string }
+
+// AttributeSpec is `attribute name of <entities> : <class> is value ;`.
+// EntityClass is the entity-class keyword Kind (SIGNAL, SUBTYPE, VARIABLE, ...).
+type AttributeSpec struct {
+	P           Pos
+	Name        string
+	Entities    []string
+	EntityClass Kind
+	Value       Expr
+}
+
+func (n *AttributeDecl) Pos() Pos { return n.P }
+func (n *AttributeDecl) End() Pos { return n.P }
+func (n *AttributeDecl) declNode() {}
+
+func (n *AttributeSpec) Pos() Pos { return n.P }
+func (n *AttributeSpec) End() Pos {
+	if n.Value != nil {
+		return n.Value.End()
+	}
+	return n.P
+}
+func (n *AttributeSpec) declNode() {}
+
 func (n *InterfaceDecl) End() Pos {
 	if n.Default != nil { return n.Default.End() }
 	if n.Constraint != nil { return n.Constraint.End() }

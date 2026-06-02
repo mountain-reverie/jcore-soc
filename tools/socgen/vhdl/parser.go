@@ -495,6 +495,8 @@ func (p *parser) parseDecl() Decl {
 		return p.parseComponentDecl()
 	case FUNCTION, PROCEDURE, PURE, IMPURE:
 		return p.parseSubprogramDecl()
+	case ATTRIBUTE:
+		return p.parseAttribute()
 	default:
 		p.errorf(tok.Pos, "unexpected token %v %q in declaration", tok.Kind, tok.Lit)
 		p.advance() // avoid infinite loop
@@ -765,6 +767,45 @@ func (p *parser) parseSubtypeIndication() (mark string, constraint Expr) {
 		constraint = p.parseExpr()
 	}
 	return mark, constraint
+}
+
+// parseAttribute parses an attribute declaration (`attribute n : mark ;`) or an
+// attribute specification (`attribute n of entities : class is expr ;`).
+func (p *parser) parseAttribute() Decl {
+	pos := p.expect(ATTRIBUTE).Pos
+	name := p.expect(IDENT).Lit
+	if p.accept(OF) {
+		entities := []string{p.parseEntityName()}
+		for p.accept(COMMA) {
+			entities = append(entities, p.parseEntityName())
+		}
+		p.expect(COLON)
+		class := p.advance().Kind // entity_class keyword (signal/subtype/variable/...)
+		p.expect(IS)
+		val := p.parseExpr()
+		p.expect(SEMICOLON)
+		return &AttributeSpec{P: pos, Name: name, Entities: entities, EntityClass: class, Value: val}
+	}
+	p.expect(COLON)
+	mark := p.parseDottedName()
+	p.expect(SEMICOLON)
+	return &AttributeDecl{P: pos, Name: name, TypeMark: mark}
+}
+
+// parseEntityName reads one entity name in an attribute spec's name list: an
+// identifier, or the keywords `others`/`all`.
+func (p *parser) parseEntityName() string {
+	switch p.cur().Kind {
+	case IDENT:
+		return p.advance().Lit
+	case OTHERS, ALL:
+		return p.advance().Kind.String()
+	default:
+		t := p.cur()
+		p.errorf(t.Pos, "expected entity name, got %v %q", t.Kind, t.Lit)
+		p.advance() // ensure progress
+		return ""
+	}
 }
 
 // parseName parses an identifier (possibly dotted or with attribute ticks)

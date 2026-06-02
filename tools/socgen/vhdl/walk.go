@@ -85,6 +85,12 @@ func Walk(v Visitor, node Node) {
 		for _, prm := range n.Params {
 			Walk(v, prm)
 		}
+	case *AttributeDecl:
+		// no child nodes
+	case *AttributeSpec:
+		if n.Value != nil {
+			Walk(v, n.Value)
+		}
 
 	// type definitions
 	case *EnumDef:
