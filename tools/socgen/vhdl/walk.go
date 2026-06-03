@@ -53,6 +53,10 @@ func Walk(v Visitor, node Node) {
 		for _, s := range n.Stmts {
 			Walk(v, s)
 		}
+	case *PackageBody:
+		for _, d := range n.Decls {
+			Walk(v, d)
+		}
 
 	// statements
 	case *ConcurrentSignalAssign:

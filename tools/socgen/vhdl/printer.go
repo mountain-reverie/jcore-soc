@@ -34,6 +34,8 @@ func printUnit(b *strings.Builder, u DesignUnit) {
 	switch n := u.(type) {
 	case *PackageDecl:
 		printPackageDecl(b, n)
+	case *PackageBody:
+		printPackageBody(b, n)
 	case *EntityDecl:
 		printEntityDecl(b, n)
 	case *ArchitectureBody:
@@ -322,6 +324,18 @@ func printPackageDecl(b *strings.Builder, n *PackageDecl) {
 		b.WriteByte('\n')
 	}
 	b.WriteString("end package;\n")
+}
+
+func printPackageBody(b *strings.Builder, n *PackageBody) {
+	b.WriteString("package body ")
+	b.WriteString(n.Name)
+	b.WriteString(" is\n")
+	for _, d := range n.Decls {
+		b.WriteString("  ")
+		printDecl(b, d, "  ")
+		b.WriteByte('\n')
+	}
+	b.WriteString("end package body;\n")
 }
 
 func printEntityDecl(b *strings.Builder, n *EntityDecl) {

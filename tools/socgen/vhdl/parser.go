@@ -353,14 +353,14 @@ func (p *parser) parseFile() *DesignFile {
 		start := p.i
 		switch p.cur().Kind {
 		case PACKAGE:
-			// Peek: PACKAGE BODY → deferred
 			if p.peekKind(1) == BODY {
-				p.errorf(p.cur().Pos, "deferred: package body not yet parsed")
-				return df
-			}
-			u := p.parsePackageDecl()
-			if u != nil {
-				df.Units = append(df.Units, u)
+				if u := p.parsePackageBody(); u != nil {
+					df.Units = append(df.Units, u)
+				}
+			} else {
+				if u := p.parsePackageDecl(); u != nil {
+					df.Units = append(df.Units, u)
+				}
 			}
 		case ENTITY:
 			u := p.parseEntityDecl()
@@ -452,6 +452,30 @@ func (p *parser) parsePackageDecl() *PackageDecl {
 	}
 	p.expect(SEMICOLON)
 	return &PackageDecl{P: pos, Name: name, Decls: decls}
+}
+
+// parsePackageBody parses `package body name is <decls> end [package body] [name] ;`.
+func (p *parser) parsePackageBody() *PackageBody {
+	pos := p.expect(PACKAGE).Pos
+	p.expect(BODY)
+	name := p.expect(IDENT).Lit
+	p.expect(IS)
+	var decls []Decl
+	for !p.at(END) && !p.at(EOF) {
+		start := p.i
+		if d := p.parseDecl(); d != nil {
+			decls = append(decls, d)
+		}
+		p.ensureProgress(start, "package body declaration")
+	}
+	p.expect(END)
+	p.accept(PACKAGE)
+	p.accept(BODY)
+	if p.at(IDENT) {
+		p.advance() // optional closing name
+	}
+	p.expect(SEMICOLON)
+	return &PackageBody{P: pos, Name: name, Decls: decls}
 }
 
 // parseEntityDecl parses: ENTITY name IS [GENERIC(...);] [PORT(...);] END [ENTITY] [name] ;

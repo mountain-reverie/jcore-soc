@@ -75,6 +75,16 @@ func (n *ArchitectureBody) End() Pos {
 }
 func (n *ArchitectureBody) unitNode() {}
 
+// PackageBody is `package body name is <declarative_items> end package body ;`.
+type PackageBody struct{ P Pos; Name string; Decls []Decl }
+
+func (n *PackageBody) Pos() Pos { return n.P }
+func (n *PackageBody) End() Pos {
+	if k := len(n.Decls); k > 0 { return n.Decls[k-1].End() }
+	return n.P
+}
+func (n *PackageBody) unitNode() {}
+
 // CondWaveform is one `value when cond` arm of a conditional signal assignment.
 // The final `else value` arm has Cond == nil.
 type CondWaveform struct {

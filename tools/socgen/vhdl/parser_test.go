@@ -825,3 +825,40 @@ end architecture;`
 		t.Fatalf("subprogram body not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
+
+func TestParsePackageBody(t *testing.T) {
+	src := `package p is
+  function inc(x : integer) return integer;
+end package;
+
+package body p is
+  constant K : integer := 4;
+  function inc(x : integer) return integer is
+  begin
+    return x + 1;
+  end function;
+end package body p;`
+	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
+	}
+	if len(df.Units) != 2 {
+		t.Fatalf("expected 2 units (package + body), got %d", len(df.Units))
+	}
+	if _, ok := df.Units[0].(*PackageDecl); !ok {
+		t.Fatalf("unit0 should be PackageDecl: %#v", df.Units[0])
+	}
+	pb, ok := df.Units[1].(*PackageBody)
+	if !ok || pb.Name != "p" || len(pb.Decls) != 2 {
+		t.Fatalf("package body: %#v", df.Units[1])
+	}
+	if _, ok := pb.Decls[1].(*SubprogramBody); !ok {
+		t.Fatalf("body should contain a SubprogramBody: %#v", pb.Decls[1])
+	}
+	// round-trip
+	out := Print(df)
+	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
+	if len(errs2) != 0 || !equalAST(df, df2) {
+		t.Fatalf("package body not AST-stable: errs=%v\n%s", errs2, out)
+	}
+}
