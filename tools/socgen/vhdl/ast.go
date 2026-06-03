@@ -318,15 +318,15 @@ func (n *ReturnStmt) Pos() Pos { return n.P }
 func (n *ReturnStmt) End() Pos { if n.Value != nil { return n.Value.End() }; return n.P }
 func (n *ReturnStmt) stmtNode() {}
 
-// LoopStmt is a loop statement. P1d-1 supports only the for-loop scheme; while
-// and bare loops are deferred. Scheme is FOR (Param+Range set) for now.
+// LoopStmt is a loop statement. Scheme is FOR (Param+Range set), WHILE (Cond
+// set), or 0 for a bare loop.
 type LoopStmt struct {
 	P      Pos
 	Label  string
-	Scheme Kind // FOR (WHILE / 0 reserved for later)
+	Scheme Kind // FOR, WHILE, or 0 (bare)
 	Param  string
 	Range  Expr
-	Cond   Expr // while-loop condition (unused in P1d-1)
+	Cond   Expr // while-loop condition
 	Stmts  []Stmt
 }
 
@@ -336,6 +336,20 @@ func (n *LoopStmt) End() Pos {
 	return n.P
 }
 func (n *LoopStmt) stmtNode() {}
+
+// NextStmt is `[label:] next [loop_label] [when cond] ;`.
+type NextStmt struct{ P Pos; Label string; LoopLabel string; When Expr }
+
+func (n *NextStmt) Pos() Pos { return n.P }
+func (n *NextStmt) End() Pos { if n.When != nil { return n.When.End() }; return n.P }
+func (n *NextStmt) stmtNode() {}
+
+// ExitStmt is `[label:] exit [loop_label] [when cond] ;`.
+type ExitStmt struct{ P Pos; Label string; LoopLabel string; When Expr }
+
+func (n *ExitStmt) Pos() Pos { return n.P }
+func (n *ExitStmt) End() Pos { if n.When != nil { return n.When.End() }; return n.P }
+func (n *ExitStmt) stmtNode() {}
 
 // AssertStmt is `[label:] assert cond [report expr] [severity expr] ;` (sequential or concurrent).
 type AssertStmt struct {

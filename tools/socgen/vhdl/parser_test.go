@@ -767,19 +767,47 @@ end architecture;`
 	}
 }
 
-func TestParseProcessWithWhileDeferred(t *testing.T) {
-	// while-loops stay deferred in P1d-1.
+func TestParseLoopControl(t *testing.T) {
 	src := `architecture rtl of e is
 begin
   process begin
-    while x loop
-      x := false;
+    while x < 10 loop
+      x := x + 1;
+      next when x = 5;
+      exit;
+    end loop;
+    loop
+      exit when done;
     end loop;
   end process;
 end architecture;`
-	_, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) == 0 {
-		t.Fatal("expected a deferred error for a while-loop")
+	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
+	}
+	st := df.Units[0].(*ArchitectureBody).Stmts[0].(*ProcessStmt).Stmts
+	wl, ok := st[0].(*LoopStmt)
+	if !ok || wl.Scheme != WHILE || wl.Cond == nil || len(wl.Stmts) != 3 {
+		t.Fatalf("while loop: %#v", st[0])
+	}
+	if _, ok := wl.Stmts[1].(*NextStmt); !ok {
+		t.Fatalf("next: %#v", wl.Stmts[1])
+	}
+	if e, ok := wl.Stmts[2].(*ExitStmt); !ok || e.When != nil {
+		t.Fatalf("exit: %#v", wl.Stmts[2])
+	}
+	bl, ok := st[1].(*LoopStmt)
+	if !ok || bl.Scheme != 0 || bl.Cond != nil {
+		t.Fatalf("bare loop: %#v", st[1])
+	}
+	if e, ok := bl.Stmts[0].(*ExitStmt); !ok || e.When == nil {
+		t.Fatalf("exit when: %#v", bl.Stmts[0])
+	}
+	// round-trip
+	out := Print(df)
+	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
+	if len(errs2) != 0 || !equalAST(df, df2) {
+		t.Fatalf("loop control not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
 

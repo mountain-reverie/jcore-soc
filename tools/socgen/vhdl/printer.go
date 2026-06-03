@@ -261,14 +261,52 @@ func printStmt(b *strings.Builder, s Stmt, indent string) {
 			b.WriteString(n.Label)
 			b.WriteString(" : ")
 		}
-		b.WriteString("for ")
-		b.WriteString(n.Param)
-		b.WriteString(" in ")
-		printExpr(b, n.Range)
-		b.WriteString(" loop\n")
+		switch n.Scheme {
+		case FOR:
+			b.WriteString("for ")
+			b.WriteString(n.Param)
+			b.WriteString(" in ")
+			printExpr(b, n.Range)
+			b.WriteByte(' ')
+		case WHILE:
+			b.WriteString("while ")
+			printExpr(b, n.Cond)
+			b.WriteByte(' ')
+		}
+		b.WriteString("loop\n")
 		printSeqStmts(b, n.Stmts, indent)
 		b.WriteString(indent)
 		b.WriteString("end loop;")
+	case *NextStmt:
+		if n.Label != "" {
+			b.WriteString(n.Label)
+			b.WriteString(" : ")
+		}
+		b.WriteString("next")
+		if n.LoopLabel != "" {
+			b.WriteByte(' ')
+			b.WriteString(n.LoopLabel)
+		}
+		if n.When != nil {
+			b.WriteString(" when ")
+			printExpr(b, n.When)
+		}
+		b.WriteByte(';')
+	case *ExitStmt:
+		if n.Label != "" {
+			b.WriteString(n.Label)
+			b.WriteString(" : ")
+		}
+		b.WriteString("exit")
+		if n.LoopLabel != "" {
+			b.WriteByte(' ')
+			b.WriteString(n.LoopLabel)
+		}
+		if n.When != nil {
+			b.WriteString(" when ")
+			printExpr(b, n.When)
+		}
+		b.WriteByte(';')
 	case *ReturnStmt:
 		if n.Label != "" {
 			b.WriteString(n.Label)

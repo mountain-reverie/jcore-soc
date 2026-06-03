@@ -806,8 +806,12 @@ func (p *parser) parseSequentialStmt() Stmt {
 		return p.parseIfStmt(pos, label)
 	case CASE:
 		return p.parseCaseStmt(pos, label)
-	case FOR:
-		return p.parseForLoop(pos, label)
+	case FOR, WHILE, LOOP:
+		return p.parseLoopStmt(pos, label)
+	case NEXT:
+		return p.parseNextExit(pos, label, true)
+	case EXIT:
+		return p.parseNextExit(pos, label, false)
 	case RETURN:
 		p.advance() // consume RETURN
 		var val Expr
@@ -822,9 +826,6 @@ func (p *parser) parseSequentialStmt() Stmt {
 		return p.parseAssertStmt(pos, label)
 	case REPORT:
 		return p.parseReportStmt(pos, label)
-	case WHILE, LOOP, NEXT, EXIT:
-		p.errorf(p.cur().Pos, "deferred: %v sequential statement not yet parsed", p.cur().Kind)
-		return nil
 	}
 	target := p.parseName()
 	if p.at(LE) {
@@ -854,12 +855,27 @@ func (p *parser) parseSequentialStmt() Stmt {
 	return nil
 }
 
-// parseForLoop parses `for id in range loop <stmts> end loop [label] ;`.
-func (p *parser) parseForLoop(pos Pos, label string) Stmt {
-	p.expect(FOR)
-	param := p.expect(IDENT).Lit
-	p.expect(IN)
-	rng := p.parseExpr()
+// parseLoopStmt parses a for/while/bare loop:
+//   [label:] for id in range loop <stmts> end loop [label] ;
+//   [label:] while cond loop      <stmts> end loop [label] ;
+//   [label:] loop                 <stmts> end loop [label] ;
+func (p *parser) parseLoopStmt(pos Pos, label string) Stmt {
+	var scheme Kind
+	var param string
+	var rng, cond Expr
+	switch p.cur().Kind {
+	case FOR:
+		p.advance()
+		param = p.expect(IDENT).Lit
+		p.expect(IN)
+		rng = p.parseExpr()
+		scheme = FOR
+	case WHILE:
+		p.advance()
+		cond = p.parseExpr()
+		scheme = WHILE
+	}
+	// bare loop: current token is LOOP, scheme stays 0
 	p.expect(LOOP)
 	body := p.parseSeqStmtsUntil(END)
 	p.expect(END)
@@ -868,7 +884,29 @@ func (p *parser) parseForLoop(pos Pos, label string) Stmt {
 		p.advance() // optional closing label
 	}
 	p.expect(SEMICOLON)
-	return &LoopStmt{P: pos, Label: label, Scheme: FOR, Param: param, Range: rng, Stmts: body}
+	return &LoopStmt{P: pos, Label: label, Scheme: scheme, Param: param, Range: rng, Cond: cond, Stmts: body}
+}
+
+// parseNextExit parses a next/exit statement: `next|exit [loop_label] [when cond] ;`.
+func (p *parser) parseNextExit(pos Pos, label string, isNext bool) Stmt {
+	if isNext {
+		p.expect(NEXT)
+	} else {
+		p.expect(EXIT)
+	}
+	loopLabel := ""
+	if p.at(IDENT) {
+		loopLabel = p.advance().Lit
+	}
+	var when Expr
+	if p.accept(WHEN) {
+		when = p.parseExpr()
+	}
+	p.expect(SEMICOLON)
+	if isNext {
+		return &NextStmt{P: pos, Label: label, LoopLabel: loopLabel, When: when}
+	}
+	return &ExitStmt{P: pos, Label: label, LoopLabel: loopLabel, When: when}
 }
 
 // parseWaitStmt parses `wait [on name {, name}] [until cond] [for time] ;`.
