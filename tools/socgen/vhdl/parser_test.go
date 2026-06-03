@@ -887,3 +887,53 @@ end package body p;`
 		t.Fatalf("package body not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
+
+func TestParseWaveformAfter(t *testing.T) {
+	src := `architecture rtl of e is
+begin
+  clk <= not clk after 5 ns;
+  rst <= '1', '0' after 15 ns;
+  q <= a;
+end architecture;`
+	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
+	}
+	arch := df.Units[0].(*ArchitectureBody)
+	a0 := arch.Stmts[0].(*ConcurrentSignalAssign)
+	if len(a0.Waveform) != 1 || a0.Waveform[0].After == nil {
+		t.Fatalf("clk waveform: %#v", a0)
+	}
+	a1 := arch.Stmts[1].(*ConcurrentSignalAssign)
+	if len(a1.Waveform) != 2 || a1.Waveform[0].After != nil || a1.Waveform[1].After == nil {
+		t.Fatalf("rst waveform: %#v", a1)
+	}
+	a2 := arch.Stmts[2].(*ConcurrentSignalAssign)
+	if len(a2.Waveform) != 1 || a2.Waveform[0].After != nil {
+		t.Fatalf("q waveform: %#v", a2)
+	}
+	// sequential waveform-after (inside a process)
+	src2 := `architecture rtl of e is
+begin
+  process begin
+    d <= x after 2 ns;
+  end process;
+end architecture;`
+	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(src2))
+	if len(errs2) != 0 {
+		t.Fatalf("errs2: %v", errs2)
+	}
+	sa := df2.Units[0].(*ArchitectureBody).Stmts[0].(*ProcessStmt).Stmts[0].(*SignalAssignStmt)
+	if len(sa.Waveform) != 1 || sa.Waveform[0].After == nil {
+		t.Fatalf("seq waveform: %#v", sa)
+	}
+	// round-trip both
+	for _, s := range []string{src, src2} {
+		d, e := ParseFile(NewFileSet(), "t.vhd", []byte(s))
+		out := Print(d)
+		d2, e2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
+		if len(e) != 0 || len(e2) != 0 || !equalAST(d, d2) {
+			t.Fatalf("waveform not AST-stable: e=%v e2=%v\n%s", e, e2, out)
+		}
+	}
+}

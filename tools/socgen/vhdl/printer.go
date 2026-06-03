@@ -73,8 +73,8 @@ func printStmt(b *strings.Builder, s Stmt, indent string) {
 		}
 		printExpr(b, n.Target)
 		b.WriteString(" <= ")
-		if n.Waveform != nil {
-			printExpr(b, n.Waveform)
+		if len(n.Waveform) > 0 {
+			printWaveform(b, n.Waveform)
 		} else {
 			for i, c := range n.Conds {
 				if i > 0 {
@@ -194,7 +194,7 @@ func printStmt(b *strings.Builder, s Stmt, indent string) {
 		}
 		printExpr(b, n.Target)
 		b.WriteString(" <= ")
-		printExpr(b, n.Waveform)
+		printWaveform(b, n.Waveform)
 		b.WriteByte(';')
 	case *VariableAssignStmt:
 		if n.Label != "" {
@@ -290,6 +290,20 @@ func printSeqStmts(b *strings.Builder, stmts []Stmt, indent string) {
 		b.WriteString("  ")
 		printStmt(b, s, indent+"  ")
 		b.WriteByte('\n')
+	}
+}
+
+// printWaveform prints `value [after time]{, value after time}`.
+func printWaveform(b *strings.Builder, wf []*WaveformElem) {
+	for i, el := range wf {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		printExpr(b, el.Value)
+		if el.After != nil {
+			b.WriteString(" after ")
+			printExpr(b, el.After)
+		}
 	}
 }
 

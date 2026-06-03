@@ -92,19 +92,29 @@ type CondWaveform struct {
 	Cond  Expr
 }
 
+// WaveformElem is one element of a signal-assignment waveform: `value [after time]`.
+type WaveformElem struct {
+	Value Expr
+	After Expr // nil if no `after` clause
+}
+
 // ConcurrentSignalAssign is `[label:] target <= ... ;`. A simple assignment sets
 // Waveform (Conds nil); a conditional assignment sets Conds (Waveform nil).
 type ConcurrentSignalAssign struct {
 	P        Pos
 	Label    string
 	Target   Expr
-	Waveform Expr
+	Waveform []*WaveformElem
 	Conds    []*CondWaveform
 }
 
 func (n *ConcurrentSignalAssign) Pos() Pos { return n.P }
 func (n *ConcurrentSignalAssign) End() Pos {
-	if n.Waveform != nil { return n.Waveform.End() }
+	if k := len(n.Waveform); k > 0 {
+		last := n.Waveform[k-1]
+		if last.After != nil { return last.After.End() }
+		if last.Value != nil { return last.Value.End() }
+	}
 	if k := len(n.Conds); k > 0 && n.Conds[k-1].Value != nil { return n.Conds[k-1].Value.End() }
 	return n.Target.End()
 }
@@ -207,10 +217,17 @@ func (n *ProcessStmt) End() Pos {
 func (n *ProcessStmt) stmtNode() {}
 
 // SignalAssignStmt is a sequential `[label:] target <= waveform ;`.
-type SignalAssignStmt struct{ P Pos; Label string; Target Expr; Waveform Expr }
+type SignalAssignStmt struct{ P Pos; Label string; Target Expr; Waveform []*WaveformElem }
 
 func (n *SignalAssignStmt) Pos() Pos { return n.P }
-func (n *SignalAssignStmt) End() Pos { if n.Waveform != nil { return n.Waveform.End() }; return n.Target.End() }
+func (n *SignalAssignStmt) End() Pos {
+	if k := len(n.Waveform); k > 0 {
+		last := n.Waveform[k-1]
+		if last.After != nil { return last.After.End() }
+		if last.Value != nil { return last.Value.End() }
+	}
+	return n.Target.End()
+}
 func (n *SignalAssignStmt) stmtNode() {}
 
 // VariableAssignStmt is `[label:] target := value ;`.

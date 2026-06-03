@@ -630,8 +630,17 @@ func (p *parser) parseConcurrentStmt() Stmt {
 			p.expect(SEMICOLON)
 			return &ConcurrentSignalAssign{P: pos, Label: label, Target: target, Conds: conds}
 		}
+		// simple waveform (first element value already parsed as `first`)
+		el0 := &WaveformElem{Value: first}
+		if p.accept(AFTER) {
+			el0.After = p.parseExpr()
+		}
+		wf := []*WaveformElem{el0}
+		for p.accept(COMMA) {
+			wf = append(wf, p.parseWaveformElem())
+		}
 		p.expect(SEMICOLON)
-		return &ConcurrentSignalAssign{P: pos, Label: label, Target: target, Waveform: first}
+		return &ConcurrentSignalAssign{P: pos, Label: label, Target: target, Waveform: wf}
 	}
 	// Bare component instantiation: `label : comp_name [generic map][port map] ;`.
 	// Only valid with a label and a simple name; otherwise defer.
@@ -642,6 +651,25 @@ func (p *parser) parseConcurrentStmt() Stmt {
 	}
 	p.errorf(p.cur().Pos, "deferred: concurrent statement not yet parsed")
 	return nil
+}
+
+// parseWaveformElem parses `value [after time]`.
+func (p *parser) parseWaveformElem() *WaveformElem {
+	v := p.parseExpr()
+	var after Expr
+	if p.accept(AFTER) {
+		after = p.parseExpr()
+	}
+	return &WaveformElem{Value: v, After: after}
+}
+
+// parseWaveform parses `element {, element}`.
+func (p *parser) parseWaveform() []*WaveformElem {
+	wf := []*WaveformElem{p.parseWaveformElem()}
+	for p.accept(COMMA) { // each iteration consumes COMMA -> always advances
+		wf = append(wf, p.parseWaveformElem())
+	}
+	return wf
 }
 
 // parseGenerate parses a for/if generate statement (label already consumed).
@@ -768,9 +796,9 @@ func (p *parser) parseSequentialStmt() Stmt {
 	target := p.parseName()
 	if p.at(LE) {
 		p.advance() // '<='
-		wave := p.parseExpr()
+		wf := p.parseWaveform()
 		p.expect(SEMICOLON)
-		return &SignalAssignStmt{P: pos, Label: label, Target: target, Waveform: wave}
+		return &SignalAssignStmt{P: pos, Label: label, Target: target, Waveform: wf}
 	}
 	if p.at(ASSIGN) {
 		p.advance() // ':='
