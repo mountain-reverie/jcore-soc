@@ -251,6 +251,8 @@ func Walk(v Visitor, node Node) {
 	case *ArrayDef:
 
 	// expressions
+	case *PhysicalLit:
+		// no child nodes
 	case *BasicLit:
 	case *Ident:
 	case *Range:

@@ -255,7 +255,15 @@ func (p *parser) parsePrimary() Expr {
 	tok := p.cur()
 
 	switch tok.Kind {
-	case INT, REAL, BASEDLIT, CHARLIT, STRINGLIT, BITSTRINGLIT:
+	case INT, REAL, BASEDLIT:
+		p.advance()
+		if p.at(IDENT) {
+			// physical literal: abstract literal + unit name
+			unit := p.advance().Lit
+			return &PhysicalLit{ValuePos: tok.Pos, Value: tok.Lit, Unit: unit}
+		}
+		return &BasicLit{ValuePos: tok.Pos, Kind: tok.Kind, Value: tok.Lit}
+	case CHARLIT, STRINGLIT, BITSTRINGLIT:
 		p.advance()
 		return &BasicLit{ValuePos: tok.Pos, Kind: tok.Kind, Value: tok.Lit}
 

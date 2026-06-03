@@ -467,6 +467,17 @@ func (n *EnumDef)   End() Pos { return n.P }
 func (n *RecordDef) End() Pos { return n.P }
 func (n *ArrayDef)  End() Pos { return n.P }
 
+// PhysicalLit is an abstract literal with a unit name, e.g. `5 ns`.
+type PhysicalLit struct {
+	ValuePos Pos
+	Value    string // the abstract literal text (e.g. "5", "1.5", "16#FF#")
+	Unit     string // the unit name (e.g. "ns")
+}
+
+func (n *PhysicalLit) Pos() Pos { return n.ValuePos }
+func (n *PhysicalLit) End() Pos { return n.ValuePos + Pos(len(n.Value)+1+len(n.Unit)) }
+func (n *PhysicalLit) exprNode() {}
+
 // expressions
 type BasicLit    struct{ ValuePos Pos; Kind Kind; Value string } // INT/REAL/BASEDLIT/CHARLIT/STRINGLIT/BITSTRINGLIT
 type Ident       struct{ NamePos Pos; Name string }              // a (possibly compound/attributed) name; full decomposition into SelectorExpr is deferred

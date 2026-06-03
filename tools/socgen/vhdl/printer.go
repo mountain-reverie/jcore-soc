@@ -594,6 +594,10 @@ func printSubtypeIndication(b *strings.Builder, mark string, constraint Expr) {
 
 func printExpr(b *strings.Builder, e Expr) {
 	switch n := e.(type) {
+	case *PhysicalLit:
+		b.WriteString(n.Value)
+		b.WriteByte(' ')
+		b.WriteString(n.Unit)
 	case *BasicLit:
 		b.WriteString(n.Value)
 	case *Ident:

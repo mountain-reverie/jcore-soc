@@ -826,6 +826,31 @@ end architecture;`
 	}
 }
 
+func TestParsePhysicalLiteral(t *testing.T) {
+	pl, ok := mustParseExpr(t, "5 ns").(*PhysicalLit)
+	if !ok || pl.Value != "5" || pl.Unit != "ns" {
+		t.Fatalf("physical literal: %#v", mustParseExpr(t, "5 ns"))
+	}
+	// a plain numeric (no unit) stays a BasicLit
+	if _, ok := mustParseExpr(t, "10").(*BasicLit); !ok {
+		t.Fatalf("plain literal should be BasicLit: %#v", mustParseExpr(t, "10"))
+	}
+	// real-valued physical literal
+	if pl, ok := mustParseExpr(t, "1.5 us").(*PhysicalLit); !ok || pl.Unit != "us" {
+		t.Fatalf("real physical: %#v", mustParseExpr(t, "1.5 us"))
+	}
+	// round-trip inside a constant default
+	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte("package p is\nconstant period : time := 10 ns;\nend package;"))
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
+	}
+	out := Print(df)
+	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
+	if len(errs2) != 0 || !equalAST(df, df2) {
+		t.Fatalf("physical literal not AST-stable: errs=%v\n%s", errs2, out)
+	}
+}
+
 func TestParsePackageBody(t *testing.T) {
 	src := `package p is
   function inc(x : integer) return integer;
