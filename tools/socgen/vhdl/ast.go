@@ -323,7 +323,7 @@ func (n *ReturnStmt) stmtNode() {}
 type LoopStmt struct {
 	P      Pos
 	Label  string
-	Scheme Kind // FOR, WHILE, or 0 (bare)
+	Scheme Kind // FOR, WHILE, or 0 (zero value) = bare loop (no scheme)
 	Param  string
 	Range  Expr
 	Cond   Expr // while-loop condition

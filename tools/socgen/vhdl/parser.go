@@ -787,9 +787,9 @@ func (p *parser) parseProcess(pos Pos, label string) Stmt {
 	return &ProcessStmt{P: pos, Label: label, Postponed: postponed, Sensitivity: sens, Decls: decls, Stmts: stmts}
 }
 
-// parseSequentialStmt parses ONE sequential statement. It supports
-// if/case/for/return/assignment/null; the wait/report/assert/while/loop/next/exit
-// cluster is deferred (file excluded).
+// parseSequentialStmt parses one sequential statement (assignment, procedure
+// call, if/case/loop, wait, assert/report, return, next/exit, null). No
+// sequential-statement keyword is deferred.
 func (p *parser) parseSequentialStmt() Stmt {
 	pos := p.cur().Pos
 	label := ""
