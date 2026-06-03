@@ -267,6 +267,13 @@ func (n *NullStmt) Pos() Pos { return n.P }
 func (n *NullStmt) End() Pos { return n.P }
 func (n *NullStmt) stmtNode() {}
 
+// ReturnStmt is `[label:] return [expression] ;`. Value is nil for a bare return.
+type ReturnStmt struct{ P Pos; Label string; Value Expr }
+
+func (n *ReturnStmt) Pos() Pos { return n.P }
+func (n *ReturnStmt) End() Pos { if n.Value != nil { return n.Value.End() }; return n.P }
+func (n *ReturnStmt) stmtNode() {}
+
 // LoopStmt is a loop statement. P1d-1 supports only the for-loop scheme; while
 // and bare loops are deferred. Scheme is FOR (Param+Range set) for now.
 type LoopStmt struct {

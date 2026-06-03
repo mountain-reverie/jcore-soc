@@ -267,6 +267,17 @@ func printStmt(b *strings.Builder, s Stmt, indent string) {
 		printSeqStmts(b, n.Stmts, indent)
 		b.WriteString(indent)
 		b.WriteString("end loop;")
+	case *ReturnStmt:
+		if n.Label != "" {
+			b.WriteString(n.Label)
+			b.WriteString(" : ")
+		}
+		b.WriteString("return")
+		if n.Value != nil {
+			b.WriteByte(' ')
+			printExpr(b, n.Value)
+		}
+		b.WriteByte(';')
 	}
 }
 

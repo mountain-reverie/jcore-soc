@@ -721,7 +721,15 @@ func (p *parser) parseSequentialStmt() Stmt {
 		return p.parseCaseStmt(pos, label)
 	case FOR:
 		return p.parseForLoop(pos, label)
-	case WHILE, LOOP, WAIT, REPORT, ASSERT, RETURN, NEXT, EXIT:
+	case RETURN:
+		p.advance() // consume RETURN
+		var val Expr
+		if !p.at(SEMICOLON) {
+			val = p.parseExpr()
+		}
+		p.expect(SEMICOLON)
+		return &ReturnStmt{P: pos, Label: label, Value: val}
+	case WHILE, LOOP, WAIT, REPORT, ASSERT, NEXT, EXIT:
 		p.errorf(p.cur().Pos, "deferred: %v sequential statement not yet parsed", p.cur().Kind)
 		return nil
 	}

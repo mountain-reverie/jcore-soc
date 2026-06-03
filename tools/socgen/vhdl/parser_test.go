@@ -753,3 +753,32 @@ end architecture;`
 		t.Fatal("expected a deferred error for a while-loop")
 	}
 }
+
+func TestParseReturnStmt(t *testing.T) {
+	src := `architecture rtl of e is
+begin
+  process begin
+    return x + 1;
+    return;
+  end process;
+end architecture;`
+	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
+	}
+	pr := df.Units[0].(*ArchitectureBody).Stmts[0].(*ProcessStmt)
+	r0, ok := pr.Stmts[0].(*ReturnStmt)
+	if !ok || r0.Value == nil {
+		t.Fatalf("return-with-value: %#v", pr.Stmts[0])
+	}
+	r1, ok := pr.Stmts[1].(*ReturnStmt)
+	if !ok || r1.Value != nil {
+		t.Fatalf("bare return: %#v", pr.Stmts[1])
+	}
+	// round-trip
+	out := Print(df)
+	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
+	if len(errs2) != 0 || !equalAST(df, df2) {
+		t.Fatalf("return not AST-stable: errs=%v\n%s", errs2, out)
+	}
+}
