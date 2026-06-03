@@ -114,6 +114,24 @@ func Walk(v Visitor, node Node) {
 		}
 	case *NullStmt:
 		// no child nodes
+	case *IfStmt:
+		if n.Cond != nil {
+			Walk(v, n.Cond)
+		}
+		for _, s := range n.Then {
+			Walk(v, s)
+		}
+		for _, ei := range n.Elsifs {
+			if ei.Cond != nil {
+				Walk(v, ei.Cond)
+			}
+			for _, s := range ei.Stmts {
+				Walk(v, s)
+			}
+		}
+		for _, s := range n.Else {
+			Walk(v, s)
+		}
 
 	// declarations
 	case *ConstantDecl:

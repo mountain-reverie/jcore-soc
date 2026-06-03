@@ -209,6 +209,39 @@ func printStmt(b *strings.Builder, s Stmt, indent string) {
 			b.WriteString(" : ")
 		}
 		b.WriteString("null;")
+	case *IfStmt:
+		if n.Label != "" {
+			b.WriteString(n.Label)
+			b.WriteString(" : ")
+		}
+		b.WriteString("if ")
+		printExpr(b, n.Cond)
+		b.WriteString(" then\n")
+		printSeqStmts(b, n.Then, indent)
+		for _, ei := range n.Elsifs {
+			b.WriteString(indent)
+			b.WriteString("elsif ")
+			printExpr(b, ei.Cond)
+			b.WriteString(" then\n")
+			printSeqStmts(b, ei.Stmts, indent)
+		}
+		if n.Else != nil {
+			b.WriteString(indent)
+			b.WriteString("else\n")
+			printSeqStmts(b, n.Else, indent)
+		}
+		b.WriteString(indent)
+		b.WriteString("end if;")
+	}
+}
+
+// printSeqStmts prints a sequential statement list, each indented under indent.
+func printSeqStmts(b *strings.Builder, stmts []Stmt, indent string) {
+	for _, s := range stmts {
+		b.WriteString(indent)
+		b.WriteString("  ")
+		printStmt(b, s, indent+"  ")
+		b.WriteByte('\n')
 	}
 }
 

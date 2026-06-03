@@ -210,6 +210,33 @@ func (n *VariableAssignStmt) Pos() Pos { return n.P }
 func (n *VariableAssignStmt) End() Pos { if n.Value != nil { return n.Value.End() }; return n.Target.End() }
 func (n *VariableAssignStmt) stmtNode() {}
 
+// ElsifClause is one `elsif cond then <stmts>` arm of an IfStmt.
+type ElsifClause struct {
+	Cond  Expr
+	Stmts []Stmt
+}
+
+// IfStmt is `[label:] if cond then <then> {elsif cond then <stmts>} [else <else>] end if ;`.
+type IfStmt struct {
+	P      Pos
+	Label  string
+	Cond   Expr
+	Then   []Stmt
+	Elsifs []*ElsifClause
+	Else   []Stmt
+}
+
+func (n *IfStmt) Pos() Pos { return n.P }
+func (n *IfStmt) End() Pos {
+	if k := len(n.Else); k > 0 { return n.Else[k-1].End() }
+	if k := len(n.Elsifs); k > 0 {
+		if m := len(n.Elsifs[k-1].Stmts); m > 0 { return n.Elsifs[k-1].Stmts[m-1].End() }
+	}
+	if k := len(n.Then); k > 0 { return n.Then[k-1].End() }
+	return n.P
+}
+func (n *IfStmt) stmtNode() {}
+
 // NullStmt is `[label:] null ;`.
 type NullStmt struct{ P Pos; Label string }
 

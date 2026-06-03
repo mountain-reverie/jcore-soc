@@ -627,15 +627,49 @@ end architecture;`
 	}
 }
 
-func TestParseProcessWithIfDeferred(t *testing.T) {
+func TestParseIfStmt(t *testing.T) {
 	src := `architecture rtl of e is
 begin
   process(clk) begin
-    if rst = '1' then q <= '0'; end if;
+    if rst = '1' then
+      q <= '0';
+    elsif en = '1' then
+      q <= d;
+      n := n + 1;
+    else
+      q <= q;
+    end if;
+  end process;
+end architecture;`
+	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
+	}
+	pr := df.Units[0].(*ArchitectureBody).Stmts[0].(*ProcessStmt)
+	ifs, ok := pr.Stmts[0].(*IfStmt)
+	if !ok || ifs.Cond == nil || len(ifs.Then) != 1 || len(ifs.Elsifs) != 1 || len(ifs.Else) != 1 {
+		t.Fatalf("if: %#v", pr.Stmts[0])
+	}
+	if len(ifs.Elsifs[0].Stmts) != 2 {
+		t.Fatalf("elsif body: %#v", ifs.Elsifs[0])
+	}
+	// round-trip
+	out := Print(df)
+	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
+	if len(errs2) != 0 || !equalAST(df, df2) {
+		t.Fatalf("if not AST-stable: errs=%v\n%s", errs2, out)
+	}
+}
+
+func TestParseProcessWithWaitDeferred(t *testing.T) {
+	src := `architecture rtl of e is
+begin
+  process begin
+    wait until clk = '1';
   end process;
 end architecture;`
 	_, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
 	if len(errs) == 0 {
-		t.Fatal("expected a deferred error for an if statement")
+		t.Fatal("expected a deferred error for a wait statement")
 	}
 }

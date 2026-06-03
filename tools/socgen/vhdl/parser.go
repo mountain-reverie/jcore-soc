@@ -715,7 +715,9 @@ func (p *parser) parseSequentialStmt() Stmt {
 		p.advance()
 		p.expect(SEMICOLON)
 		return &NullStmt{P: pos, Label: label}
-	case IF, CASE, FOR, WHILE, LOOP, WAIT, REPORT, ASSERT, RETURN, NEXT, EXIT:
+	case IF:
+		return p.parseIfStmt(pos, label)
+	case CASE, FOR, WHILE, LOOP, WAIT, REPORT, ASSERT, RETURN, NEXT, EXIT:
 		p.errorf(p.cur().Pos, "deferred: %v sequential statement not yet parsed", p.cur().Kind)
 		return nil
 	}
@@ -734,6 +736,58 @@ func (p *parser) parseSequentialStmt() Stmt {
 	}
 	p.errorf(p.cur().Pos, "deferred: sequential statement not yet parsed")
 	return nil
+}
+
+// parseSeqStmtsUntil parses sequential statements until the current token is one
+// of stops (or EOF). Each iteration is ensureProgress-guarded so it cannot spin.
+func (p *parser) parseSeqStmtsUntil(stops ...Kind) []Stmt {
+	var stmts []Stmt
+	for !p.at(EOF) && !p.atAny(stops) {
+		start := p.i
+		if s := p.parseSequentialStmt(); s != nil {
+			stmts = append(stmts, s)
+		}
+		p.ensureProgress(start, "sequential statement")
+	}
+	return stmts
+}
+
+// atAny reports whether the current token's kind is in ks.
+func (p *parser) atAny(ks []Kind) bool {
+	k := p.cur().Kind
+	for _, x := range ks {
+		if k == x {
+			return true
+		}
+	}
+	return false
+}
+
+// parseIfStmt parses `if cond then <stmts> {elsif cond then <stmts>} [else <stmts>] end if [label] ;`.
+func (p *parser) parseIfStmt(pos Pos, label string) Stmt {
+	p.expect(IF)
+	cond := p.parseExpr()
+	p.expect(THEN)
+	then := p.parseSeqStmtsUntil(ELSIF, ELSE, END)
+	var elsifs []*ElsifClause
+	for p.at(ELSIF) {
+		p.advance()
+		c := p.parseExpr()
+		p.expect(THEN)
+		body := p.parseSeqStmtsUntil(ELSIF, ELSE, END)
+		elsifs = append(elsifs, &ElsifClause{Cond: c, Stmts: body})
+	}
+	var els []Stmt
+	if p.accept(ELSE) {
+		els = p.parseSeqStmtsUntil(END)
+	}
+	p.expect(END)
+	p.expect(IF)
+	if p.at(IDENT) {
+		p.advance() // optional closing label
+	}
+	p.expect(SEMICOLON)
+	return &IfStmt{P: pos, Label: label, Cond: cond, Then: then, Elsifs: elsifs, Else: els}
 }
 
 // isDeclStart reports whether k begins a declaration handled by parseDecl.
