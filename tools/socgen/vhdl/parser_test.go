@@ -698,16 +698,45 @@ end architecture;`
 	}
 }
 
-func TestParseProcessWithWaitDeferred(t *testing.T) {
+func TestParseWaitStmt(t *testing.T) {
 	src := `architecture rtl of e is
 begin
   process begin
+    wait;
+    wait for 10 ns;
     wait until clk = '1';
+    wait on a, b until c for 5 ns;
   end process;
 end architecture;`
-	_, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) == 0 {
-		t.Fatal("expected a deferred error for a wait statement")
+	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
+	}
+	st := df.Units[0].(*ArchitectureBody).Stmts[0].(*ProcessStmt).Stmts
+	if len(st) != 4 {
+		t.Fatalf("stmts: %d", len(st))
+	}
+	w0 := st[0].(*WaitStmt)
+	if len(w0.On) != 0 || w0.Until != nil || w0.For != nil {
+		t.Fatalf("wait;: %#v", w0)
+	}
+	w1 := st[1].(*WaitStmt)
+	if w1.For == nil || w1.Until != nil {
+		t.Fatalf("wait for: %#v", w1)
+	}
+	w2 := st[2].(*WaitStmt)
+	if w2.Until == nil {
+		t.Fatalf("wait until: %#v", w2)
+	}
+	w3 := st[3].(*WaitStmt)
+	if len(w3.On) != 2 || w3.Until == nil || w3.For == nil {
+		t.Fatalf("wait on/until/for: %#v", w3)
+	}
+	// round-trip
+	out := Print(df)
+	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
+	if len(errs2) != 0 || !equalAST(df, df2) {
+		t.Fatalf("wait not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
 

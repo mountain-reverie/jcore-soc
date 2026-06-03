@@ -789,7 +789,9 @@ func (p *parser) parseSequentialStmt() Stmt {
 		}
 		p.expect(SEMICOLON)
 		return &ReturnStmt{P: pos, Label: label, Value: val}
-	case WHILE, LOOP, WAIT, REPORT, ASSERT, NEXT, EXIT:
+	case WAIT:
+		return p.parseWaitStmt(pos, label)
+	case WHILE, LOOP, REPORT, ASSERT, NEXT, EXIT:
 		p.errorf(p.cur().Pos, "deferred: %v sequential statement not yet parsed", p.cur().Kind)
 		return nil
 	}
@@ -825,6 +827,27 @@ func (p *parser) parseForLoop(pos Pos, label string) Stmt {
 	}
 	p.expect(SEMICOLON)
 	return &LoopStmt{P: pos, Label: label, Scheme: FOR, Param: param, Range: rng, Stmts: body}
+}
+
+// parseWaitStmt parses `wait [on name {, name}] [until cond] [for time] ;`.
+func (p *parser) parseWaitStmt(pos Pos, label string) Stmt {
+	p.expect(WAIT)
+	var on []Expr
+	if p.accept(ON) {
+		on = append(on, p.parseName())
+		for p.accept(COMMA) {
+			on = append(on, p.parseName())
+		}
+	}
+	var until, forExpr Expr
+	if p.accept(UNTIL) {
+		until = p.parseExpr()
+	}
+	if p.accept(FOR) {
+		forExpr = p.parseExpr()
+	}
+	p.expect(SEMICOLON)
+	return &WaitStmt{P: pos, Label: label, On: on, Until: until, For: forExpr}
 }
 
 // parseSeqStmtsUntil parses sequential statements until the current token is one

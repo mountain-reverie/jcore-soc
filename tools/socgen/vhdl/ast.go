@@ -320,6 +320,24 @@ func (n *LoopStmt) End() Pos {
 }
 func (n *LoopStmt) stmtNode() {}
 
+// WaitStmt is `[label:] wait [on signals] [until cond] [for time] ;`.
+type WaitStmt struct {
+	P     Pos
+	Label string
+	On    []Expr // sensitivity clause signal names
+	Until Expr   // condition clause
+	For   Expr   // timeout clause
+}
+
+func (n *WaitStmt) Pos() Pos { return n.P }
+func (n *WaitStmt) End() Pos {
+	if n.For != nil { return n.For.End() }
+	if n.Until != nil { return n.Until.End() }
+	if k := len(n.On); k > 0 { return n.On[k-1].End() }
+	return n.P
+}
+func (n *WaitStmt) stmtNode() {}
+
 // declarations
 type ConstantDecl  struct{ P Pos; Names []string; SubtypeMark string; Constraint Expr; Default Expr }
 type SignalDecl    struct{ P Pos; Names []string; SubtypeMark string; Constraint Expr; Default Expr }

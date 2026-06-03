@@ -280,6 +280,30 @@ func printStmt(b *strings.Builder, s Stmt, indent string) {
 			printExpr(b, n.Value)
 		}
 		b.WriteByte(';')
+	case *WaitStmt:
+		if n.Label != "" {
+			b.WriteString(n.Label)
+			b.WriteString(" : ")
+		}
+		b.WriteString("wait")
+		if len(n.On) > 0 {
+			b.WriteString(" on ")
+			for i, s := range n.On {
+				if i > 0 {
+					b.WriteString(", ")
+				}
+				printExpr(b, s)
+			}
+		}
+		if n.Until != nil {
+			b.WriteString(" until ")
+			printExpr(b, n.Until)
+		}
+		if n.For != nil {
+			b.WriteString(" for ")
+			printExpr(b, n.For)
+		}
+		b.WriteByte(';')
 	}
 }
 

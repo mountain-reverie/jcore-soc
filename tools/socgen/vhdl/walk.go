@@ -172,6 +172,16 @@ func Walk(v Visitor, node Node) {
 		for _, s := range n.Stmts {
 			Walk(v, s)
 		}
+	case *WaitStmt:
+		for _, s := range n.On {
+			Walk(v, s)
+		}
+		if n.Until != nil {
+			Walk(v, n.Until)
+		}
+		if n.For != nil {
+			Walk(v, n.For)
+		}
 
 	// declarations
 	case *ConstantDecl:
