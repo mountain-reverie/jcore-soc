@@ -94,13 +94,17 @@ func TestCorpusRoundTrip(t *testing.T) {
 				cppExe = "gcc"
 			}
 			if !roundTrips(absPath, cppExe, src) {
-				_, errs := ParseFile(NewFileSet(), rel, src)
+				var errs []error
+				if cppExe != "" {
+					_, errs = ParseFile(NewFileSet(), absPath, src, WithCPP(cppExe))
+				} else {
+					_, errs = ParseFile(NewFileSet(), absPath, src)
+				}
 				t.Fatalf("round-trip failed; parse errs: %v", errs)
 			}
 		})
 	}
 }
-
 
 func TestCorpusGhdlReanalyze(t *testing.T) {
 	if _, err := exec.LookPath("ghdl"); err != nil {
@@ -126,7 +130,7 @@ func TestCorpusGhdlReanalyze(t *testing.T) {
 			if cppExe != "" {
 				f, errs = ParseFile(NewFileSet(), absPath, src, WithCPP(cppExe))
 			} else {
-				f, errs = ParseFile(NewFileSet(), rel, src)
+				f, errs = ParseFile(NewFileSet(), absPath, src)
 			}
 			if len(errs) != 0 {
 				t.Fatalf("parse: %v", errs)
