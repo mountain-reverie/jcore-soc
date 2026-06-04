@@ -386,6 +386,8 @@ func Walk(v Visitor, node Node) {
 		}
 	case *SelectorExpr:
 		Walk(v, n.X)
+	case *AttributeName:
+		Walk(v, n.X)
 	case *BinaryExpr:
 		Walk(v, n.X)
 		Walk(v, n.Y)

@@ -801,6 +801,19 @@ func (n *SelectorExpr) Pos() Pos { return n.X.Pos() }
 func (n *SelectorExpr) End() Pos { return n.Dot + Pos(len(n.Sel)+1) }
 func (n *SelectorExpr) exprNode() {}
 
+// AttributeName is an attribute applied to a prefix expression, e.g.
+// dr_tmp(i)'LAST_EVENT or arr(i)'length. (Attributes on a SIMPLE name are
+// folded into Ident.Name by the parser; this node carries the non-flat case.)
+type AttributeName struct {
+	X    Expr
+	Tick Pos
+	Attr string
+}
+
+func (a *AttributeName) Pos() Pos { return a.X.Pos() }
+func (a *AttributeName) End() Pos { return a.Tick + Pos(len(a.Attr)+1) }
+func (*AttributeName) exprNode()  {}
+
 func (n *BasicLit)   exprNode() {}
 func (n *Ident)      exprNode() {}
 func (n *Range)      exprNode() {}

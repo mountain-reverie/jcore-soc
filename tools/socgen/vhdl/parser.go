@@ -1793,6 +1793,12 @@ func (p *parser) parseEntityClassEntry() string {
 	return s
 }
 
+// isAttrNameKind reports whether k can name an attribute after a tick
+// (an identifier, extended identifier, or a reserved word like `range`).
+func isAttrNameKind(k Kind) bool {
+	return k == IDENT || k == EXTIDENT || (k > kwStart && k < kwEnd)
+}
+
 // parseName parses an identifier (possibly dotted or with attribute ticks)
 // and optionally a call-or-index suffix.
 func (p *parser) parseName() Expr {
@@ -1823,8 +1829,7 @@ func (p *parser) parseName() Expr {
 		// Peek at the token after the tick. peekKind returns EOF past the end,
 		// and EOF is not an attr-name kind, so the loop still breaks correctly.
 		ak := p.peekKind(1)
-		isAttrName := ak == IDENT || ak == EXTIDENT || (ak > kwStart && ak < kwEnd)
-		if !isAttrName {
+		if !isAttrNameKind(ak) {
 			break
 		}
 		p.advance() // consume TICK
@@ -1846,15 +1851,11 @@ func (p *parser) parseName() Expr {
 		return &QualifiedExpr{Mark: name, Tick: tick.Pos, X: p.parseParenOrAggregate()}
 	}
 
-	// Note: an attribute applied to a call/indexed result (e.g. f(a)'length) is
-	// not handled here — the attribute loop above runs before this suffix. Such
-	// names need the SelectorExpr/attribute decomposition deferred past P1b.
-	// TODO(p1c): handle suffix attributes when names are properly decomposed.
-
-	// Suffix chain: zero or more `(args)` (call/index/slice) and `.field`
-	// (selection after a call/index). A leading run of simple `.id` is already
-	// flattened into the Ident above; this loop builds chained CallExpr and
-	// SelectorExpr for the non-flat tail.
+	// Suffix chain: zero or more `(args)` (call/index/slice), `.field`
+	// (selection after a call/index), and `'attr` (attribute on a call/index
+	// result). A leading run of simple `.id` is already flattened into the Ident
+	// above; this loop builds chained CallExpr, SelectorExpr, and AttributeName
+	// for the non-flat tail.
 	var expr Expr = name
 	for {
 		switch {
@@ -1877,6 +1878,14 @@ func (p *parser) parseName() Expr {
 				sel = selTok.Kind.String()
 			}
 			expr = &SelectorExpr{X: expr, Dot: dotTok.Pos, Sel: sel}
+		case p.at(TICK) && isAttrNameKind(p.peekKind(1)):
+			tickTok := p.advance() // consume '
+			attr := p.advance()
+			attrText := attr.Lit
+			if attrText == "" {
+				attrText = attr.Kind.String()
+			}
+			expr = &AttributeName{X: expr, Tick: tickTok.Pos, Attr: attrText}
 		default:
 			return expr
 		}

@@ -1700,3 +1700,77 @@ func TestParseMultiUnitContext(t *testing.T) {
 		t.Fatalf("case3: AST not stable across print/reparse\n--- printed ---\n%s", out3)
 	}
 }
+
+func TestParseSuffixAttribute(t *testing.T) {
+	// Case 1: arr(i)'length — AttributeName wrapping a CallExpr.
+	e1 := mustParseExpr(t, "arr(i)'length")
+	an1, ok := e1.(*AttributeName)
+	if !ok {
+		t.Fatalf("case1: expected *AttributeName, got %T: %#v", e1, e1)
+	}
+	if _, ok := an1.X.(*CallExpr); !ok {
+		t.Fatalf("case1: expected X to be *CallExpr, got %T", an1.X)
+	}
+	if an1.Attr != "length" {
+		t.Fatalf("case1: expected Attr=length, got %q", an1.Attr)
+	}
+	// round-trip
+	var b1 strings.Builder
+	printExpr(&b1, e1)
+	if !equalAST(e1, mustParseExpr(t, b1.String())) {
+		t.Fatalf("case1: not AST-stable across print/reparse; printed: %q", b1.String())
+	}
+
+	// Case 2: dr_tmp(i)'LAST_EVENT inside an aggregate — the AttributeName node
+	// is reachable from the aggregate.
+	src2 := `package p is
+constant C : time := (0 => dr_tmp(i)'LAST_EVENT);
+end package;`
+	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(src2))
+	if len(errs2) != 0 {
+		t.Fatalf("case2: parse errors: %v", errs2)
+	}
+	// Check that an AttributeName node exists somewhere in the tree.
+	found := false
+	Inspect(df2, func(n Node) bool {
+		if _, ok := n.(*AttributeName); ok {
+			found = true
+		}
+		return !found
+	})
+	if !found {
+		t.Fatal("case2: no *AttributeName found in AST")
+	}
+	// round-trip
+	out2 := Print(df2)
+	df2b, errs2b := ParseFile(NewFileSet(), "t.vhd", []byte(out2))
+	if len(errs2b) != 0 {
+		t.Fatalf("case2: reparse errors: %v\n--- printed ---\n%s", errs2b, out2)
+	}
+	if !equalAST(df2, df2b) {
+		t.Fatalf("case2: AST not stable across print/reparse\n--- printed ---\n%s", out2)
+	}
+
+	// Regression 1: s'range is still a flat Ident, NOT an AttributeName.
+	e3 := mustParseExpr(t, "s'range")
+	id3, ok := e3.(*Ident)
+	if !ok || id3.Name != "s'range" {
+		t.Fatalf("regression1: expected Ident{s'range}, got %T %#v", e3, e3)
+	}
+	var b3 strings.Builder
+	printExpr(&b3, e3)
+	if !equalAST(e3, mustParseExpr(t, b3.String())) {
+		t.Fatalf("regression1: not AST-stable; printed: %q", b3.String())
+	}
+
+	// Regression 2: f(x) is still a plain CallExpr, not wrapped in AttributeName.
+	e4 := mustParseExpr(t, "f(x)")
+	if _, ok := e4.(*CallExpr); !ok {
+		t.Fatalf("regression2: expected *CallExpr, got %T", e4)
+	}
+	var b4 strings.Builder
+	printExpr(&b4, e4)
+	if !equalAST(e4, mustParseExpr(t, b4.String())) {
+		t.Fatalf("regression2: not AST-stable; printed: %q", b4.String())
+	}
+}

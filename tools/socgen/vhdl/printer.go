@@ -915,6 +915,10 @@ func printExpr(b *strings.Builder, e Expr) {
 		printExpr(b, n.X)
 		b.WriteByte('.')
 		b.WriteString(n.Sel)
+	case *AttributeName:
+		printExpr(b, n.X)
+		b.WriteByte('\'')
+		b.WriteString(n.Attr)
 	case *ParenExpr:
 		b.WriteByte('(')
 		printExpr(b, n.X)
