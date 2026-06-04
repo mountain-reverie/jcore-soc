@@ -683,6 +683,16 @@ func printDecl(b *strings.Builder, d Decl, indent string) {
 		b.WriteByte('(')
 		b.WriteString(strings.Join(n.Constituents, ", "))
 		b.WriteString(");")
+	case *ConfigSpec:
+		b.WriteString("for ")
+		b.WriteString(strings.Join(n.Insts, ", "))
+		b.WriteString(" : ")
+		b.WriteString(n.Comp)
+		b.WriteByte(' ')
+		if n.Binding != nil {
+			printBindingIndication(b, n.Binding)
+		}
+		b.WriteByte(';')
 	case *SubprogramDecl:
 		printSubprogramSpec(b, n.IsProcedure, n.Pure, n.Impure, n.Designator, n.Params, n.ReturnMark)
 		b.WriteByte(';')

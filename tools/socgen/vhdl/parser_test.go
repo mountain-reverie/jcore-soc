@@ -1171,3 +1171,33 @@ end configuration;`
 		t.Fatalf("component config not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
+
+func TestParseConfigurationSpec(t *testing.T) {
+	src := `architecture rtl of e is
+  for u0 : comp use entity work.ent(rtl) port map (clk => clk);
+  for all : ram use configuration work.ram_sim;
+begin
+end architecture;`
+	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
+	}
+	arch := df.Units[0].(*ArchitectureBody)
+	if len(arch.Decls) != 2 {
+		t.Fatalf("decls: %d", len(arch.Decls))
+	}
+	cs0, ok := arch.Decls[0].(*ConfigSpec)
+	if !ok || cs0.Insts[0] != "u0" || cs0.Comp != "comp" || cs0.Binding == nil || cs0.Binding.UnitKind != ENTITY || cs0.Binding.Arch != "rtl" || len(cs0.Binding.PortMap) != 1 {
+		t.Fatalf("config spec 0: %#v", arch.Decls[0])
+	}
+	cs1, ok := arch.Decls[1].(*ConfigSpec)
+	if !ok || cs1.Insts[0] != "all" || cs1.Binding.UnitKind != CONFIGURATION {
+		t.Fatalf("config spec 1: %#v", arch.Decls[1])
+	}
+	// round-trip
+	out := Print(df)
+	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
+	if len(errs2) != 0 || !equalAST(df, df2) {
+		t.Fatalf("config spec not AST-stable: errs=%v\n%s", errs2, out)
+	}
+}

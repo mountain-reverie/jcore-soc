@@ -133,6 +133,22 @@ func (n *ComponentConfig) End() Pos {
 	return n.P
 }
 
+// ConfigSpec is a configuration specification (a declarative item):
+// `for inst_list : comp binding_indication ;`.
+type ConfigSpec struct {
+	P       Pos
+	Insts   []string // instantiation labels, or "all" / "others"
+	Comp    string
+	Binding *BindingIndication
+}
+
+func (n *ConfigSpec) Pos() Pos { return n.P }
+func (n *ConfigSpec) End() Pos {
+	if n.Binding != nil { return n.Binding.End() }
+	return n.P
+}
+func (n *ConfigSpec) declNode() {}
+
 // BindingIndication is `use (entity name[(arch)] | configuration name | open)
 // [generic map (...)] [port map (...)]`.
 type BindingIndication struct {

@@ -1263,11 +1263,27 @@ func (p *parser) parseDecl() Decl {
 		return p.parseAliasDecl()
 	case GROUP:
 		return p.parseGroupDecl()
+	case FOR:
+		return p.parseConfigSpec()
 	default:
 		p.errorf(tok.Pos, "unexpected token %v %q in declaration", tok.Kind, tok.Lit)
 		p.advance() // avoid infinite loop
 		return nil
 	}
+}
+
+// parseConfigSpec parses a configuration specification:
+// `for inst_list : comp binding_indication ;` (binding consumes the trailing ;).
+func (p *parser) parseConfigSpec() Decl {
+	pos := p.expect(FOR).Pos
+	insts := []string{p.parseConfigSpecName()}
+	for p.accept(COMMA) {
+		insts = append(insts, p.parseConfigSpecName())
+	}
+	p.expect(COLON)
+	comp := p.parseDottedName()
+	binding := p.parseBindingIndication()
+	return &ConfigSpec{P: pos, Insts: insts, Comp: comp, Binding: binding}
 }
 
 // parseSubprogramDecl parses a subprogram SPECIFICATION:

@@ -306,6 +306,10 @@ func Walk(v Visitor, node Node) {
 		if n.Target != nil {
 			Walk(v, n.Target)
 		}
+	case *ConfigSpec:
+		if n.Binding != nil {
+			Walk(v, n.Binding)
+		}
 	case *AttributeDecl:
 		// no child nodes
 	case *GroupTemplateDecl:
