@@ -142,6 +142,16 @@ func (p *parser) parseExpr() Expr {
 	return left
 }
 
+// parseDiscreteRange parses a range that may carry a type mark:
+// `integer range 0 to 7`, or a plain range/attribute like `0 to 7`.
+func (p *parser) parseDiscreteRange() Expr {
+	e := p.parseExpr()
+	if p.accept(RANGE) {
+		return &RangeConstraint{P: e.Pos(), Mark: e, Range: p.parseExpr()}
+	}
+	return e
+}
+
 // parseLogical handles the lowest-precedence logical operators.
 func (p *parser) parseLogical() Expr {
 	left := p.parseRelation()
@@ -861,7 +871,7 @@ func (p *parser) parseGenerate(pos Pos, label string, kind Kind) Stmt {
 		p.advance() // consume FOR
 		param = p.expect(IDENT).Lit
 		p.expect(IN)
-		rng = p.parseExpr()
+		rng = p.parseDiscreteRange()
 	} else {
 		p.advance() // consume IF
 		cond = p.parseExpr()
@@ -1019,7 +1029,7 @@ func (p *parser) parseLoopStmt(pos Pos, label string) Stmt {
 		p.advance()
 		param = p.expect(IDENT).Lit
 		p.expect(IN)
-		rng = p.parseExpr()
+		rng = p.parseDiscreteRange()
 		scheme = FOR
 	case WHILE:
 		p.advance()

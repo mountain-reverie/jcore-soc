@@ -1354,3 +1354,66 @@ end architecture;`
 		t.Fatalf("selected assign not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
+
+func TestParseForRangeTypeMark(t *testing.T) {
+	// for loop: `for i in integer range 0 to 7 loop`
+	src := `architecture a of e is
+begin
+  process begin
+    for i in integer range 0 to 7 loop
+      null;
+    end loop;
+  end process;
+end architecture;`
+	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
+	}
+	pr := df.Units[0].(*ArchitectureBody).Stmts[0].(*ProcessStmt)
+	lp, ok := pr.Stmts[0].(*LoopStmt)
+	if !ok || lp.Scheme != FOR || lp.Param != "i" {
+		t.Fatalf("for-loop: %#v", pr.Stmts[0])
+	}
+	rc, ok := lp.Range.(*RangeConstraint)
+	if !ok {
+		t.Fatalf("loop range is %T, want *RangeConstraint", lp.Range)
+	}
+	id, ok := rc.Mark.(*Ident)
+	if !ok || id.Name != "integer" {
+		t.Fatalf("RangeConstraint.Mark: %#v", rc.Mark)
+	}
+	if _, ok := rc.Range.(*Range); !ok {
+		t.Fatalf("RangeConstraint.Range: %T", rc.Range)
+	}
+	// round-trip
+	out := Print(df)
+	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
+	if len(errs2) != 0 || !equalAST(df, df2) {
+		t.Fatalf("for-range type mark not AST-stable: errs=%v\n%s", errs2, out)
+	}
+
+	// for generate: `for g in 0 to 3 generate` — plain Range, NOT RangeConstraint
+	src2 := `architecture a of e is
+begin
+  g : for g in 0 to 3 generate
+    u : entity work.cell port map (clk => clk);
+  end generate;
+end architecture;`
+	df3, errs3 := ParseFile(NewFileSet(), "t.vhd", []byte(src2))
+	if len(errs3) != 0 {
+		t.Fatalf("generate errs: %v", errs3)
+	}
+	gs, ok := df3.Units[0].(*ArchitectureBody).Stmts[0].(*GenerateStmt)
+	if !ok || gs.Kind != FOR || gs.Param != "g" {
+		t.Fatalf("generate: %#v", df3.Units[0].(*ArchitectureBody).Stmts[0])
+	}
+	if _, ok := gs.Range.(*Range); !ok {
+		t.Fatalf("generate plain range is %T, want *Range", gs.Range)
+	}
+	// round-trip
+	out3 := Print(df3)
+	df4, errs4 := ParseFile(NewFileSet(), "t.vhd", []byte(out3))
+	if len(errs4) != 0 || !equalAST(df3, df4) {
+		t.Fatalf("generate plain range not AST-stable: errs=%v\n%s", errs4, out3)
+	}
+}

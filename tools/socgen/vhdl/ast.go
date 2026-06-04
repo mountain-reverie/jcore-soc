@@ -806,3 +806,14 @@ func (n *CallExpr)   exprNode() {}
 func (n *BinaryExpr) exprNode() {}
 func (n *UnaryExpr)  exprNode() {}
 func (n *ParenExpr)  exprNode() {}
+
+// RangeConstraint is a discrete range with a type mark: `integer range 0 to 7`.
+type RangeConstraint struct {
+	P     Pos
+	Mark  Expr // the type mark
+	Range Expr // the range after `range`
+}
+
+func (r *RangeConstraint) Pos() Pos    { return r.P }
+func (r *RangeConstraint) End() Pos    { return r.Range.End() }
+func (*RangeConstraint)   exprNode()   {}

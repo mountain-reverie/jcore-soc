@@ -920,6 +920,10 @@ func printExpr(b *strings.Builder, e Expr) {
 		printExpr(b, n.Mark)
 		b.WriteByte('\'')
 		printExpr(b, n.X) // X is a ParenExpr/Aggregate that prints its own parens
+	case *RangeConstraint:
+		printExpr(b, n.Mark)
+		b.WriteString(" range ")
+		printExpr(b, n.Range)
 	}
 }
 

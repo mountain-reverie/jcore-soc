@@ -402,6 +402,9 @@ func Walk(v Visitor, node Node) {
 	case *QualifiedExpr:
 		Walk(v, n.Mark)
 		Walk(v, n.X)
+	case *RangeConstraint:
+		Walk(v, n.Mark)
+		Walk(v, n.Range)
 
 	default:
 		// A node type with no case is a traversal gap. Panic loudly so it is
