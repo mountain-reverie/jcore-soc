@@ -405,6 +405,8 @@ func Walk(v Visitor, node Node) {
 	case *RangeConstraint:
 		Walk(v, n.Mark)
 		Walk(v, n.Range)
+	case *AllocatorExpr:
+		Walk(v, n.X)
 
 	default:
 		// A node type with no case is a traversal gap. Panic loudly so it is

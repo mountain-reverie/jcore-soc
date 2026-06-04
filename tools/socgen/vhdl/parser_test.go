@@ -1417,3 +1417,52 @@ end architecture;`
 		t.Fatalf("generate plain range not AST-stable: errs=%v\n%s", errs4, out3)
 	}
 }
+
+func TestParseAllocator(t *testing.T) {
+	// Case 1: new integer → AllocatorExpr with X = *Ident "integer"
+	e1 := mustParseExpr(t, "new integer")
+	a1, ok := e1.(*AllocatorExpr)
+	if !ok {
+		t.Fatalf("new integer: expected *AllocatorExpr, got %T", e1)
+	}
+	id, ok := a1.X.(*Ident)
+	if !ok || id.Name != "integer" {
+		t.Fatalf("new integer: X = %#v, want *Ident{\"integer\"}", a1.X)
+	}
+
+	// Case 2: new bit_vector(7 downto 0) → AllocatorExpr with X = *CallExpr
+	e2 := mustParseExpr(t, "new bit_vector(7 downto 0)")
+	a2, ok := e2.(*AllocatorExpr)
+	if !ok {
+		t.Fatalf("new bit_vector(...): expected *AllocatorExpr, got %T", e2)
+	}
+	if _, ok := a2.X.(*CallExpr); !ok {
+		t.Fatalf("new bit_vector(...): X = %T, want *CallExpr", a2.X)
+	}
+
+	// Case 3: new string'("x") → AllocatorExpr (qualified expression)
+	e3 := mustParseExpr(t, `new string'("x")`)
+	a3, ok := e3.(*AllocatorExpr)
+	if !ok {
+		t.Fatalf(`new string'("x"): expected *AllocatorExpr, got %T`, e3)
+	}
+	if _, ok := a3.X.(*QualifiedExpr); !ok {
+		t.Fatalf(`new string'("x"): X = %T, want *QualifiedExpr`, a3.X)
+	}
+
+	// Round-trip all three via expression print/reparse
+	for _, src := range []string{
+		"new integer",
+		"new bit_vector(7 downto 0)",
+		`new string'("x")`,
+	} {
+		e := mustParseExpr(t, src)
+		var b strings.Builder
+		printExpr(&b, e)
+		got := b.String()
+		e2 := mustParseExpr(t, got)
+		if !equalAST(e, e2) {
+			t.Fatalf("allocator %q: round-trip mismatch: printed %q", src, got)
+		}
+	}
+}

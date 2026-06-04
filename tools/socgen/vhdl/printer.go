@@ -924,6 +924,9 @@ func printExpr(b *strings.Builder, e Expr) {
 		printExpr(b, n.Mark)
 		b.WriteString(" range ")
 		printExpr(b, n.Range)
+	case *AllocatorExpr:
+		b.WriteString("new ")
+		printExpr(b, n.X)
 	}
 }
 

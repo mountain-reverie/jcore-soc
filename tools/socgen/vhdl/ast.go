@@ -817,3 +817,13 @@ type RangeConstraint struct {
 func (r *RangeConstraint) Pos() Pos    { return r.P }
 func (r *RangeConstraint) End() Pos    { return r.Range.End() }
 func (*RangeConstraint)   exprNode()   {}
+
+// AllocatorExpr is a `new <subtype_indication | qualified_expression>` allocator.
+type AllocatorExpr struct {
+	New Pos
+	X   Expr
+}
+
+func (a *AllocatorExpr) Pos() Pos    { return a.New }
+func (a *AllocatorExpr) End() Pos    { return a.X.End() }
+func (*AllocatorExpr)   exprNode()   {}

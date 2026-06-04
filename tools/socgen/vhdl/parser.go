@@ -287,6 +287,9 @@ func (p *parser) parsePrimary() Expr {
 		// Keywords that can appear as primaries in expressions (e.g. inside
 		// aggregates: others, all; attribute names: range, etc.)
 		switch tok.Kind {
+		case NEW:
+			npos := p.advance().Pos
+			return &AllocatorExpr{New: npos, X: p.parseExpr()}
 		case OTHERS, ALL, RANGE, NULL, OPEN:
 			p.advance()
 			return &Ident{NamePos: tok.Pos, Name: tok.Kind.String()}
