@@ -621,6 +621,9 @@ func printDecl(b *strings.Builder, d Decl, indent string) {
 		}
 		b.WriteByte(';')
 	case *VariableDecl:
+		if n.Shared {
+			b.WriteString("shared ")
+		}
 		b.WriteString("variable ")
 		b.WriteString(strings.Join(n.Names, ", "))
 		b.WriteString(" : ")

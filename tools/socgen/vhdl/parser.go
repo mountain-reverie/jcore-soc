@@ -1187,7 +1187,7 @@ func (p *parser) parseIfStmt(pos Pos, label string) Stmt {
 // isDeclStart reports whether k begins a declaration handled by parseDecl.
 func isDeclStart(k Kind) bool {
 	switch k {
-	case CONSTANT, SIGNAL, SUBTYPE, TYPE, COMPONENT, FUNCTION, PROCEDURE, PURE, IMPURE, ATTRIBUTE, ALIAS, GROUP:
+	case CONSTANT, SIGNAL, VARIABLE, SHARED, SUBTYPE, TYPE, COMPONENT, FUNCTION, PROCEDURE, PURE, IMPURE, ATTRIBUTE, ALIAS, GROUP:
 		return true
 	}
 	return false
@@ -1247,6 +1247,8 @@ func (p *parser) parseDecl() Decl {
 		return p.parseConstantOrSignal(false)
 	case VARIABLE:
 		return p.parseVariableDecl()
+	case SHARED:
+		return p.parseSharedVariableDecl()
 	case SUBTYPE:
 		return p.parseSubtypeDecl()
 	case TYPE:
@@ -1358,6 +1360,19 @@ func (p *parser) parseConstantOrSignal(isConst bool) Decl {
 // parseVariableDecl parses `variable names : subtype [:= default] ;`.
 func (p *parser) parseVariableDecl() Decl {
 	pos := p.expect(VARIABLE).Pos
+	return p.finishVariableDecl(pos, false)
+}
+
+// parseSharedVariableDecl parses `shared variable … ;`.
+func (p *parser) parseSharedVariableDecl() Decl {
+	pos := p.expect(SHARED).Pos
+	p.expect(VARIABLE)
+	return p.finishVariableDecl(pos, true)
+}
+
+// finishVariableDecl parses the body after the [shared] variable keyword(s):
+// `names : subtype [:= default] ;`.
+func (p *parser) finishVariableDecl(pos Pos, shared bool) Decl {
 	names := p.parseNameList()
 	p.expect(COLON)
 	mark, constraint := p.parseSubtypeIndication()
@@ -1366,7 +1381,7 @@ func (p *parser) parseVariableDecl() Decl {
 		def = p.parseExpr()
 	}
 	p.expect(SEMICOLON)
-	return &VariableDecl{P: pos, Names: names, SubtypeMark: mark, Constraint: constraint, Default: def}
+	return &VariableDecl{P: pos, Shared: shared, Names: names, SubtypeMark: mark, Constraint: constraint, Default: def}
 }
 
 // parseSubtypeDecl parses: SUBTYPE id IS subtype-indication ;

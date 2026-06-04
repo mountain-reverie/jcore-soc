@@ -1103,6 +1103,33 @@ end configuration cfg;`
 	}
 }
 
+func TestParseSharedVariable(t *testing.T) {
+	ds := parseDecls(t, `
+		shared variable s : integer := 0;
+		variable v : bit;`)
+	if len(ds) != 2 {
+		t.Fatalf("got %d decls", len(ds))
+	}
+	sv, ok := ds[0].(*VariableDecl)
+	if !ok || !sv.Shared || sv.Names[0] != "s" || sv.Default == nil {
+		t.Fatalf("shared variable: %#v", ds[0])
+	}
+	pv, ok := ds[1].(*VariableDecl)
+	if !ok || pv.Shared {
+		t.Fatalf("plain variable should not be Shared: %#v", ds[1])
+	}
+	// round-trip
+	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte("package p is\nshared variable s : integer := 0;\nend package;"))
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
+	}
+	out := Print(df)
+	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
+	if len(errs2) != 0 || !equalAST(df, df2) {
+		t.Fatalf("shared variable not AST-stable: errs=%v\n%s", errs2, out)
+	}
+}
+
 func TestParseComponentConfiguration(t *testing.T) {
 	src := `configuration cfg of e is
   for rtl

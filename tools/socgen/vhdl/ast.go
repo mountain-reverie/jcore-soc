@@ -270,8 +270,9 @@ func (n *GenerateStmt) End() Pos {
 }
 func (n *GenerateStmt) stmtNode() {}
 
-// VariableDecl is `variable names : subtype [:= default] ;` (process/subprogram local).
-type VariableDecl struct{ P Pos; Names []string; SubtypeMark string; Constraint Expr; Default Expr }
+// VariableDecl is `[shared] variable names : subtype [:= default] ;` (process/subprogram local,
+// or shared variable declared in a protected type or package body).
+type VariableDecl struct{ P Pos; Shared bool; Names []string; SubtypeMark string; Constraint Expr; Default Expr }
 
 func (n *VariableDecl) Pos() Pos { return n.P }
 func (n *VariableDecl) End() Pos {
