@@ -1,6 +1,7 @@
 package vhdl
 
 import (
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,15 +18,45 @@ func corpusRoot(t *testing.T) string {
 	return root
 }
 
-// roundTrips reports whether src parses with no errors and is AST-stable across
-// parse -> print -> reparse.
-func roundTrips(src []byte) bool {
-	f1, errs1 := ParseFile(NewFileSet(), "t.vhd", src)
+// hasCPPDirective reports whether src contains any C-preprocessor directive.
+// A line is a CPP directive if its first non-whitespace byte is '#'.
+func hasCPPDirective(src []byte) bool {
+	for len(src) > 0 {
+		// Find end of line.
+		end := bytes.IndexByte(src, '\n')
+		var line []byte
+		if end < 0 {
+			line = src
+			src = nil
+		} else {
+			line = src[:end]
+			src = src[end+1:]
+		}
+		trimmed := bytes.TrimLeft(line, " \t\r")
+		if len(trimmed) > 0 && trimmed[0] == '#' {
+			return true
+		}
+	}
+	return false
+}
+
+// roundTrips reports whether src (at absPath, with optional cppExe) parses with
+// no errors and is AST-stable across parse -> print -> reparse.
+// If cppExe is non-empty, the first parse uses WithCPP; the reparse of the
+// printed (already-expanded) output does not.
+func roundTrips(absPath, cppExe string, src []byte) bool {
+	var f1 *DesignFile
+	var errs1 []error
+	if cppExe != "" {
+		f1, errs1 = ParseFile(NewFileSet(), absPath, src, WithCPP(cppExe))
+	} else {
+		f1, errs1 = ParseFile(NewFileSet(), absPath, src)
+	}
 	if len(errs1) != 0 {
 		return false
 	}
 	out := Print(f1)
-	f2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
+	f2, errs2 := ParseFile(NewFileSet(), absPath, []byte(out))
 	if len(errs2) != 0 {
 		return false
 	}
@@ -50,17 +81,26 @@ func TestCorpusRoundTrip(t *testing.T) {
 	t.Logf("corpus: %d of 241 files round-trip", len(rels))
 	for _, rel := range rels {
 		t.Run(rel, func(t *testing.T) {
-			src, err := os.ReadFile(filepath.Join(root, rel))
+			absPath := filepath.Join(root, rel)
+			src, err := os.ReadFile(absPath)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !roundTrips(src) {
+			cppExe := ""
+			if hasCPPDirective(src) {
+				if _, err := exec.LookPath("gcc"); err != nil {
+					t.Skip("gcc not found; skipping cpp file")
+				}
+				cppExe = "gcc"
+			}
+			if !roundTrips(absPath, cppExe, src) {
 				_, errs := ParseFile(NewFileSet(), rel, src)
 				t.Fatalf("round-trip failed; parse errs: %v", errs)
 			}
 		})
 	}
 }
+
 
 func TestCorpusGhdlReanalyze(t *testing.T) {
 	if _, err := exec.LookPath("ghdl"); err != nil {
@@ -69,11 +109,25 @@ func TestCorpusGhdlReanalyze(t *testing.T) {
 	root := corpusRoot(t)
 	for _, rel := range readList(t, "testdata/p1b_corpus.txt") {
 		t.Run(rel, func(t *testing.T) {
-			src, err := os.ReadFile(filepath.Join(root, rel))
+			absPath := filepath.Join(root, rel)
+			src, err := os.ReadFile(absPath)
 			if err != nil {
 				t.Fatal(err)
 			}
-			f, errs := ParseFile(NewFileSet(), rel, src)
+			cppExe := ""
+			if hasCPPDirective(src) {
+				if _, err := exec.LookPath("gcc"); err != nil {
+					t.Skip("gcc not found; skipping cpp file")
+				}
+				cppExe = "gcc"
+			}
+			var f *DesignFile
+			var errs []error
+			if cppExe != "" {
+				f, errs = ParseFile(NewFileSet(), absPath, src, WithCPP(cppExe))
+			} else {
+				f, errs = ParseFile(NewFileSet(), rel, src)
+			}
 			if len(errs) != 0 {
 				t.Fatalf("parse: %v", errs)
 			}

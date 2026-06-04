@@ -39,6 +39,7 @@ components/cpu/decode/decode_table_simple.vhd
 components/cpu/decode/decode_table_simple_config.vhd
 components/cpu/sim/bridge_pkg.vhd
 components/cpu/sim/bus_monitor.vhd
+components/cpu/sim/cpu_pure_tb.vhd
 components/cpu/sim/cpusim_miniaic2.vhd
 components/cpu/sim/data_bus_pkg.vhd
 components/cpu/sim/mem/asymmetric_ram.vhd
@@ -100,6 +101,7 @@ components/ring_bus/examples/data_bus_adapter.vhd
 components/ring_bus/examples/examples_pkg.vhd
 components/ring_bus/examples/rbus_data_master.vhd
 components/ring_bus/ring_bus_pkg.vhd
+components/ring_bus/ring_bus_pkg_body.vhd
 components/ring_bus/tests/data_bus_adapter_tap.vhd
 components/ring_bus/tests/node_tap.vhd
 components/ring_bus/tests/rbus_data_master_tap.vhd
