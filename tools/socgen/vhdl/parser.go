@@ -399,10 +399,34 @@ func (p *parser) parseFile() *DesignFile {
 	return df
 }
 
+// parseConfig holds options for ParseFile.
+type parseConfig struct {
+	cpp string // preprocessor executable; "" = disabled
+}
+
+// Option configures ParseFile.
+type Option func(*parseConfig)
+
+// WithCPP runs exe (e.g. "gcc") as a C preprocessor over the source before
+// lexing, using jcore's common.mk flags. Only the executable name is
+// configurable.
+func WithCPP(exe string) Option { return func(c *parseConfig) { c.cpp = exe } }
+
 // ParseFile parses src (named filename) into a DesignFile. fset records source
 // positions; returned errors are rendered via fset.Position. A nil or empty
 // error slice means a clean parse.
-func ParseFile(fset *FileSet, filename string, src []byte) (*DesignFile, []error) {
+func ParseFile(fset *FileSet, filename string, src []byte, opts ...Option) (*DesignFile, []error) {
+	var cfg parseConfig
+	for _, o := range opts {
+		o(&cfg)
+	}
+	if cfg.cpp != "" {
+		out, err := runCPP(cfg.cpp, filename, src)
+		if err != nil {
+			return nil, []error{fmt.Errorf("%s: cpp (%s) failed: %w", filename, cfg.cpp, err)}
+		}
+		src = out
+	}
 	f := fset.AddFile(filename, len(src))
 	p := newParser(src, f)
 	df := p.parseFile()

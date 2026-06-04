@@ -1,6 +1,7 @@
 package vhdl
 
 import (
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -1465,4 +1466,73 @@ func TestParseAllocator(t *testing.T) {
 			t.Fatalf("allocator %q: round-trip mismatch: printed %q", src, got)
 		}
 	}
+}
+
+func TestParseWithCPP(t *testing.T) {
+	// bad-exe: must NOT panic, must return errors; no gcc guard — works without gcc.
+	t.Run("bad_exe", func(t *testing.T) {
+		_, errs := ParseFile(NewFileSet(), "t.vhd", []byte("entity e is end entity;\n"), WithCPP("definitely-not-a-real-cpp-xyz"))
+		if len(errs) == 0 {
+			t.Fatal("expected errors for bad cpp exe, got none")
+		}
+	})
+
+	// option-is-the-enabler: WITHOUT WithCPP, '#' is illegal, so we get errors.
+	t.Run("no_cpp_hash_fails", func(t *testing.T) {
+		_, errs := ParseFile(NewFileSet(), "t.vhd", []byte("#define FOO\nentity e is end entity;\n"))
+		if len(errs) == 0 {
+			t.Fatal("expected errors: '#' is illegal in VHDL without cpp")
+		}
+	})
+
+	// gcc-dependent tests.
+	if _, err := exec.LookPath("gcc"); err != nil {
+		t.Skip("gcc not available")
+	}
+
+	// macro/define consumed: #define FOO → entity parses cleanly and round-trips.
+	t.Run("define_consumed", func(t *testing.T) {
+		src := "#define FOO\nentity e is end entity;\n"
+		f1, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src), WithCPP("gcc"))
+		if len(errs) != 0 {
+			t.Fatalf("unexpected errors: %v", errs)
+		}
+		out := Print(f1)
+		f2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
+		if len(errs2) != 0 {
+			t.Fatalf("reparse errors: %v", errs2)
+		}
+		if !equalAST(f1, f2) {
+			t.Fatal("AST not stable across print/reparse")
+		}
+	})
+
+	// token-paste: MK(foo) expands to foo_t; entity name must be foo_t.
+	t.Run("token_paste", func(t *testing.T) {
+		src := "#define MK(x) x ## _t\nentity MK(foo) is end entity;\n"
+		f1, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src), WithCPP("gcc"))
+		if len(errs) != 0 {
+			t.Fatalf("unexpected errors: %v", errs)
+		}
+		// Assert entity name is foo_t.
+		if len(f1.Units) == 0 {
+			t.Fatal("no units")
+		}
+		ent, ok := f1.Units[0].(*EntityDecl)
+		if !ok {
+			t.Fatalf("expected EntityDecl, got %T", f1.Units[0])
+		}
+		if ent.Name != "foo_t" {
+			t.Fatalf("expected entity name foo_t, got %q", ent.Name)
+		}
+		// Also round-trip.
+		out := Print(f1)
+		f2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
+		if len(errs2) != 0 {
+			t.Fatalf("reparse errors: %v", errs2)
+		}
+		if !equalAST(f1, f2) {
+			t.Fatal("AST not stable across print/reparse")
+		}
+	})
 }
