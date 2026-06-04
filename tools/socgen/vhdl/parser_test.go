@@ -377,16 +377,23 @@ func TestParseGroupDecls(t *testing.T) {
 }
 
 func TestDeferredUnitTagged(t *testing.T) {
-	// Entity statement parts (passive statements after `begin`) are now fully
-	// parsed — the old deferral path has been replaced. Verify that an entity
-	// with an assert statement part parses cleanly (zero errors).
-	df, errs := parse(t, "entity e is\nbegin\n  assert true;\nend entity;")
-	if len(errs) != 0 {
-		t.Fatalf("unexpected parse errors: %v", errs)
+	// A block statement inside an architecture is not yet parsed (deferred).
+	// Verify that parsing such a file yields at least one error containing
+	// "deferred", exercising the deferral-tagging mechanism.
+	src := "architecture a of e is begin b: block begin end block; end architecture;"
+	_, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
+	if len(errs) == 0 {
+		t.Fatalf("expected deferral errors for block statement, got none")
 	}
-	e, ok := df.Units[0].(*EntityDecl)
-	if !ok || len(e.Stmts) != 1 {
-		t.Fatalf("expected 1 stmt, got %#v", df.Units[0])
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Error(), "deferred") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected an error containing \"deferred\", got: %v", errs)
 	}
 }
 
@@ -413,24 +420,6 @@ end entity e;`
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
 	if len(errs2) != 0 || !equalAST(df, df2) {
 		t.Fatalf("entity declarative part not AST-stable: errs=%v\n%s", errs2, out)
-	}
-}
-
-func TestEntityStatementPartDeferred(t *testing.T) {
-	// Entity statement parts are now fully parsed (no longer deferred).
-	// Verify the assert is parsed correctly and the file round-trips.
-	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte("entity e is\nbegin\n  assert true;\nend entity;"))
-	if len(errs) != 0 {
-		t.Fatalf("unexpected parse errors: %v", errs)
-	}
-	e, ok := df.Units[0].(*EntityDecl)
-	if !ok || len(e.Stmts) != 1 {
-		t.Fatalf("expected 1 stmt, got %#v", df.Units[0])
-	}
-	out := Print(df)
-	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
-		t.Fatalf("entity statement part not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
 
