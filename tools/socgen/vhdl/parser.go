@@ -340,18 +340,17 @@ func (p *parser) parseElementAssoc() *ElementAssoc {
 	return &ElementAssoc{X: first} // positional (Choices == nil)
 }
 
-// parseFile parses a complete VHDL design file: optional context clauses
-// followed by one or more design units.
+// parseFile parses a complete VHDL design file: context clauses (library/use)
+// and design units may appear in any order at the top level.
 func (p *parser) parseFile() *DesignFile {
 	df := &DesignFile{}
 
-	// Context clauses: library / use
-	for p.at(LIBRARY) || p.at(USE) {
+	for !p.at(EOF) {
+		start := p.i
 		switch p.cur().Kind {
 		case LIBRARY:
 			pos := p.advance().Pos // consume LIBRARY
-			var names []string
-			names = append(names, p.expect(IDENT).Lit)
+			names := []string{p.expect(IDENT).Lit}
 			for p.accept(COMMA) {
 				names = append(names, p.expect(IDENT).Lit)
 			}
@@ -359,13 +358,6 @@ func (p *parser) parseFile() *DesignFile {
 			df.Context = append(df.Context, &LibraryClause{P: pos, Names: names})
 		case USE:
 			df.Context = append(df.Context, p.parseUseClause())
-		}
-	}
-
-	// Design units
-	for !p.at(EOF) {
-		start := p.i
-		switch p.cur().Kind {
 		case PACKAGE:
 			if p.peekKind(1) == BODY {
 				if u := p.parsePackageBody(); u != nil {

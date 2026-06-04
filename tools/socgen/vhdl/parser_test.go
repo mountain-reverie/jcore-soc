@@ -1579,3 +1579,71 @@ func TestParseEntityStatementPart(t *testing.T) {
 		t.Fatalf("case3: want 0 stmts, got %d", len(e3.Stmts))
 	}
 }
+
+// TestParseMultiUnitContext verifies that library/use context clauses are
+// accepted at any top-level position (leading OR between design units).
+func TestParseMultiUnitContext(t *testing.T) {
+	// Sub-case 1: context clause between two design units.
+	src1 := "library a;\nentity e is end entity;\nlibrary b;\nuse b.x.all;\narchitecture r of e is begin end architecture;\n"
+	df1, errs1 := ParseFile(NewFileSet(), "t.vhd", []byte(src1))
+	if len(errs1) != 0 {
+		t.Fatalf("case1: parse errors: %v", errs1)
+	}
+	if len(df1.Context) != 3 {
+		t.Fatalf("case1: want 3 context items, got %d", len(df1.Context))
+	}
+	if len(df1.Units) != 2 {
+		t.Fatalf("case1: want 2 units, got %d", len(df1.Units))
+	}
+	// round-trip: printer hoists context to top; reparse must yield equalAST
+	out1 := Print(df1)
+	df1b, errs1b := ParseFile(NewFileSet(), "t.vhd", []byte(out1))
+	if len(errs1b) != 0 {
+		t.Fatalf("case1: reparse errors: %v\n--- printed ---\n%s", errs1b, out1)
+	}
+	if !equalAST(df1, df1b) {
+		t.Fatalf("case1: AST not stable across print/reparse\n--- printed ---\n%s", out1)
+	}
+
+	// Sub-case 2: secondary use-led unit (use clause after first entity).
+	src2 := "entity e is end entity;\nuse work.p.all;\narchitecture r of e is begin end architecture;\n"
+	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(src2))
+	if len(errs2) != 0 {
+		t.Fatalf("case2: parse errors: %v", errs2)
+	}
+	if len(df2.Context) != 1 {
+		t.Fatalf("case2: want 1 context item, got %d", len(df2.Context))
+	}
+	if len(df2.Units) != 2 {
+		t.Fatalf("case2: want 2 units, got %d", len(df2.Units))
+	}
+	out2 := Print(df2)
+	df2b, errs2b := ParseFile(NewFileSet(), "t.vhd", []byte(out2))
+	if len(errs2b) != 0 {
+		t.Fatalf("case2: reparse errors: %v\n--- printed ---\n%s", errs2b, out2)
+	}
+	if !equalAST(df2, df2b) {
+		t.Fatalf("case2: AST not stable across print/reparse\n--- printed ---\n%s", out2)
+	}
+
+	// Sub-case 3: regression — leading context clauses still work (no regression).
+	src3 := "library ieee;\nuse ieee.std_logic_1164.all;\nentity e is end entity;\n"
+	df3, errs3 := ParseFile(NewFileSet(), "t.vhd", []byte(src3))
+	if len(errs3) != 0 {
+		t.Fatalf("case3: parse errors: %v", errs3)
+	}
+	if len(df3.Context) != 2 {
+		t.Fatalf("case3: want 2 context items, got %d", len(df3.Context))
+	}
+	if len(df3.Units) != 1 {
+		t.Fatalf("case3: want 1 unit, got %d", len(df3.Units))
+	}
+	out3 := Print(df3)
+	df3b, errs3b := ParseFile(NewFileSet(), "t.vhd", []byte(out3))
+	if len(errs3b) != 0 {
+		t.Fatalf("case3: reparse errors: %v\n--- printed ---\n%s", errs3b, out3)
+	}
+	if !equalAST(df3, df3b) {
+		t.Fatalf("case3: AST not stable across print/reparse\n--- printed ---\n%s", out3)
+	}
+}
