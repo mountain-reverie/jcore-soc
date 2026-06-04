@@ -880,6 +880,10 @@ func printExpr(b *strings.Builder, e Expr) {
 			printExpr(b, arg)
 		}
 		b.WriteByte(')')
+	case *SelectorExpr:
+		printExpr(b, n.X)
+		b.WriteByte('.')
+		b.WriteString(n.Sel)
 	case *ParenExpr:
 		b.WriteByte('(')
 		printExpr(b, n.X)

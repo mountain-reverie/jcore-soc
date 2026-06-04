@@ -1242,3 +1242,44 @@ func TestParseFileAndAccessAndUse(t *testing.T) {
 		t.Fatalf("file/access/use not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
+
+func TestParseNameSuffixChains(t *testing.T) {
+	// double index: arr(i)(j) -> CallExpr{ Fun: CallExpr{arr,[i]}, [j] }
+	e := mustParseExpr(t, "arr(i)(j)")
+	outer, ok := e.(*CallExpr)
+	if !ok {
+		t.Fatalf("double index top: %#v", e)
+	}
+	if _, ok := outer.Fun.(*CallExpr); !ok {
+		t.Fatalf("double index inner: %#v", outer.Fun)
+	}
+	// selection after index: arr(i).field -> SelectorExpr{ X: CallExpr{arr,[i]}, Sel: "field" }
+	se, ok := mustParseExpr(t, "arr(i).field").(*SelectorExpr)
+	if !ok || se.Sel != "field" {
+		t.Fatalf("post-index selection: %#v", mustParseExpr(t, "arr(i).field"))
+	}
+	if _, ok := se.X.(*CallExpr); !ok {
+		t.Fatalf("selector base: %#v", se.X)
+	}
+	// invariants: flat dotted name stays a flat Ident; single call stays one CallExpr
+	if id, ok := mustParseExpr(t, "a.b.c").(*Ident); !ok || id.Name != "a.b.c" {
+		t.Fatalf("flat dotted name regressed: %#v", mustParseExpr(t, "a.b.c"))
+	}
+	if c, ok := mustParseExpr(t, "f(x)").(*CallExpr); !ok || len(c.Args) != 1 {
+		t.Fatalf("single call regressed: %#v", mustParseExpr(t, "f(x)"))
+	}
+	// round-trip a mixed suffix name as a signal-assignment target
+	src := `architecture rtl of e is
+begin
+  rec.d(STABLE)(19 downto 4) <= x;
+end architecture;`
+	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
+	}
+	out := Print(df)
+	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
+	if len(errs2) != 0 || !equalAST(df, df2) {
+		t.Fatalf("suffix-chain name not AST-stable: errs=%v\n%s", errs2, out)
+	}
+}

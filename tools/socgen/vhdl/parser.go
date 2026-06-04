@@ -1800,19 +1800,34 @@ func (p *parser) parseName() Expr {
 	// names need the SelectorExpr/attribute decomposition deferred past P1b.
 	// TODO(p1c): handle suffix attributes when names are properly decomposed.
 
-	// Call or index: name ( args ).
-	if p.at(LPAREN) {
-		lparen := p.advance() // consume '('
-		var args []Expr
-		if !p.at(RPAREN) {
-			args = append(args, p.parseExpr())
-			for p.accept(COMMA) {
+	// Suffix chain: zero or more `(args)` (call/index/slice) and `.field`
+	// (selection after a call/index). A leading run of simple `.id` is already
+	// flattened into the Ident above; this loop builds chained CallExpr and
+	// SelectorExpr for the non-flat tail.
+	var expr Expr = name
+	for {
+		switch {
+		case p.at(LPAREN):
+			lparen := p.advance() // consume '('
+			var args []Expr
+			if !p.at(RPAREN) {
 				args = append(args, p.parseExpr())
+				for p.accept(COMMA) {
+					args = append(args, p.parseExpr())
+				}
 			}
+			rparen := p.expect(RPAREN)
+			expr = &CallExpr{Fun: expr, Lparen: lparen.Pos, Args: args, Rparen: rparen.Pos}
+		case p.at(DOT) && (p.peekKind(1) == IDENT || p.peekKind(1) == EXTIDENT || p.peekKind(1) == ALL):
+			p.advance() // consume '.'
+			selTok := p.advance()
+			sel := selTok.Lit
+			if sel == "" {
+				sel = selTok.Kind.String()
+			}
+			expr = &SelectorExpr{X: expr, Dot: selTok.Pos, Sel: sel}
+		default:
+			return expr
 		}
-		rparen := p.expect(RPAREN)
-		return &CallExpr{Fun: name, Lparen: lparen.Pos, Args: args, Rparen: rparen.Pos}
 	}
-
-	return name
 }

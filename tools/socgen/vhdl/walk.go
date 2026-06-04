@@ -356,6 +356,8 @@ func Walk(v Visitor, node Node) {
 		for _, a := range n.Args {
 			Walk(v, a)
 		}
+	case *SelectorExpr:
+		Walk(v, n.X)
 	case *BinaryExpr:
 		Walk(v, n.X)
 		Walk(v, n.Y)

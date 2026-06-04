@@ -749,6 +749,20 @@ func (n *QualifiedExpr) Pos() Pos { return n.Mark.Pos() }
 func (n *QualifiedExpr) End() Pos { return n.X.End() }
 func (n *QualifiedExpr) exprNode() {}
 
+// SelectorExpr is a selected name `X.Sel` where X is a non-simple prefix (e.g. a
+// call/indexed result). A leading run of simple dotted names is flattened into
+// Ident.Name instead; SelectorExpr is produced only for a selection after a
+// call/index suffix.
+type SelectorExpr struct {
+	X   Expr
+	Dot Pos
+	Sel string
+}
+
+func (n *SelectorExpr) Pos() Pos { return n.X.Pos() }
+func (n *SelectorExpr) End() Pos { return n.Dot + Pos(len(n.Sel)+1) }
+func (n *SelectorExpr) exprNode() {}
+
 func (n *BasicLit)   exprNode() {}
 func (n *Ident)      exprNode() {}
 func (n *Range)      exprNode() {}
