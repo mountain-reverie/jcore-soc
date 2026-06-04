@@ -721,6 +721,18 @@ func printDecl(b *strings.Builder, d Decl, indent string) {
 		}
 		b.WriteString(" is ")
 		printExpr(b, n.Target)
+		if n.Signature != nil {
+			b.WriteString(" [")
+			b.WriteString(strings.Join(n.Signature.Types, ", "))
+			if n.Signature.Return != "" {
+				if len(n.Signature.Types) > 0 {
+					b.WriteByte(' ')
+				}
+				b.WriteString("return ")
+				b.WriteString(n.Signature.Return)
+			}
+			b.WriteByte(']')
+		}
 		b.WriteByte(';')
 	case *GroupTemplateDecl:
 		b.WriteString("group ")

@@ -392,6 +392,75 @@ func TestParseAliasDecls(t *testing.T) {
 	}
 }
 
+func TestParseAliasSignature(t *testing.T) {
+	roundTrip := func(t *testing.T, src string) *AliasDecl {
+		t.Helper()
+		full := "package p is\n" + src + "\nend package;"
+		df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(full))
+		if len(errs) != 0 {
+			t.Fatalf("parse errors: %v", errs)
+		}
+		pkg := df.Units[0].(*PackageDecl)
+		a, ok := pkg.Decls[0].(*AliasDecl)
+		if !ok {
+			t.Fatalf("expected *AliasDecl, got %T", pkg.Decls[0])
+		}
+		// round-trip
+		out := Print(df)
+		df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
+		if len(errs2) != 0 || !equalAST(df, df2) {
+			t.Fatalf("not AST-stable: errs=%v\n%s", errs2, out)
+		}
+		return a
+	}
+
+	t.Run("return_sig", func(t *testing.T) {
+		a := roundTrip(t, `alias to_slv2 is to_slv [unresolved_ufixed return std_logic_vector];`)
+		if a.Signature == nil {
+			t.Fatal("expected Signature != nil")
+		}
+		if len(a.Signature.Types) != 1 || a.Signature.Types[0] != "unresolved_ufixed" {
+			t.Fatalf("Types = %v", a.Signature.Types)
+		}
+		if a.Signature.Return != "std_logic_vector" {
+			t.Fatalf("Return = %q", a.Signature.Return)
+		}
+	})
+
+	t.Run("multi_type_no_return", func(t *testing.T) {
+		a := roundTrip(t, `alias bwrite is write [line, unresolved_ufixed, side, width];`)
+		if a.Signature == nil {
+			t.Fatal("expected Signature != nil")
+		}
+		if len(a.Signature.Types) != 4 {
+			t.Fatalf("Types len = %d, want 4: %v", len(a.Signature.Types), a.Signature.Types)
+		}
+		if a.Signature.Return != "" {
+			t.Fatalf("Return = %q, want empty", a.Signature.Return)
+		}
+	})
+
+	t.Run("two_types_no_return", func(t *testing.T) {
+		a := roundTrip(t, `alias bread is read [line, unresolved_ufixed];`)
+		if a.Signature == nil {
+			t.Fatal("expected Signature != nil")
+		}
+		if len(a.Signature.Types) != 2 {
+			t.Fatalf("Types len = %d, want 2: %v", len(a.Signature.Types), a.Signature.Types)
+		}
+		if a.Signature.Return != "" {
+			t.Fatalf("Return = %q, want empty", a.Signature.Return)
+		}
+	})
+
+	t.Run("no_signature", func(t *testing.T) {
+		a := roundTrip(t, `alias y is x;`)
+		if a.Signature != nil {
+			t.Fatalf("expected Signature == nil, got %+v", a.Signature)
+		}
+	})
+}
+
 func TestParseGroupDecls(t *testing.T) {
 	ds := parseDecls(t, `
 		group local_ports is (signal <>);

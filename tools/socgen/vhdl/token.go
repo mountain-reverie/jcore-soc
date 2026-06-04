@@ -26,6 +26,8 @@ const (
 	// delimiters (VHDL-93)
 	LPAREN    // (
 	RPAREN    // )
+	LBRACKET  // [
+	RBRACKET  // ]
 	COMMA     // ,
 	SEMICOLON // ;
 	COLON     // :
@@ -159,7 +161,7 @@ var kindStr = map[Kind]string{
 	IDENT: "IDENT", EXTIDENT: "EXTIDENT", INT: "INT", REAL: "REAL",
 	BASEDLIT: "BASEDLIT", CHARLIT: "CHARLIT", STRINGLIT: "STRINGLIT", BITSTRINGLIT: "BITSTRINGLIT",
 
-	LPAREN: "(", RPAREN: ")", COMMA: ",", SEMICOLON: ";", COLON: ":",
+	LPAREN: "(", RPAREN: ")", LBRACKET: "[", RBRACKET: "]", COMMA: ",", SEMICOLON: ";", COLON: ":",
 	ASSIGN: ":=", ARROW: "=>", LE: "<=", GE: ">=", NE: "/=", LT: "<", GT: ">",
 	EQ: "=", PLUS: "+", MINUS: "-", STAR: "*", SLASH: "/", EXP: "**",
 	AMP: "&", BAR: "|", DOT: ".", TICK: "'", BOX: "<>",

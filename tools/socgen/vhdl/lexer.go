@@ -262,6 +262,10 @@ func (l *Lexer) Next() Token {
 		return l.emit(Token{Kind: LPAREN, Pos: startPos})
 	case ')':
 		return l.emit(Token{Kind: RPAREN, Pos: startPos})
+	case '[':
+		return l.emit(Token{Kind: LBRACKET, Pos: startPos})
+	case ']':
+		return l.emit(Token{Kind: RBRACKET, Pos: startPos})
 	case ',':
 		return l.emit(Token{Kind: COMMA, Pos: startPos})
 	case ';':

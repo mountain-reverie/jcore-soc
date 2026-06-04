@@ -97,6 +97,19 @@ func TestLexTickVsChar(t *testing.T) {
 	}
 }
 
+func TestLexBrackets(t *testing.T) {
+	got := kinds(`[ ]`)
+	want := []Kind{LBRACKET, RBRACKET}
+	if len(got) != len(want) {
+		t.Fatalf("len got=%d want=%d (%v)", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("tok %d = %v want %v", i, got[i], want[i])
+		}
+	}
+}
+
 func TestLexerPositionMultiLine(t *testing.T) {
 	src := []byte("entity foo is\nend entity;")
 	fs := NewFileSet()

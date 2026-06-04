@@ -1759,7 +1759,24 @@ func (p *parser) parseEntityName() string {
 	}
 }
 
-// parseAliasDecl parses `alias name [: subtype_indication] is target ;`.
+// parseSignature parses `[ [type_mark {, type_mark}] [return type_mark] ]`.
+func (p *parser) parseSignature() *Signature {
+	p.expect(LBRACKET)
+	sig := &Signature{}
+	if !p.at(RETURN) && !p.at(RBRACKET) {
+		sig.Types = append(sig.Types, p.parseDottedName())
+		for p.accept(COMMA) {
+			sig.Types = append(sig.Types, p.parseDottedName())
+		}
+	}
+	if p.accept(RETURN) {
+		sig.Return = p.parseDottedName()
+	}
+	p.expect(RBRACKET)
+	return sig
+}
+
+// parseAliasDecl parses `alias name [: subtype_indication] is target [signature] ;`.
 func (p *parser) parseAliasDecl() Decl {
 	pos := p.expect(ALIAS).Pos
 	name := p.expect(IDENT).Lit
@@ -1770,8 +1787,12 @@ func (p *parser) parseAliasDecl() Decl {
 	}
 	p.expect(IS)
 	target := p.parseName()
+	var sig *Signature
+	if p.at(LBRACKET) {
+		sig = p.parseSignature()
+	}
 	p.expect(SEMICOLON)
-	return &AliasDecl{P: pos, Name: name, SubtypeMark: mark, Constraint: constraint, Target: target}
+	return &AliasDecl{P: pos, Name: name, SubtypeMark: mark, Constraint: constraint, Target: target, Signature: sig}
 }
 
 // parseGroupDecl parses a group template declaration (`group n is (classes) ;`)

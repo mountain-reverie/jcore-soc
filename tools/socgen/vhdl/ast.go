@@ -620,7 +620,14 @@ func (n *SubprogramBody) End() Pos {
 }
 func (n *SubprogramBody) declNode() {}
 
-// AliasDecl is `alias name [: subtype_indication] is target ;`. SubtypeMark is ""
+// Signature is an alias/attribute subprogram signature:
+// `[ [type_mark {, type_mark}] [return type_mark] ]`.
+type Signature struct {
+	Types  []string // parameter/profile type marks
+	Return string   // return type mark ("" if none)
+}
+
+// AliasDecl is `alias name [: subtype_indication] is target [signature] ;`. SubtypeMark is ""
 // when no subtype indication is present. Target is the aliased name expression.
 type AliasDecl struct {
 	P           Pos
@@ -628,6 +635,7 @@ type AliasDecl struct {
 	SubtypeMark string
 	Constraint  Expr
 	Target      Expr
+	Signature   *Signature
 }
 
 func (n *AliasDecl) Pos() Pos { return n.P }
