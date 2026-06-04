@@ -120,6 +120,7 @@ components/uartlite/uart_pkg.vhd
 components/uartlite/uartlitedb.vhd
 lib/fixed_dsm_pkg/fixed_dsm_pkg.vhd
 lib/fixed_dsm_pkg/ieee/fixed_float_types_c.vhd
+lib/fixed_dsm_pkg/ieee/fixed_pkg_c.vhd
 lib/fixed_dsm_pkg/test.vhd
 lib/fixed_dsm_pkg/test_cordic.vhd
 lib/fixed_dsm_pkg/tests/add_carry_tb.vhd
