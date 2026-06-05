@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"gopkg.in/yaml.v3"
 )
@@ -74,11 +75,12 @@ func spliceInclude(n *yaml.Node, dir string, stack []string) error {
 		return fmt.Errorf("include depth exceeded at %q", n.Value)
 	}
 	p := filepath.Join(dir, n.Value)
-	abs, _ := filepath.Abs(p)
-	for _, s := range stack {
-		if s == abs {
-			return fmt.Errorf("include cycle: %s", abs)
-		}
+	abs, aerr := filepath.Abs(p)
+	if aerr != nil {
+		return fmt.Errorf("include %s: %w", p, aerr)
+	}
+	if slices.Contains(stack, abs) {
+		return fmt.Errorf("include cycle: %s", abs)
 	}
 	data, err := os.ReadFile(p)
 	if err != nil {
@@ -108,6 +110,9 @@ func mergeMapping(n *yaml.Node) error {
 	for i := 0; i+1 < len(n.Content); i += 2 {
 		k, v := n.Content[i], n.Content[i+1]
 		if k.Value == "<<" {
+			if mergeVal != nil {
+				return fmt.Errorf("line %d: multiple << merge keys in one mapping", n.Line)
+			}
 			mergeVal = v
 			continue
 		}
@@ -115,10 +120,14 @@ func mergeMapping(n *yaml.Node) error {
 	}
 	n.Content = out
 	if mergeVal != nil {
-		if mergeVal.Kind != yaml.MappingNode {
+		mv := mergeVal
+		if mv.Kind == yaml.AliasNode {
+			mv = mv.Alias
+		}
+		if mv == nil || mv.Kind != yaml.MappingNode {
 			return fmt.Errorf("line %d: << value must be a mapping", n.Line)
 		}
-		deepMergeInto(n, mergeVal) // siblings (already in n) win over merged
+		deepMergeInto(n, mv) // siblings (already in n) win over merged
 	}
 	return nil
 }

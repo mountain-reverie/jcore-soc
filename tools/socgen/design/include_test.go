@@ -1,6 +1,7 @@
 package design
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -94,5 +95,52 @@ func TestIncludeCycle(t *testing.T) {
 	_, errs := Load(filepath.Join(dir, "a.yaml"))
 	if len(errs) == 0 {
 		t.Fatal("expected an include-cycle error")
+	}
+}
+
+func TestSeqConcatOnMerge(t *testing.T) {
+	dir := writeFiles(t, map[string]string{
+		"design.yaml": "merge-signals:\n  <<: !include base.yaml\n  sig: [c]\n",
+		"base.yaml":   "sig: [a, b]\n",
+	})
+	d, errs := Load(filepath.Join(dir, "design.yaml"))
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
+	}
+	// sequences concatenate, override (sibling) items first then base.
+	got := d.MergeSignals["sig"]
+	want := []string{"c", "a", "b"}
+	if len(got) != 3 || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Errorf("sig = %v, want %v", got, want)
+	}
+}
+
+func TestDepthCap(t *testing.T) {
+	files := map[string]string{}
+	for i := 0; i < 20; i++ {
+		files[fmt.Sprintf("f%d.yaml", i)] = fmt.Sprintf("x: !include f%d.yaml\n", i+1)
+	}
+	files["f20.yaml"] = "x: leaf\n"
+	dir := writeFiles(t, files)
+	_, errs := Load(filepath.Join(dir, "f0.yaml"))
+	if len(errs) == 0 {
+		t.Fatal("expected an include-depth error")
+	}
+}
+
+func TestNonMappingMergeError(t *testing.T) {
+	_, errs := loadString(t, "devices:\n  - class: c\n    <<: 5\n")
+	if len(errs) == 0 {
+		t.Fatal("expected a non-mapping << error")
+	}
+}
+
+func TestStandaloneRemove(t *testing.T) {
+	d, errs := loadString(t, "devices:\n  - class: c\n    name: !remove\n")
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
+	}
+	if d.Devices[0].Name != "" {
+		t.Errorf("standalone !remove should drop the key; name = %q", d.Devices[0].Name)
 	}
 }
