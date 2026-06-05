@@ -70,3 +70,91 @@ func TestResolveClassConfiguration(t *testing.T) {
 		t.Errorf("config resolution = %+v", rc)
 	}
 }
+
+func TestResolveClassExplicitArch(t *testing.T) {
+	lib := buildLib(t,
+		`entity e is end entity;`,
+		`architecture a1 of e is begin end architecture;`,
+		`architecture a2 of e is begin end architecture;`)
+	// two archs, but explicit selection picks a2 (no ambiguity error)
+	rc, errs := resolveClass("c", &design.DeviceClass{Entity: "e", Architecture: "a2"}, lib, nil)
+	if len(errs) != 0 {
+		t.Fatalf("explicit arch should resolve cleanly: %v", errs)
+	}
+	if rc.ArchName != "a2" {
+		t.Errorf("ArchName = %q want a2", rc.ArchName)
+	}
+}
+
+func TestResolveClassArchConfigMismatch(t *testing.T) {
+	lib := buildLib(t,
+		`entity e is end entity;`,
+		`architecture rtl of e is begin end architecture;`,
+		`architecture other of e is begin end architecture;`,
+		`configuration ecfg of e is for rtl end for; end configuration;`)
+	// configuration selects rtl, but explicit architecture says "other" -> mismatch
+	_, errs := resolveClass("c", &design.DeviceClass{Entity: "e", Architecture: "other", Configuration: "ecfg"}, lib, nil)
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Error(), "mismatch") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("want arch/config mismatch error, got %v", errs)
+	}
+}
+
+func iptr(i int) *int { return &i }
+
+func TestResolveRegs(t *testing.T) {
+	lib := buildLib(t, `entity e is end entity;`, `architecture a of e is begin end architecture;`)
+	dc := &design.DeviceClass{Entity: "e", Regs: []*design.Reg{
+		{Name: "RX"},                                    // addr 0, width 4 -> [0,3]
+		{Name: "tx", Width: iptr(4)},                   // addr 4 -> [4,7]
+		{Name: "ctrl", Addr: iptr(12), Width: iptr(4)}, // explicit [12,15]
+	}}
+	rc, errs := resolveClass("uartlite", dc, lib, nil)
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
+	}
+	if len(rc.Regs) != 3 {
+		t.Fatalf("regs: %d", len(rc.Regs))
+	}
+	if rc.Regs[0].Name != "rx" || rc.Regs[0].ByteRange != [2]int{0, 3} {
+		t.Errorf("reg0 = %+v", rc.Regs[0])
+	}
+	if rc.Regs[1].ByteRange != [2]int{4, 7} {
+		t.Errorf("reg1 = %+v", rc.Regs[1])
+	}
+	if rc.Regs[2].ByteRange != [2]int{12, 15} {
+		t.Errorf("reg2 = %+v", rc.Regs[2])
+	}
+	// maxAddr = 16 -> ceil(log2 16)-1 = 4-1 = 3
+	if rc.LeftAddrBit != 3 {
+		t.Errorf("left-addr-bit = %d want 3", rc.LeftAddrBit)
+	}
+}
+
+func TestResolveRegsOverlap(t *testing.T) {
+	lib := buildLib(t, `entity e is end entity;`, `architecture a of e is begin end architecture;`)
+	dc := &design.DeviceClass{Entity: "e", Regs: []*design.Reg{
+		{Name: "a", Addr: iptr(0), Width: iptr(8)}, // [0,7]
+		{Name: "b", Addr: iptr(4), Width: iptr(4)}, // [4,7] overlaps a
+	}}
+	_, errs := resolveClass("c", dc, lib, nil)
+	if len(errs) == 0 {
+		t.Fatal("want register-overlap error")
+	}
+}
+
+func TestResolveRegsLeftAddrTooSmall(t *testing.T) {
+	lib := buildLib(t, `entity e is end entity;`, `architecture a of e is begin end architecture;`)
+	dc := &design.DeviceClass{Entity: "e", LeftAddrBit: 1, Regs: []*design.Reg{
+		{Name: "a", Addr: iptr(0), Width: iptr(16)}, // needs left-addr-bit >= ceil(log2 16)-1 = 3
+	}}
+	_, errs := resolveClass("c", dc, lib, nil)
+	if len(errs) == 0 {
+		t.Fatal("want left-addr-bit-too-small error")
+	}
+}

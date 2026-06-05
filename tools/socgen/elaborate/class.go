@@ -2,6 +2,7 @@ package elaborate
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/j-core/jcore-soc/tools/socgen/design"
@@ -64,5 +65,73 @@ func resolveClass(name string, dc *design.DeviceClass, lib *iface.Library, errs 
 	default:
 		errs = append(errs, fmt.Errorf("class %q: unable to find single architecture for entity %q (%d found)", name, dc.Entity, len(archs)))
 	}
+	rc.Regs, rc.LeftAddrBit, rc.RegRange, errs = resolveRegs(name, dc, errs)
 	return rc, errs
 }
+
+func resolveRegs(class string, dc *design.DeviceClass, errs []error) ([]*ResolvedReg, int, [2]int, []error) {
+	addr := 0
+	var regs []*ResolvedReg
+	for _, r := range dc.Regs {
+		width := 4
+		if r.Width != nil {
+			width = *r.Width
+		}
+		a := addr
+		if r.Addr != nil {
+			a = *r.Addr
+		}
+		typ := r.Type
+		if typ == "" {
+			typ = "fixed"
+		}
+		rr := &ResolvedReg{
+			Name:      lc(r.Name),
+			Addr:      a,
+			Width:     width,
+			ByteRange: [2]int{a, a + width - 1},
+			Mode:      r.Mode,
+			Type:      typ,
+		}
+		regs = append(regs, rr)
+		addr = a + width
+	}
+	if len(regs) == 0 {
+		return nil, 0, [2]int{}, errs
+	}
+	// per-class register overlap (local check; cross-device is P4e)
+	for i := 0; i < len(regs); i++ {
+		for j := i + 1; j < len(regs); j++ {
+			if overlaps(regs[i].ByteRange, regs[j].ByteRange) {
+				errs = append(errs, fmt.Errorf("class %q: register %q overlaps %q", class, regs[i].Name, regs[j].Name))
+			}
+		}
+	}
+	maxAddr := 0
+	low, high := regs[0].ByteRange[0], regs[0].ByteRange[1]
+	for _, r := range regs {
+		if e := r.Addr + r.Width; e > maxAddr {
+			maxAddr = e
+		}
+		if r.ByteRange[0] < low {
+			low = r.ByteRange[0]
+		}
+		if r.ByteRange[1] > high {
+			high = r.ByteRange[1]
+		}
+	}
+	required := int(math.Ceil(math.Log2(float64(maxAddr)))) - 1
+	leftBit := required
+	if dc.LeftAddrBit > 0 {
+		if dc.LeftAddrBit < required {
+			errs = append(errs, fmt.Errorf("class %q: left-addr-bit %d too small for registers, must be at least %d", class, dc.LeftAddrBit, required))
+		}
+		if dc.LeftAddrBit > required {
+			leftBit = dc.LeftAddrBit
+		}
+	}
+	regRange := [2]int{low - low%4, ((high / 4) + 1) * 4} // align low down, high up to 4
+	return regs, leftBit, regRange, errs
+}
+
+func overlaps(a, b [2]int) bool { return a[0] <= b[1] && b[0] <= a[1] }
