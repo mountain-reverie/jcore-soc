@@ -120,6 +120,9 @@ func resolveRegs(class string, dc *design.DeviceClass, errs []error) ([]*Resolve
 			high = r.ByteRange[1]
 		}
 	}
+	if maxAddr < 1 {
+		maxAddr = 1
+	}
 	required := int(math.Ceil(math.Log2(float64(maxAddr)))) - 1
 	leftBit := required
 	if dc.LeftAddrBit > 0 {
