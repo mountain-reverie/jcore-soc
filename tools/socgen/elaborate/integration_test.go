@@ -21,6 +21,9 @@ func TestElaborateMimasV2(t *testing.T) {
 	for _, e := range errs {
 		t.Logf("  %v", e)
 	}
+	if len(errs) != 0 {
+		t.Errorf("want 0 resolution errors for mimas_v2, got %d", len(errs))
+	}
 	// every device resolves to a class with a bound entity + an architecture.
 	for _, dev := range res.Devices {
 		rc := res.Classes[lc(dev.Class)]

@@ -7,19 +7,42 @@ import (
 	"github.com/j-core/jcore-soc/tools/socgen/design"
 )
 
-// Devices resolves every spec device of a loaded board into a *Resolution
-// (per-device: entity/arch, registers, name, effective generics). Best-effort;
-// never panics.
+// Devices resolves the device classes actually instantiated by the board into
+// a *Resolution (per-device: entity/arch, registers, name, effective generics).
+// Classes defined in the board's YAML but not referenced by any device are
+// skipped — they may have empty/absent entity fields and would produce spurious
+// errors. Best-effort; never panics.
 func Devices(b *board.Board) (*Resolution, []error) {
 	res := &Resolution{Classes: map[string]*ResolvedClass{}}
 	var errs []error
 	if b == nil || b.Design == nil {
 		return res, errs
 	}
-	for name, dc := range b.Design.DeviceClasses {
+	// Resolve only the classes actually instantiated by a device.
+	seen := map[string]bool{}
+	for _, dev := range b.Design.Devices {
+		key := lc(dev.Class)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		dc, ok := b.Design.DeviceClasses[dev.Class]
+		if !ok {
+			// try a case-insensitive match against the class map
+			for cn, c := range b.Design.DeviceClasses {
+				if lc(cn) == key {
+					dc, ok = c, true
+					break
+				}
+			}
+		}
+		if !ok {
+			errs = append(errs, fmt.Errorf("device %q: unknown class %q", dev.Name, dev.Class))
+			continue
+		}
 		var rc *ResolvedClass
-		rc, errs = resolveClass(name, dc, b.Library, errs)
-		res.Classes[lc(name)] = rc
+		rc, errs = resolveClass(dev.Class, dc, b.Library, errs)
+		res.Classes[key] = rc
 	}
 	res.Devices, errs = resolveDevices(b.Design, res.Classes, errs)
 	return res, errs
