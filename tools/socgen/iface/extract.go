@@ -26,6 +26,8 @@ func Extract(files []*vhdl.DesignFile) (*Library, []error) {
 				lib.addArchitecture(n)
 			case *vhdl.PackageDecl:
 				errs = lib.addPackage(n, errs)
+			case *vhdl.ConfigurationDecl:
+				errs = lib.addConfiguration(n, errs)
 			}
 		}
 	}
@@ -109,6 +111,19 @@ func toPorts(ids []*vhdl.InterfaceDecl) []*Port {
 		}
 	}
 	return out
+}
+
+func (l *Library) addConfiguration(n *vhdl.ConfigurationDecl, errs []error) []error {
+	key := lower(n.Name)
+	if _, dup := l.Configurations[key]; dup {
+		errs = append(errs, dupErr("configuration", n.Name))
+	}
+	arch := ""
+	if n.Block != nil {
+		arch = n.Block.Spec
+	}
+	l.Configurations[key] = &Configuration{Name: n.Name, Entity: n.Entity, Arch: arch, Node: n}
+	return errs
 }
 
 func toGenerics(ids []*vhdl.InterfaceDecl) []*Generic {

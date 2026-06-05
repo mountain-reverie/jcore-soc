@@ -12,7 +12,7 @@ type Library struct {
 	Entities       map[string]*Entity
 	Packages       map[string]*Package
 	Architectures  map[string][]*Architecture // keyed by ENTITY name
-	Configurations map[string]*Configuration  // populated in Task 3
+	Configurations map[string]*Configuration
 	index          map[string]Symbol
 }
 
@@ -111,6 +111,11 @@ func (l *Library) ResolveType(name string) (*TypeEntry, bool) {
 		}
 	}
 	return nil, false
+}
+
+func (l *Library) Configuration(name string) (*Configuration, bool) {
+	c, ok := l.Configurations[lower(name)]
+	return c, ok
 }
 
 func lower(s string) string { return strings.ToLower(s) }

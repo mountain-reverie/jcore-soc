@@ -1,6 +1,8 @@
 package iface
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/j-core/jcore-soc/tools/socgen/vhdl"
@@ -113,5 +115,104 @@ end package;`)
 	}
 	if te, ok := lib.ResolveType("state_t"); !ok || te.Name != "state_t" {
 		t.Errorf("ResolveType(state_t) = %v %v", te, ok)
+	}
+}
+
+func TestExtractConfiguration(t *testing.T) {
+	df := parse(t, `configuration cfg of uart is
+  for rtl
+  end for;
+end configuration;`)
+	lib, errs := Extract([]*vhdl.DesignFile{df})
+	if len(errs) != 0 {
+		t.Fatalf("extract errors: %v", errs)
+	}
+	c, ok := lib.Configuration("cfg")
+	if !ok {
+		t.Fatal("configuration cfg not found")
+	}
+	if c.Entity != "uart" || c.Arch != "rtl" || c.Node == nil {
+		t.Errorf("config = %+v", c)
+	}
+}
+
+func TestExtractDuplicateEntity(t *testing.T) {
+	a := parse(t, `entity dup is end entity;`)
+	b := parse(t, `entity dup is end entity;`)
+	_, errs := Extract([]*vhdl.DesignFile{a, b})
+	if len(errs) == 0 {
+		t.Fatal("expected a duplicate-entity error")
+	}
+}
+
+func TestExtractEmpty(t *testing.T) {
+	lib, errs := Extract(nil)
+	if lib == nil || len(errs) != 0 {
+		t.Fatalf("empty input: lib=%v errs=%v", lib, errs)
+	}
+	if _, ok := lib.Entity("nope"); ok {
+		t.Error("empty lib should have no entities")
+	}
+}
+
+// Carry-forward from T2 review: negative ResolveType + component generic assertion.
+func TestResolveTypeNegative(t *testing.T) {
+	df := parse(t, `package p is
+  constant C : integer := 1;
+  component comp is port (x : in std_logic); end component;
+end package;`)
+	lib, _ := Extract([]*vhdl.DesignFile{df})
+	if _, ok := lib.ResolveType("C"); ok {
+		t.Error("ResolveType should return false for a constant name")
+	}
+	if _, ok := lib.ResolveType("comp"); ok {
+		t.Error("ResolveType should return false for a component name")
+	}
+	if _, ok := lib.ResolveType("nonexistent"); ok {
+		t.Error("ResolveType should return false for an unknown name")
+	}
+}
+
+func TestExtractComponentGeneric(t *testing.T) {
+	df := parse(t, `package p is
+  component fifo is generic (depth : integer); port (clk : in std_logic); end component;
+end package;`)
+	lib, _ := Extract([]*vhdl.DesignFile{df})
+	p, _ := lib.Package("p")
+	if len(p.Components[0].Generics) != 1 || p.Components[0].Generics[0].Name != "depth" {
+		t.Errorf("component generics: %+v", p.Components[0].Generics)
+	}
+}
+
+func TestExtractCorpusSmoke(t *testing.T) {
+	root := os.Getenv("JCORE_SOC_ROOT")
+	if root == "" {
+		t.Skip("JCORE_SOC_ROOT not set")
+	}
+	rels := []string{
+		"components/cpu/cpu2j0_pkg.vhd",
+		"components/uartlite/uartlitedb.vhd",
+	}
+	var files []*vhdl.DesignFile
+	for _, rel := range rels {
+		src, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			t.Skipf("corpus file missing: %s", rel)
+		}
+		df, errs := vhdl.ParseFile(vhdl.NewFileSet(), rel, src)
+		if len(errs) != 0 {
+			t.Skipf("parse %s: %v", rel, errs)
+		}
+		files = append(files, df)
+	}
+	lib, errs := Extract(files)
+	for _, e := range errs {
+		t.Logf("extract note: %v", e)
+	}
+	if len(lib.Packages) == 0 {
+		t.Error("expected at least one package")
+	}
+	if len(lib.Entities) == 0 {
+		t.Error("expected at least one entity")
 	}
 }
