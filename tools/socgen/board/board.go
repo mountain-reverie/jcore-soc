@@ -1,8 +1,10 @@
 package board
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -51,4 +53,37 @@ func loadFrom(root, name string, files []string) (*Board, []error) {
 		errs = append(errs, design.Validate(d, lib)...)
 	}
 	return &Board{Name: name, Design: d, Library: lib}, errs
+}
+
+// Files runs the build's file-list target for the named board (root = the
+// jcore-soc repo root) and returns the absolute VHDL file paths it lists.
+func Files(root, name string) ([]string, error) {
+	cmd := exec.Command("make", "-C", root, name,
+		"TARGET=vhdl_list.txt", "LAST_OUTPUT=false", "REL_OUTPUT_DIR=output/"+name)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("make %s vhdl_list.txt: %w: %s", name, err, tailStr(stderr.String()))
+	}
+	return readFileList(filepath.Join(root, "output", name, "vhdl_list.txt"))
+}
+
+// Load loads the board's YAML spec, builds the interface Library from its full
+// VHDL file set (via make), and validates the spec against it. Returns a
+// best-effort Board plus all collected errors (load + parse + validation).
+func Load(root, name string) (*Board, []error) {
+	files, err := Files(root, name)
+	if err != nil {
+		d, derrs := design.Load(filepath.Join(root, "targets", "boards", name, "design.yaml"))
+		return &Board{Name: name, Design: d}, append(derrs, err)
+	}
+	return loadFrom(root, name, files)
+}
+
+func tailStr(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) > 600 {
+		return "..." + s[len(s)-600:]
+	}
+	return s
 }

@@ -57,6 +57,24 @@ func TestReadFileList(t *testing.T) {
 	}
 }
 
+func TestReadFileListEmpty(t *testing.T) {
+	dir := t.TempDir()
+	p := writeFile(t, dir, "vhdl_list.txt", "notes.txt\n\nREADME\n")
+	if _, err := readFileList(p); err == nil {
+		t.Error("a list with no .vhd/.vhh entries should return an error")
+	}
+}
+
+func TestLibraryEmpty(t *testing.T) {
+	lib, errs := Library(nil)
+	if lib == nil {
+		t.Fatal("Library(nil) should return a non-nil *iface.Library")
+	}
+	if len(errs) != 0 {
+		t.Errorf("Library(nil) should have zero errors, got: %v", errs)
+	}
+}
+
 func TestLoadFromComposition(t *testing.T) {
 	root := t.TempDir()
 	// a tiny board spec referencing one device class -> one entity
