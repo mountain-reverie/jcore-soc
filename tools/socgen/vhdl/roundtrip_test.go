@@ -40,23 +40,42 @@ func hasCPPDirective(src []byte) bool {
 	return false
 }
 
-// roundTrips reports whether src (at absPath, with optional cppExe) parses with
-// no errors and is AST-stable across parse -> print -> reparse.
-// If cppExe is non-empty, the first parse uses WithCPP; the reparse of the
-// printed (already-expanded) output does not.
-func roundTrips(absPath, cppExe string, src []byte) bool {
-	var f1 *DesignFile
-	var errs1 []error
-	if cppExe != "" {
-		f1, errs1 = ParseFile(NewFileSet(), absPath, src, WithCPP(cppExe))
-	} else {
-		f1, errs1 = ParseFile(NewFileSet(), absPath, src)
+// cppFileOpts supplies build-specific preprocessor flags for corpus files whose
+// cpp directives need defines/includes beyond the defaults. Mirrors each file's
+// build Makefile (e.g. components/cpu/sim/Makefile for cpu_tb.vhd).
+var cppFileOpts = map[string][]Option{
+	"components/cpu/sim/cpu_tb.vhd": {
+		WithCPPDefine("VHDL", ""),
+		WithCPPDefine("CONFIG_PREFETCHER", "0"),
+		WithCPPDefine("CONFIG_RING_BUS", "0"),
+		WithCPPInclude("sim"),
+	},
+}
+
+// cppOpts returns the parse options for a corpus file (by rel path), and whether
+// the subtest should skip because a cpp directive is present but gcc is absent.
+func cppOpts(rel string, src []byte) (opts []Option, skip bool) {
+	if !hasCPPDirective(src) {
+		return nil, false
 	}
+	if _, err := exec.LookPath("gcc"); err != nil {
+		return nil, true
+	}
+	opts = []Option{WithCPP("gcc")}
+	opts = append(opts, cppFileOpts[rel]...)
+	return opts, false
+}
+
+// roundTrips reports whether src (at absPath, with given opts) parses with
+// no errors and is AST-stable across parse -> print -> reparse.
+// The reparse of the printed (already-expanded) output uses no options.
+func roundTrips(absPath string, opts []Option, src []byte) bool {
+	f1, errs1 := ParseFile(NewFileSet(), absPath, src, opts...)
 	if len(errs1) != 0 {
 		return false
 	}
 	out := Print(f1)
-	f2, errs2 := ParseFile(NewFileSet(), absPath, []byte(out))
+	f2, errs2 := ParseFile(NewFileSet(), absPath, []byte(out)) // printed VHDL has no directives
 	if len(errs2) != 0 {
 		return false
 	}
@@ -86,20 +105,13 @@ func TestCorpusRoundTrip(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			cppExe := ""
-			if hasCPPDirective(src) {
-				if _, err := exec.LookPath("gcc"); err != nil {
-					t.Skip("gcc not found; skipping cpp file")
-				}
-				cppExe = "gcc"
+			opts, skip := cppOpts(rel, src)
+			if skip {
+				t.Skip("cpp file but gcc not available")
 			}
-			if !roundTrips(absPath, cppExe, src) {
+			if !roundTrips(absPath, opts, src) {
 				var errs []error
-				if cppExe != "" {
-					_, errs = ParseFile(NewFileSet(), absPath, src, WithCPP(cppExe))
-				} else {
-					_, errs = ParseFile(NewFileSet(), absPath, src)
-				}
+				_, errs = ParseFile(NewFileSet(), absPath, src, opts...)
 				t.Fatalf("round-trip failed; parse errs: %v", errs)
 			}
 		})
@@ -118,20 +130,11 @@ func TestCorpusGhdlReanalyze(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			cppExe := ""
-			if hasCPPDirective(src) {
-				if _, err := exec.LookPath("gcc"); err != nil {
-					t.Skip("gcc not found; skipping cpp file")
-				}
-				cppExe = "gcc"
+			opts, skip := cppOpts(rel, src)
+			if skip {
+				t.Skip("cpp file but gcc not available")
 			}
-			var f *DesignFile
-			var errs []error
-			if cppExe != "" {
-				f, errs = ParseFile(NewFileSet(), absPath, src, WithCPP(cppExe))
-			} else {
-				f, errs = ParseFile(NewFileSet(), absPath, src)
-			}
+			f, errs := ParseFile(NewFileSet(), absPath, src, opts...)
 			if len(errs) != 0 {
 				t.Fatalf("parse: %v", errs)
 			}
