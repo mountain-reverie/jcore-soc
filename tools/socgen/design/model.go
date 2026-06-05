@@ -21,6 +21,7 @@ type Design struct {
 type DeviceClass struct {
 	Entity        string           `yaml:"entity"`
 	Configuration string           `yaml:"configuration"`
+	Architecture  string           `yaml:"architecture"`
 	Desc          string           `yaml:"desc"`
 	DtName        string           `yaml:"dt-name"`
 	DtProps       map[string]any   `yaml:"dt-props"`
