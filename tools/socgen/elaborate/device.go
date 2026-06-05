@@ -15,7 +15,7 @@ import (
 func Devices(b *board.Board) (*Resolution, []error) {
 	res := &Resolution{Classes: map[string]*ResolvedClass{}}
 	var errs []error
-	if b == nil || b.Design == nil {
+	if b == nil || b.Design == nil || b.Library == nil {
 		return res, errs
 	}
 	// Resolve only the classes actually instantiated by a device.
