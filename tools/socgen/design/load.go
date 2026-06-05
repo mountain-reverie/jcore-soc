@@ -3,6 +3,7 @@ package design
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
@@ -22,6 +23,9 @@ func Load(path string) (*Design, []error) {
 	root := &doc
 	if doc.Kind == yaml.DocumentNode && len(doc.Content) == 1 {
 		root = doc.Content[0]
+	}
+	if err := resolveTree(root, filepath.Dir(path), nil); err != nil {
+		return nil, []error{fmt.Errorf("%s: %w", path, err)}
 	}
 	d := &Design{}
 	if err := root.Decode(d); err != nil {
