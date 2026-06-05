@@ -45,7 +45,7 @@ zero-signals: [icache0_ctrl, dcache0_ctrl]
 	if dev.BaseAddr == nil || uint64(*dev.BaseAddr) != 0xabcd0200 {
 		t.Errorf("base-addr = %v", dev.BaseAddr)
 	}
-	if dev.IRQ == nil || *dev.IRQ != 4 {
+	if dev.IRQ == nil || dev.IRQ.Int == nil || *dev.IRQ.Int != 4 {
 		t.Errorf("irq = %v", dev.IRQ)
 	}
 	// verbatim-by-default + typed values

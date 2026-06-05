@@ -29,17 +29,46 @@ type DeviceClass struct {
 	Generics      map[string]Value `yaml:"generics"`
 	Ports         map[string]Value `yaml:"ports"`
 	Requires      []string         `yaml:"requires"`
+	DtChildren    []any            `yaml:"dt-children"`
 }
 
 type Device struct {
 	Class    string           `yaml:"class"`
 	Name     string           `yaml:"name"`
+	CPU      *int             `yaml:"cpu"`
 	BaseAddr *Hex             `yaml:"base-addr"`
-	IRQ      *int             `yaml:"irq"`
+	IRQ      *IRQRef          `yaml:"irq"`
 	Generics map[string]Value `yaml:"generics"`
 	Ports    map[string]Value `yaml:"ports"`
 	DtProps  map[string]any   `yaml:"dt-props"`
 	DtStdout bool             `yaml:"dt-stdout"`
+	DtLabel  string           `yaml:"dt-label"`
+	DtNode   *bool            `yaml:"dt-node"`
+}
+
+// IRQRef is a device interrupt reference. It is either a single IRQ line
+// (Int set, e.g. `irq: 4`) or a set of named IRQ lines (Named set, e.g. the
+// cache controller's `irq: {int0: {cpu: 0, irq: 3}, ...}`).
+type IRQRef struct {
+	Int   *int
+	Named map[string]*IRQEntry
+}
+
+func (r *IRQRef) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind == yaml.MappingNode {
+		m := map[string]*IRQEntry{}
+		if err := n.Decode(&m); err != nil {
+			return fmt.Errorf("line %d: invalid irq map: %w", n.Line, err)
+		}
+		r.Named = m
+		return nil
+	}
+	i, err := strconv.Atoi(n.Value)
+	if err != nil {
+		return fmt.Errorf("line %d: invalid irq %q: %w", n.Line, n.Value, err)
+	}
+	r.Int = &i
+	return nil
 }
 
 type TopEntity struct {
