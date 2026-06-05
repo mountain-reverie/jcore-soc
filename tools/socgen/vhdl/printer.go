@@ -12,6 +12,14 @@ func Print(f *DesignFile) string {
 	return b.String()
 }
 
+// SubtypeString renders a subtype indication (type mark + optional constraint)
+// to canonical VHDL, e.g. "std_logic_vector(15 downto 0)" or "integer range 0 to 7".
+func SubtypeString(mark string, constraint Expr) string {
+	var b strings.Builder
+	printSubtypeIndication(&b, mark, constraint)
+	return b.String()
+}
+
 func printFile(b *strings.Builder, f *DesignFile) {
 	for _, c := range f.Context {
 		switch n := c.(type) {
