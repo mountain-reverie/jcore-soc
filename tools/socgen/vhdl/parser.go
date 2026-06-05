@@ -393,8 +393,13 @@ func (p *parser) parseFile() *DesignFile {
 
 // parseConfig holds options for ParseFile.
 type parseConfig struct {
-	cpp string // preprocessor executable; "" = disabled
+	cpp         string
+	cppDefines  []cppDefine // -Dkey[=value], in order
+	cppIncludes []string    // extra include dirs, resolved relative to the source file's dir
 }
+
+// cppDefine represents a single -D flag for the C preprocessor.
+type cppDefine struct{ key, value string }
 
 // Option configures ParseFile.
 type Option func(*parseConfig)
@@ -403,6 +408,19 @@ type Option func(*parseConfig)
 // lexing, using jcore's common.mk flags. Only the executable name is
 // configurable.
 func WithCPP(exe string) Option { return func(c *parseConfig) { c.cpp = exe } }
+
+// WithCPPDefine adds a `-Dkey=value` (or `-Dkey` when value is "") to the
+// preprocessor invocation. Only effective alongside WithCPP.
+func WithCPPDefine(key, value string) Option {
+	return func(c *parseConfig) { c.cppDefines = append(c.cppDefines, cppDefine{key, value}) }
+}
+
+// WithCPPInclude adds an extra preprocessor include directory, resolved
+// relative to the source file's directory (like the standing -I<dir>/config).
+// Only effective alongside WithCPP.
+func WithCPPInclude(dir string) Option {
+	return func(c *parseConfig) { c.cppIncludes = append(c.cppIncludes, dir) }
+}
 
 // ParseFile parses src (named filename) into a DesignFile. fset records source
 // positions; returned errors are rendered via fset.Position. A nil or empty
@@ -413,7 +431,7 @@ func ParseFile(fset *FileSet, filename string, src []byte, opts ...Option) (*Des
 		o(&cfg)
 	}
 	if cfg.cpp != "" {
-		out, err := runCPP(cfg.cpp, filename, src)
+		out, err := runCPP(cfg, filename, src)
 		if err != nil {
 			return nil, []error{fmt.Errorf("%s: cpp (%s) failed: %w", filename, cfg.cpp, err)}
 		}

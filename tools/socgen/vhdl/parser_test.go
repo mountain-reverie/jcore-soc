@@ -1,7 +1,9 @@
 package vhdl
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -2072,4 +2074,133 @@ end package;`
 	if !equalAST(e4, mustParseExpr(t, b4.String())) {
 		t.Fatalf("regression2: not AST-stable; printed: %q", b4.String())
 	}
+}
+
+// roundTripWithOpts parses src with filename and opts, asserts zero errors,
+// prints, reparses (no opts), and checks AST equality.
+func roundTripWithOpts(t *testing.T, filename, src string, opts ...Option) *DesignFile {
+	t.Helper()
+	df, errs := ParseFile(NewFileSet(), filename, []byte(src), opts...)
+	if len(errs) != 0 {
+		t.Fatalf("parse errors: %v", errs)
+	}
+	out := Print(df)
+	df2, errs2 := ParseFile(NewFileSet(), filename, []byte(out))
+	if len(errs2) != 0 {
+		t.Fatalf("reparse errors: %v\n--- printed ---\n%s", errs2, out)
+	}
+	if !equalAST(df, df2) {
+		t.Fatalf("AST not stable across print/reparse\n--- printed ---\n%s", out)
+	}
+	return df
+}
+
+func TestParseWithCPPDefine(t *testing.T) {
+	if _, err := exec.LookPath("gcc"); err != nil {
+		t.Skip("gcc not available")
+	}
+
+	// Sub-case 1: #if FOO with WithCPPDefine("FOO","1") → entity e (NOT wrong).
+	t.Run("if_value_define", func(t *testing.T) {
+		src := "#if FOO\nentity e is end entity;\n#else\nentity wrong is end entity;\n#endif\n"
+		df := roundTripWithOpts(t, "t.vhd", src, WithCPP("gcc"), WithCPPDefine("FOO", "1"))
+		if len(df.Units) != 1 {
+			t.Fatalf("expected 1 unit, got %d", len(df.Units))
+		}
+		ent, ok := df.Units[0].(*EntityDecl)
+		if !ok {
+			t.Fatalf("expected *EntityDecl, got %T", df.Units[0])
+		}
+		if ent.Name != "e" {
+			t.Fatalf("expected entity name e, got %q (FOO=1 branch should be taken)", ent.Name)
+		}
+	})
+
+	// Sub-case 2: #ifdef FOO with WithCPPDefine("FOO","") → entity e present.
+	t.Run("ifdef_bare_define", func(t *testing.T) {
+		src := "#ifdef FOO\nentity e is end entity;\n#endif\n"
+		df := roundTripWithOpts(t, "t.vhd", src, WithCPP("gcc"), WithCPPDefine("FOO", ""))
+		if len(df.Units) != 1 {
+			t.Fatalf("expected 1 unit, got %d", len(df.Units))
+		}
+		ent, ok := df.Units[0].(*EntityDecl)
+		if !ok {
+			t.Fatalf("expected *EntityDecl, got %T", df.Units[0])
+		}
+		if ent.Name != "e" {
+			t.Fatalf("expected entity name e, got %q", ent.Name)
+		}
+	})
+}
+
+func TestParseWithCPPInclude(t *testing.T) {
+	if _, err := exec.LookPath("gcc"); err != nil {
+		t.Skip("gcc not available")
+	}
+
+	tmp := t.TempDir()
+	subDir := filepath.Join(tmp, "sub")
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
+		t.Fatalf("mkdir sub: %v", err)
+	}
+	incFile := filepath.Join(subDir, "inc.vhd")
+	if err := os.WriteFile(incFile, []byte("entity inc_e is end entity;\n"), 0o644); err != nil {
+		t.Fatalf("write inc.vhd: %v", err)
+	}
+
+	mainFilename := filepath.Join(tmp, "main.vhd")
+	src := "#include \"inc.vhd\"\n"
+	df := roundTripWithOpts(t, mainFilename, src, WithCPP("gcc"), WithCPPInclude("sub"))
+	if len(df.Units) != 1 {
+		t.Fatalf("expected 1 unit, got %d", len(df.Units))
+	}
+	ent, ok := df.Units[0].(*EntityDecl)
+	if !ok {
+		t.Fatalf("expected *EntityDecl, got %T", df.Units[0])
+	}
+	if ent.Name != "inc_e" {
+		t.Fatalf("expected entity name inc_e, got %q", ent.Name)
+	}
+}
+
+// TestProbeCpuTb is an informational probe: it tries to parse cpu_tb.vhd with
+// the build defines and reports the round-trip result. It NEVER fails the suite.
+func TestProbeCpuTb(t *testing.T) {
+	root := os.Getenv("JCORE_SOC_ROOT")
+	if root == "" {
+		t.Skip("JCORE_SOC_ROOT not set")
+	}
+	if _, err := exec.LookPath("gcc"); err != nil {
+		t.Skip("gcc not available")
+	}
+	tbPath := filepath.Join(root, "components/cpu/sim/cpu_tb.vhd")
+	src, err := os.ReadFile(tbPath)
+	if err != nil {
+		t.Skipf("cpu_tb.vhd not found: %v", err)
+	}
+
+	opts := []Option{
+		WithCPP("gcc"),
+		WithCPPDefine("VHDL", ""),
+		WithCPPDefine("CONFIG_PREFETCHER", "0"),
+		WithCPPDefine("CONFIG_RING_BUS", "0"),
+		WithCPPInclude("sim"),
+	}
+
+	df1, errs1 := ParseFile(NewFileSet(), tbPath, src, opts...)
+	if len(errs1) != 0 {
+		t.Logf("PROBE: cpu_tb.vhd parse errors (does NOT round-trip): first error: %v", errs1[0])
+		return
+	}
+	out := Print(df1)
+	df2, errs2 := ParseFile(NewFileSet(), tbPath, []byte(out))
+	if len(errs2) != 0 {
+		t.Logf("PROBE: cpu_tb.vhd does NOT round-trip; first reparse error: %v", errs2[0])
+		return
+	}
+	if !equalAST(df1, df2) {
+		t.Logf("PROBE: cpu_tb.vhd parses OK but AST not stable across print/reparse")
+		return
+	}
+	t.Logf("PROBE: cpu_tb.vhd ROUND-TRIPS CLEANLY (parse+print+reparse+equalAST all pass)")
 }
