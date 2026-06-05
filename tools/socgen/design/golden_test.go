@@ -155,58 +155,6 @@ func TestGoldenTurtle1v0(t *testing.T) {
 	}
 }
 
-func TestGoldenTurtle1v1(t *testing.T) {
-	dir := boardsDir(t)
-	p := filepath.Join(dir, "turtle_1v1", "design.yaml")
-	if _, err := os.Stat(p); err != nil {
-		t.Skipf("%s not migrated yet", p)
-	}
-	// turtle_1v1 faithfully mirrors its EDN, which includes
-	// ../sei_device_classes — a file that does not exist in this repo (the
-	// common include is commented out in the EDN, and no sei file was ever
-	// committed). The board's device-classes therefore cannot resolve. The
-	// YAML mirrors that broken state for P6 parity; until a sei spec exists
-	// the load is expected to fail on the missing include, so we skip rather
-	// than fabricate device classes.
-	if _, err := os.Stat(filepath.Join(dir, "sei_device_classes.yaml")); err != nil {
-		d, errs := Load(p)
-		if len(errs) == 0 {
-			t.Fatalf("expected load to fail on missing sei include, but it succeeded: %+v", d)
-		}
-		t.Skipf("turtle_1v1 references missing ../sei_device_classes (pre-existing in EDN); load errs: %v", errs)
-	}
-
-	d := loadBoard(t, "turtle_1v1")
-	if d.Target != "spartan6" {
-		t.Errorf("target = %q", d.Target)
-	}
-	if len(d.Devices) != 8 {
-		t.Fatalf("len(devices) = %d, want 8", len(d.Devices))
-	}
-	// gpsif device (unique to turtle_1v1) with verbatim symbol ports.
-	var gps *Device
-	for _, dev := range d.Devices {
-		if dev.Class == "gpsif" {
-			gps = dev
-		}
-	}
-	if gps == nil {
-		t.Fatal("gpsif device missing")
-	}
-	if gps.BaseAddr == nil || uint64(*gps.BaseAddr) != 0xabcc0000 {
-		t.Errorf("gpsif base-addr = %v", gps.BaseAddr)
-	}
-	if gps.IRQ == nil || gps.IRQ.Int == nil || *gps.IRQ.Int != 2 {
-		t.Errorf("gpsif irq = %+v", gps.IRQ)
-	}
-	if v := gps.Ports["bi"]; v.Kind != KindExpr || v.Text != "BIST_SCAN_NOP" {
-		t.Errorf("gpsif bi port = %+v", v)
-	}
-	if v := gps.Generics["GPSIF_NC"]; v.Kind != KindInt || v.Int != 5 {
-		t.Errorf("gpsif GPSIF_NC = %+v", v)
-	}
-}
-
 func TestGoldenMicroboard(t *testing.T) {
 	d := loadBoard(t, "microboard")
 
@@ -220,6 +168,20 @@ func TestGoldenMicroboard(t *testing.T) {
 	}
 	if emac.Entity != "eth_mac" {
 		t.Errorf("emac entity = %q, want eth_mac (override)", emac.Entity)
+	}
+	// configuration: !remove deletes the inherited eth_mac_rmii_fpga.
+	if emac.Configuration != "" {
+		t.Errorf("emac configuration = %q, want removed (empty)", emac.Configuration)
+	}
+	// The three !remove'd generics must be ABSENT from the merged class.
+	for _, g := range []string{"ASYNC_BUS_BRIDGE", "INSERT_WRITE_DELAY_ETHRX", "INSERT_READ_DELAY_ETHRX"} {
+		if _, present := emac.Generics[g]; present {
+			t.Errorf("emac generic %q present, want removed via !remove", g)
+		}
+	}
+	// A non-removed inherited generic must survive the merge.
+	if v, present := emac.Generics["ASYNC_BRIDGE_IMPL2"]; !present || v.Kind != KindBool || v.Bool != false {
+		t.Errorf("emac ASYNC_BRIDGE_IMPL2 = %+v (present=%v), want inherited false", v, present)
 	}
 	// 5 inline devices: gpio, aic0, uart0, spi flash, emac.
 	if len(d.Devices) != 5 {

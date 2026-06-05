@@ -167,11 +167,11 @@ device-classes:
   <<: !include ../common_device_classes.yaml
   emac:
     entity: eth_mac
-    configuration: null
+    configuration: !remove
     generics:
-      ASYNC_BUS_BRIDGE: null
-      INSERT_WRITE_DELAY_ETHRX: null
-      INSERT_READ_DELAY_ETHRX: null
+      ASYNC_BUS_BRIDGE: !remove
+      INSERT_WRITE_DELAY_ETHRX: !remove
+      INSERT_READ_DELAY_ETHRX: !remove
 
 devices:
   - class: gpio

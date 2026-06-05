@@ -114,6 +114,7 @@ const (
 	KindInt
 	KindFloat
 	KindBool
+	KindMap // structured map value (e.g. an aic `irq_i: {irq?: true}`)
 )
 
 // Value is a generic/port value modeling verbatim-by-default: a plain YAML
@@ -125,9 +126,21 @@ type Value struct {
 	Int   int64
 	Float float64
 	Bool  bool
+	Map   map[string]any // KindMap (structured map value, preserved losslessly)
 }
 
 func (v *Value) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind == yaml.MappingNode {
+		m := map[string]any{}
+		if err := n.Decode(&m); err != nil {
+			return fmt.Errorf("line %d: %w", n.Line, err)
+		}
+		v.Kind, v.Map = KindMap, m
+		return nil
+	}
+	if n.Kind != yaml.ScalarNode {
+		return fmt.Errorf("line %d: unsupported generic/port value kind %v", n.Line, n.Kind)
+	}
 	switch n.Tag {
 	case "!str":
 		v.Kind, v.Text = KindStr, n.Value
@@ -165,6 +178,8 @@ func (v Value) String() string {
 		return strconv.FormatFloat(v.Float, 'g', -1, 64)
 	case KindBool:
 		return strconv.FormatBool(v.Bool)
+	case KindMap:
+		return fmt.Sprintf("%v", v.Map)
 	default:
 		return v.Text
 	}

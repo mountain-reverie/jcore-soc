@@ -89,6 +89,32 @@ func TestLoadBoolCasing(t *testing.T) {
 	}
 }
 
+func TestLoadMapValuedPort(t *testing.T) {
+	// NB: `irq?` is written in block style; YAML flow mappings ({...}) reserve
+	// a leading-token `?` as the explicit-key indicator, so `{ irq?: true }`
+	// fails to parse. The real specs use block style for these map values too.
+	d, errs := loadString(t, `devices:
+  - class: aic
+    ports:
+      irq_i:
+        irq?: true
+      sig: cpu0_sig
+`)
+	if len(errs) != 0 {
+		t.Fatalf("load errors: %v", errs)
+	}
+	p := d.Devices[0].Ports
+	if p["irq_i"].Kind != KindMap {
+		t.Fatalf("irq_i kind = %v, want KindMap", p["irq_i"].Kind)
+	}
+	if p["irq_i"].Map["irq?"] != true {
+		t.Errorf("irq_i map = %v", p["irq_i"].Map)
+	}
+	if p["sig"].Kind != KindExpr || p["sig"].Text != "cpu0_sig" { // scalar still verbatim
+		t.Errorf("sig = %+v", p["sig"])
+	}
+}
+
 // A function-call generic must survive as a verbatim Expr.
 func TestLoadFuncCallValue(t *testing.T) {
 	d, errs := loadString(t, `top-entities:
