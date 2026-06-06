@@ -40,3 +40,47 @@ func TestChooseArchAmbiguousIsSoft(t *testing.T) {
 	}
 	_ = design.KindExpr // keep design import used across the file
 }
+
+func TestResolveEntityExplicitEntity(t *testing.T) {
+	lib := buildLib(t,
+		`entity pll is port (clk_i : in std_logic; clk_o : out std_logic); end entity;`,
+		`architecture rtl of pll is begin end architecture;`)
+	te := &design.TopEntity{
+		Entity: "pll",
+		Ports:  map[string]design.Value{"clk_i": {Kind: design.KindExpr, Text: "ref"}, "clk_o": {Kind: design.KindExpr, Text: "sys"}},
+	}
+	re, errs := resolveEntity("padring", "mypll", te, lib, map[string]string{}, nil)
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
+	}
+	if re.Name != "mypll" || re.Entity == nil || re.ArchName != "rtl" {
+		t.Fatalf("got %+v", re)
+	}
+	if len(re.Ports) != 2 {
+		t.Fatalf("expected 2 ports, got %d", len(re.Ports))
+	}
+}
+
+func TestResolveEntityNameDefaultsToKey(t *testing.T) {
+	// no Entity field -> the map key is used as the entity name
+	lib := buildLib(t,
+		`entity fpga_reboot is port (clk : in std_logic); end entity;`,
+		`architecture s6 of fpga_reboot is begin end architecture;`)
+	te := &design.TopEntity{Architecture: "s6"}
+	re, errs := resolveEntity("top", "fpga_reboot", te, lib, map[string]string{}, nil)
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
+	}
+	if re.Entity == nil || re.ArchName != "s6" {
+		t.Fatalf("entity-name-from-key or architecture failed: %+v", re)
+	}
+}
+
+func TestResolveEntityUnknownEntity(t *testing.T) {
+	lib := buildLib(t, `entity e is port (clk : in std_logic); end entity;`,
+		`architecture rtl of e is begin end architecture;`)
+	re, errs := resolveEntity("top", "ghost", &design.TopEntity{}, lib, map[string]string{}, nil)
+	if re.Entity != nil || len(errs) != 1 {
+		t.Fatalf("expected one error and nil entity: re=%+v errs=%v", re, errs)
+	}
+}
