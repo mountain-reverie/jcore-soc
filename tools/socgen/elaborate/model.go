@@ -28,6 +28,7 @@ type ResolvedPort struct {
 type Resolution struct {
 	Classes map[string]*ResolvedClass // by class name (lower-cased key)
 	Devices []*ResolvedDevice         // spec order, unique names assigned
+	Signals map[string]*Signal        // global net-list, populated by Elaborate (P4c)
 }
 
 type ResolvedClass struct {
@@ -56,4 +57,25 @@ type ResolvedDevice struct {
 	Generics map[string]design.Value // effective (class overlaid by instance)
 	BaseAddr *uint64                 // carried, validated in P4e
 	Ports    []*ResolvedPort
+}
+
+// Signal is a global net that one or more device ports are connected to.
+type Signal struct {
+	Name  string
+	Type  *ResolvedType
+	Ports []*SignalPortRef
+}
+
+// SignalPortRef is a reference from a signal to one of its device ports.
+type SignalPortRef struct {
+	Context  Context
+	PortName string
+	Dir      string
+	Type     *ResolvedType
+}
+
+// Context identifies the source of a SignalPortRef (device instance or synthetic driver).
+type Context struct {
+	Kind string // "device" | "zero" (top/padring in P4d)
+	ID   string
 }
