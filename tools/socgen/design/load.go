@@ -31,5 +31,25 @@ func Load(path string) (*Design, []error) {
 	if err := root.Decode(d); err != nil {
 		return nil, []error{fmt.Errorf("%s: %w", path, err)}
 	}
-	return d, nil
+	var errs []error
+	if d.Pins != nil && d.Pins.File != "" {
+		// The .pins file path is relative to the soc_gen working directory
+		// (targets/soc_gen), matching the original Clojure soc_gen which is run
+		// as `cd targets/soc_gen; lein run`. design.yaml lives at
+		// targets/boards/<name>/, so the soc_gen dir is ../../soc_gen from there.
+		pinPath := filepath.Join(filepath.Dir(path), "..", "..", "soc_gen", d.Pins.File)
+		data, err := os.ReadFile(pinPath)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("read pins %s: %w", pinPath, err))
+		} else {
+			var perrs []error
+			if d.Pins.Part != "" || d.Pins.Type == "pin-list" {
+				d.Pins.Pins, perrs = parsePinList(data, d.Pins.Part)
+			} else {
+				d.Pins.Pins, perrs = parsePinNames(data)
+			}
+			errs = append(errs, perrs...)
+		}
+	}
+	return d, errs
 }

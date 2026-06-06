@@ -3,6 +3,7 @@ package design
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -142,4 +143,60 @@ func (s *SigSpec) UnmarshalYAML(n *yaml.Node) error {
 		return fmt.Errorf("line %d: invalid signal node", n.Line)
 	}
 	return nil
+}
+
+// parsePinNames parses the simple "NAME PAD" .pins format (one pin per line; '#'
+// comments and blank lines skipped; net lower-cased).
+func parsePinNames(data []byte) ([]*Pin, []error) {
+	var pins []*Pin
+	var errs []error
+	for _, line := range strings.Split(string(data), "\n") {
+		t := strings.TrimSpace(line)
+		if t == "" || strings.HasPrefix(t, "#") {
+			continue
+		}
+		f := strings.Fields(t)
+		p := &Pin{Net: strings.ToLower(f[0])}
+		if len(f) > 1 {
+			p.Pad = f[1]
+		}
+		pins = append(pins, p)
+	}
+	return pins, errs
+}
+
+// parsePinList parses the EAGLE columnar .pins export (columns: Part Pad Pin Dir
+// Net). Lines before the `part` row are skipped; parsing stops at the next blank
+// line; '*** unconnected ***' and '#' lines are dropped; net is normalized
+// (lower-case, '-'->'_', '!' removed).
+func parsePinList(data []byte, part string) ([]*Pin, []error) {
+	var pins []*Pin
+	var errs []error
+	lines := strings.Split(string(data), "\n")
+	i := 0
+	for i < len(lines) && !strings.HasPrefix(lines[i], part) {
+		i++
+	}
+	if i == len(lines) {
+		return nil, []error{fmt.Errorf("pin-list: part %q not found", part)}
+	}
+	lines[i] = strings.TrimPrefix(lines[i], part) // strip the part token from the first row
+	for ; i < len(lines); i++ {
+		raw := lines[i]
+		if strings.TrimSpace(raw) == "" {
+			break
+		}
+		if strings.HasPrefix(strings.TrimSpace(raw), "#") || strings.Contains(raw, "*** unconnected ***") {
+			continue
+		}
+		f := strings.Fields(raw)
+		if len(f) < 4 {
+			continue // not a pin row
+		}
+		net := strings.ToLower(f[3])
+		net = strings.ReplaceAll(net, "-", "_")
+		net = strings.ReplaceAll(net, "!", "")
+		pins = append(pins, &Pin{Net: net, Pad: f[0]})
+	}
+	return pins, errs
 }

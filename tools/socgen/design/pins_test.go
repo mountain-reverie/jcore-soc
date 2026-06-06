@@ -93,3 +93,47 @@ pins:
 		t.Errorf("rule8 out: %+v", ps.Rules[8].Out)
 	}
 }
+
+func TestParsePinNames(t *testing.T) {
+	src := "# comment\nCLK_100MHz V10\n\nUART_TX A8\nmcb3_dram_a0  J7\n"
+	pins, errs := parsePinNames([]byte(src))
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
+	}
+	want := []Pin{{"clk_100mhz", "V10"}, {"uart_tx", "A8"}, {"mcb3_dram_a0", "J7"}}
+	if len(pins) != len(want) {
+		t.Fatalf("got %d pins: %+v", len(pins), pins)
+	}
+	for i, w := range want {
+		if *pins[i] != w {
+			t.Errorf("pin %d = %+v want %+v", i, *pins[i], w)
+		}
+	}
+}
+
+func TestParsePinListEagle(t *testing.T) {
+	src := `Pinlist
+
+Part     Pad      Pin        Dir      Net
+
+IC3      A1       GND        io       GND
+         A2       IO_L2N_0   io       USB0_N
+         A3       IO_L4N_0   io       !VID-EN
+         A7       IO_L10N_0  io                *** unconnected ***
+         A8       IO_L33N_0  io       HDMI-D2_N
+`
+	pins, errs := parsePinList([]byte(src), "IC3")
+	if len(errs) != 0 {
+		t.Fatalf("errs: %v", errs)
+	}
+	// unconnected dropped; net normalized: lower, '-'->'_', '!' removed
+	want := []Pin{{"gnd", "A1"}, {"usb0_n", "A2"}, {"vid_en", "A3"}, {"hdmi_d2_n", "A8"}}
+	if len(pins) != len(want) {
+		t.Fatalf("got %d pins: %+v", len(pins), pins)
+	}
+	for i, w := range want {
+		if *pins[i] != w {
+			t.Errorf("pin %d = %+v want %+v", i, *pins[i], w)
+		}
+	}
+}
