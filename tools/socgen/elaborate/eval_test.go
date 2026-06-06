@@ -31,7 +31,8 @@ func TestEvalInt(t *testing.T) {
 		{"std_logic_vector(n+1 downto 0)", "std_logic_vector(5 downto 0)"},
 		{"std_logic_vector(0 to n)", "std_logic_vector(0 to 4)"},
 		{"std_logic", "std_logic"},
-		{"std_logic_vector(missing-1 downto 0)", "std_logic_vector(missing - 1 downto 0)"}, // symbolic: missing not in env
+		{"std_logic_vector(missing-1 downto 0)", "std_logic_vector(missing - 1 downto 0)"},        // symbolic: missing not in env
+		{"std_logic_vector(num_cs-1 downto missing)", "std_logic_vector(num_cs - 1 downto missing)"}, // half-symbolic: one concrete, one missing -> stays symbolic
 	}
 	for _, c := range cases {
 		mark, con := parseConstraint(t, c.typ)

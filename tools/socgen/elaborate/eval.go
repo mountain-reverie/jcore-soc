@@ -98,9 +98,14 @@ func resolveType(mark string, constraint vhdl.Expr, env map[string]int64) *Resol
 	r, ro := evalInt(rng.Right, env)
 	if lo && ro {
 		li, ri := int(l), int(r)
-		dir := "to"
-		if rng.Dir == vhdl.DOWNTO {
+		var dir string
+		switch rng.Dir {
+		case vhdl.DOWNTO:
 			dir = "downto"
+		case vhdl.TO:
+			dir = "to"
+		default:
+			return rt // unrecognized direction; keep symbolic
 		}
 		return &ResolvedType{Mark: mark, Left: &li, Right: &ri, Dir: dir}
 	}

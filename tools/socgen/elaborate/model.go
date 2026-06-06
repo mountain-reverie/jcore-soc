@@ -5,6 +5,25 @@ import (
 	"github.com/j-core/jcore-soc/tools/socgen/iface"
 )
 
+type PortKind int
+
+const (
+	KindSignal  PortKind = iota // connects to GlobalSignal
+	KindValue                   // tied to a constant Value
+	KindIRQ                     // {irq?: ...} — recorded; routing is P4d
+	KindDataBus                 // {data-bus: ...} — recorded; bus mux is P5
+	KindDeferred                // an unsupported map kind (bist/ring/open) — recorded only
+)
+
+type ResolvedPort struct {
+	Name         string
+	Dir          string        // from the entity port: "in"|"out"|"inout"|"buffer"|""
+	Type         *ResolvedType
+	Kind         PortKind
+	GlobalSignal string        // Kind==KindSignal
+	Value        *design.Value // Kind==KindValue
+}
+
 // Resolution is the per-device resolution produced by Devices (P4b).
 type Resolution struct {
 	Classes map[string]*ResolvedClass // by class name (lower-cased key)
@@ -36,4 +55,5 @@ type ResolvedDevice struct {
 	Class    string
 	Generics map[string]design.Value // effective (class overlaid by instance)
 	BaseAddr *uint64                 // carried, validated in P4e
+	Ports    []*ResolvedPort
 }
