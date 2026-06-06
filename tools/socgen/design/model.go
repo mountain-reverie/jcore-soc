@@ -75,6 +75,7 @@ func (r *IRQRef) UnmarshalYAML(n *yaml.Node) error {
 type TopEntity struct {
 	Entity        string           `yaml:"entity"`
 	Configuration string           `yaml:"configuration"`
+	Architecture  string           `yaml:"architecture"`
 	Generics      map[string]Value `yaml:"generics"`
 	Ports         map[string]Value `yaml:"ports"`
 }
