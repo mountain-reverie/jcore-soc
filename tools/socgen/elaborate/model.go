@@ -10,7 +10,7 @@ type PortKind int
 const (
 	KindSignal  PortKind = iota // connects to GlobalSignal
 	KindValue                   // tied to a constant Value
-	KindIRQ                     // {irq?: ...} — recorded; routing is P4d
+	KindIRQ                     // {irq?: ...} — recorded; routing is a later sub-milestone
 	KindDataBus                 // {data-bus: ...} — recorded; bus mux is P5
 	KindDeferred                // an unsupported map kind (bist/ring/open) — recorded only
 )
@@ -24,11 +24,14 @@ type ResolvedPort struct {
 	Value        *design.Value // Kind==KindValue
 }
 
-// Resolution is the per-device resolution produced by Devices (P4b).
+// Resolution is the per-device resolution produced by Devices (P4b), plus the
+// net-list and top/padring entities populated by Elaborate (P4c/P4d).
 type Resolution struct {
-	Classes map[string]*ResolvedClass // by class name (lower-cased key)
-	Devices []*ResolvedDevice         // spec order, unique names assigned
-	Signals map[string]*Signal        // global net-list, populated by Elaborate (P4c)
+	Classes         map[string]*ResolvedClass  // by class name (lower-cased key)
+	Devices         []*ResolvedDevice          // spec order, unique names assigned
+	TopEntities     map[string]*ResolvedEntity // by top-entity name (P4d)
+	PadringEntities map[string]*ResolvedEntity // by padring-entity name (P4d)
+	Signals         map[string]*Signal         // global net-list, populated by Elaborate
 }
 
 type ResolvedClass struct {
@@ -59,14 +62,27 @@ type ResolvedDevice struct {
 	Ports    []*ResolvedPort
 }
 
-// Signal is a global net that one or more device ports are connected to.
+// ResolvedEntity is a resolved top-entity or padring-entity: an entity bound to
+// an architecture/configuration with its ports built. Unlike a device it has no
+// class — it names the entity directly (P4d).
+type ResolvedEntity struct {
+	Name     string
+	Entity   *iface.Entity        // nil if the entity could not be bound
+	ArchName string               // effective architecture name ("" if unresolved)
+	Config   *iface.Configuration // non-nil iff resolved via a configuration
+	Ports    []*ResolvedPort
+}
+
+// Signal is a global net that one or more ports (device, top/padring, or a
+// synthetic driver) are connected to.
 type Signal struct {
 	Name  string
 	Type  *ResolvedType
 	Ports []*SignalPortRef
 }
 
-// SignalPortRef is a reference from a signal to one of its device ports.
+// SignalPortRef is a reference from a signal to one of its participating ports
+// (device, top-entity, padring-entity, or synthetic driver).
 type SignalPortRef struct {
 	Context  Context
 	PortName string
@@ -74,8 +90,9 @@ type SignalPortRef struct {
 	Type     *ResolvedType
 }
 
-// Context identifies the source of a SignalPortRef (device instance or synthetic driver).
+// Context identifies the source of a SignalPortRef (device instance, top/padring
+// entity, or synthetic driver).
 type Context struct {
-	Kind string // "device" | "zero" (top/padring in P4d)
+	Kind string // "device" | "zero" | "top" | "padring"
 	ID   string
 }

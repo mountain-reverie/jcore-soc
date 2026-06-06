@@ -1,6 +1,8 @@
 package elaborate
 
 import (
+	"sort"
+
 	"github.com/j-core/jcore-soc/tools/socgen/board"
 	"github.com/j-core/jcore-soc/tools/socgen/design"
 )
@@ -39,38 +41,32 @@ func Elaborate(b *board.Board) (*Resolution, []error) {
 		}
 		dev.Ports = buildPorts(dev.Name, rc.Entity, spec, env, merge)
 	}
+	res.TopEntities, errs = resolveEntities("top", b.Design.TopEntities, b.Library, merge, errs)
+	res.PadringEntities, errs = resolveEntities("padring", b.Design.PadringEntities, b.Library, merge, errs)
 	res.Signals, errs = gatherSignals(res, b.Design.ZeroSignals, errs)
 	errs = validateSignals(res.Signals, errs)
 	return res, errs
 }
 
-// gatherSignals groups KindSignal device ports by global-signal name and adds
-// synthetic zero-signal drivers for undriven listed signals.
+// gatherSignals groups KindSignal ports (across devices, top entities and padring
+// entities) by global-signal name, then adds synthetic zero-signal drivers for
+// any undriven listed signal.
 func gatherSignals(res *Resolution, zero []string, errs []error) (map[string]*Signal, []error) {
 	sigs := map[string]*Signal{}
 	for _, dev := range res.Devices {
-		for _, p := range dev.Ports {
-			if p.Kind != KindSignal || p.GlobalSignal == "" {
-				continue
-			}
-			s := sigs[p.GlobalSignal]
-			if s == nil {
-				s = &Signal{Name: p.GlobalSignal, Type: p.Type}
-				sigs[p.GlobalSignal] = s
-			}
-			s.Ports = append(s.Ports, &SignalPortRef{
-				Context:  Context{Kind: "device", ID: dev.Name},
-				PortName: p.Name,
-				Dir:      p.Dir,
-				Type:     p.Type,
-			})
-		}
+		addPortsToSignals(sigs, Context{Kind: "device", ID: dev.Name}, dev.Ports)
+	}
+	for _, name := range sortedEntityNames(res.TopEntities) {
+		addPortsToSignals(sigs, Context{Kind: "top", ID: name}, res.TopEntities[name].Ports)
+	}
+	for _, name := range sortedEntityNames(res.PadringEntities) {
+		addPortsToSignals(sigs, Context{Kind: "padring", ID: name}, res.PadringEntities[name].Ports)
 	}
 	// zero-signals: add a synthetic :out driver to an undriven listed signal
 	for _, z := range zero {
 		s := sigs[z]
 		if s == nil {
-			continue // a zero-signal that no port references — nothing to drive (or P4d)
+			continue // a zero-signal that no port references — nothing to drive
 		}
 		driven := false
 		for _, pr := range s.Ports {
@@ -89,4 +85,33 @@ func gatherSignals(res *Resolution, zero []string, errs []error) (map[string]*Si
 		}
 	}
 	return sigs, errs
+}
+
+// addPortsToSignals records each KindSignal port under its global-signal name.
+func addPortsToSignals(sigs map[string]*Signal, ctx Context, ports []*ResolvedPort) {
+	for _, p := range ports {
+		if p.Kind != KindSignal || p.GlobalSignal == "" {
+			continue
+		}
+		s := sigs[p.GlobalSignal]
+		if s == nil {
+			s = &Signal{Name: p.GlobalSignal, Type: p.Type}
+			sigs[p.GlobalSignal] = s
+		}
+		s.Ports = append(s.Ports, &SignalPortRef{
+			Context:  ctx,
+			PortName: p.Name,
+			Dir:      p.Dir,
+			Type:     p.Type,
+		})
+	}
+}
+
+func sortedEntityNames(m map[string]*ResolvedEntity) []string {
+	ks := make([]string, 0, len(m))
+	for k := range m {
+		ks = append(ks, k)
+	}
+	sort.Strings(ks)
+	return ks
 }

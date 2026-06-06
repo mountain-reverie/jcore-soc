@@ -12,26 +12,46 @@ import (
 func lc(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
 
 // resolveClass binds a device class to its entity and chooses its architecture
-// or configuration (faithful to choose-device-arch). Registers/left-addr-bit are
-// added in Task 2. Appends errors; returns a best-effort *ResolvedClass.
+// or configuration (via the shared chooseArch), then resolves its registers.
+// Appends errors; returns a best-effort *ResolvedClass.
 func resolveClass(name string, dc *design.DeviceClass, lib *iface.Library, errs []error) (*ResolvedClass, []error) {
 	rc := &ResolvedClass{Name: name, Generics: dc.Generics}
-	entityID := lc(dc.Entity)
+	ent, arch, cfg, hardErr, errs := chooseArch(fmt.Sprintf("class %q", name), dc.Entity, dc.Architecture, dc.Configuration, lib, errs)
+	rc.Entity, rc.ArchName, rc.Config = ent, arch, cfg
+	if !hardErr {
+		// A hard failure (entity/config/arch not found, or arch+config mismatch)
+		// skips register resolution, exactly as the original early returns did.
+		rc.Regs, rc.LeftAddrBit, rc.RegRange, errs = resolveRegs(name, dc, errs)
+	}
+	return rc, errs
+}
+
+// chooseArch binds entityName to an entity and selects its architecture or
+// configuration (faithful to choose-device-arch). ctx is an error-message label
+// (e.g. `class "uartlite"` or `top-entity "cpus"`). It returns hardErr=true on a
+// hard failure — entity / configuration / architecture not found, or arch+config
+// mismatch — so the caller can skip dependent work. The soft cases (no
+// architecture, or an ambiguous choice among many) append an error but return the
+// bound entity with hardErr=false, matching the original fall-through behavior.
+func chooseArch(ctx, entityName, archName, configName string, lib *iface.Library, errs []error) (*iface.Entity, string, *iface.Configuration, bool, []error) {
+	if lib == nil {
+		return nil, "", nil, true, append(errs, fmt.Errorf("%s: no library", ctx))
+	}
+	entityID := lc(entityName)
 	ent, ok := lib.Entity(entityID)
 	if !ok {
-		return rc, append(errs, fmt.Errorf("class %q: unable to map to entity %q", name, dc.Entity))
+		return nil, "", nil, true, append(errs, fmt.Errorf("%s: unable to map to entity %q", ctx, entityName))
 	}
-	rc.Entity = ent
 
 	archs := lib.ArchitecturesOf(entityID)
-	configID := lc(dc.Configuration)
-	archID := lc(dc.Architecture)
+	configID := lc(configName)
+	archID := lc(archName)
 
 	var cfg *iface.Configuration
 	if configID != "" {
 		c, ok := lib.Configuration(configID)
 		if !ok {
-			return rc, append(errs, fmt.Errorf("class %q: configuration %q of entity %q not found", name, dc.Configuration, dc.Entity))
+			return ent, "", nil, true, append(errs, fmt.Errorf("%s: configuration %q of entity %q not found", ctx, configName, entityName))
 		}
 		cfg = c
 	}
@@ -44,29 +64,27 @@ func resolveClass(name string, dc *design.DeviceClass, lib *iface.Library, errs 
 			}
 		}
 		if arch == nil {
-			return rc, append(errs, fmt.Errorf("class %q: architecture %q of entity %q not found", name, dc.Architecture, dc.Entity))
+			return ent, "", nil, true, append(errs, fmt.Errorf("%s: architecture %q of entity %q not found", ctx, archName, entityName))
 		}
 	}
 
 	switch {
 	case cfg != nil && arch != nil:
 		if lc(arch.Name) != lc(cfg.Arch) {
-			return rc, append(errs, fmt.Errorf("class %q: architecture %q and configuration %q (arch %q) mismatch; set only configuration", name, dc.Architecture, dc.Configuration, cfg.Arch))
+			return ent, "", nil, true, append(errs, fmt.Errorf("%s: architecture %q and configuration %q (arch %q) mismatch; set only configuration", ctx, archName, configName, cfg.Arch))
 		}
-		rc.Config, rc.ArchName = cfg, cfg.Arch
+		return ent, cfg.Arch, cfg, false, errs
 	case cfg != nil:
-		rc.Config, rc.ArchName = cfg, cfg.Arch
+		return ent, cfg.Arch, cfg, false, errs
 	case arch != nil:
-		rc.ArchName = arch.Name
+		return ent, arch.Name, nil, false, errs
 	case len(archs) == 1:
-		rc.ArchName = archs[0].Name
+		return ent, archs[0].Name, nil, false, errs
 	case len(archs) == 0:
-		errs = append(errs, fmt.Errorf("class %q: unable to find any architecture for entity %q", name, dc.Entity))
+		return ent, "", nil, false, append(errs, fmt.Errorf("%s: unable to find any architecture for entity %q", ctx, entityName))
 	default:
-		errs = append(errs, fmt.Errorf("class %q: unable to find single architecture for entity %q (%d found)", name, dc.Entity, len(archs)))
+		return ent, "", nil, false, append(errs, fmt.Errorf("%s: unable to find single architecture for entity %q (%d found)", ctx, entityName, len(archs)))
 	}
-	rc.Regs, rc.LeftAddrBit, rc.RegRange, errs = resolveRegs(name, dc, errs)
-	return rc, errs
 }
 
 func resolveRegs(class string, dc *design.DeviceClass, errs []error) ([]*ResolvedReg, int, [2]int, []error) {
