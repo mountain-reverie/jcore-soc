@@ -24,12 +24,15 @@ func validateSignals(sigs map[string]*Signal, errs []error) []error {
 		if len(types) > 1 {
 			errs = append(errs, fmt.Errorf("type mismatch for signal %q: %s", n, strings.Join(sortedKeys(types), " vs ")))
 		}
-		// single driver
+		// single driver. A port drives if out/buffer/inout; it consumes if in/inout.
 		var outs, ins []string
 		for _, p := range s.Ports {
-			if p.Dir == "out" {
+			switch p.Dir {
+			case "out", "buffer", "inout":
 				outs = append(outs, p.Context.ID+"."+p.PortName)
-			} else if p.Dir == "in" {
+			}
+			switch p.Dir {
+			case "in", "inout":
 				ins = append(ins, p.Context.ID+"."+p.PortName)
 			}
 		}

@@ -6,7 +6,11 @@ import (
 )
 
 func sig(name string, ports ...*SignalPortRef) *Signal {
-	return &Signal{Name: name, Type: ports[0].Type, Ports: ports}
+	var t *ResolvedType
+	if len(ports) > 0 {
+		t = ports[0].Type
+	}
+	return &Signal{Name: name, Type: t, Ports: ports}
 }
 func pr(id, port, dir, typ string) *SignalPortRef {
 	return &SignalPortRef{Context: Context{Kind: "device", ID: id}, PortName: port, Dir: dir, Type: &ResolvedType{Mark: typ}}
