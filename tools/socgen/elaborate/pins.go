@@ -155,3 +155,101 @@ func bareSignalDir(sigs map[string]*Signal, base string) string {
 	}
 	return "out"
 }
+
+// resolvePins folds the rules over each pin, joins the resulting legs into the
+// net-list (sigs), and returns the resolved pins (with buffer kind + attrs). It
+// must run AFTER device/top/padring gather so a bare-`signal:` pin's direction can
+// be inferred from existing drivers, and BEFORE zero-signals.
+func resolvePins(d *design.Design, sigs map[string]*Signal) []*ResolvedPin {
+	if d == nil || d.Pins == nil {
+		return nil
+	}
+	var out []*ResolvedPin
+	for _, pin := range d.Pins.Pins {
+		f := foldRules(d.Pins.Rules, pin)
+		rp := &ResolvedPin{Net: pin.Net, Pad: pin.Pad, Attrs: f.attrs, Diff: f.signalDiff}
+		bareDir := ""
+		if f.signalRef != "" {
+			base, elem := splitSignal(f.signalRef)
+			rp.Signal = f.signalRef
+			bareDir = bareSignalDir(sigs, base)
+			addPinPort(sigs, pin.Net, "signal", base, elem, bareDir, f.signalDiff)
+		}
+		// in: -> driver (out); out:/out-en: -> consumer (in)
+		if f.inRef != "" {
+			base, elem := splitSignal(f.inRef)
+			rp.In = f.inRef
+			addPinPort(sigs, pin.Net, "in", base, elem, "out", "")
+		}
+		if f.outRef != "" {
+			base, elem := splitSignal(f.outRef)
+			rp.Out = f.outRef
+			addPinPort(sigs, pin.Net, "out", base, elem, "in", "")
+		}
+		if f.outEnRef != "" {
+			base, elem := splitSignal(f.outEnRef)
+			rp.OutEn = f.outEnRef
+			addPinPort(sigs, pin.Net, "out-en", base, elem, "in", "")
+		}
+		rp.BufferKind = bufferKind(f, bareDir)
+		out = append(out, rp)
+	}
+	return out
+}
+
+// addPinPort joins one pin leg to the net-list under its base signal name.
+func addPinPort(sigs map[string]*Signal, net, leg, base, element, dir, diff string) {
+	if base == "" {
+		return
+	}
+	s := sigs[base]
+	if s == nil {
+		s = &Signal{Name: base}
+		sigs[base] = s
+	}
+	s.Ports = append(s.Ports, &SignalPortRef{
+		Context:  Context{Kind: "pin", ID: net},
+		PortName: "pin." + net + "." + leg,
+		Dir:      dir,
+		Type:     s.Type,
+		Element:  element,
+		Diff:     diff,
+	})
+}
+
+// bufferKind selects the semantic I/O buffer from the folded pin shape. bareDir is
+// the auto-inferred net-list direction of a bare-`signal:` pin ("out" = the pin
+// drives the net, so the pad is an INPUT; "in" = the pin consumes, pad is OUTPUT);
+// it is "" for pins using explicit in/out/out-en legs.
+func bufferKind(f folded, bareDir string) BufferKind {
+	if f.buff != nil && !*f.buff {
+		return BufDirect
+	}
+	in, out, outEn := f.inRef != "", f.outRef != "", f.outEnRef != ""
+	if f.signalRef != "" && !in && !out && !outEn {
+		// a bare single-ended (or differential) signal pin: input pad if it drives
+		// the net, output pad if it consumes it.
+		switch {
+		case f.signalDiff != "" && bareDir == "out":
+			return BufIBUFDS
+		case f.signalDiff != "":
+			return BufOBUFDS
+		case bareDir == "out":
+			return BufIBUF
+		default:
+			return BufOBUF
+		}
+	}
+	switch {
+	case in && out && outEn:
+		return BufIOBUF
+	case out && outEn:
+		return BufOBUFT
+	case out:
+		return BufOBUF
+	case in:
+		return BufIBUF
+	default:
+		return BufIBUF
+	}
+}

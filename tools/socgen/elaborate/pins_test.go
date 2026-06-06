@@ -145,3 +145,62 @@ func TestBareSignalAutoDirection(t *testing.T) {
 		}
 	}
 }
+
+func TestResolvePinsJoinAndBuffer(t *testing.T) {
+	d := &design.Design{
+		Pins: &design.PinsSpec{
+			Rules: []*design.PinRule{
+				{Match: &design.Match{Regex: "clk"}, Signal: &design.SigSpec{Kind: design.SigTrue}},
+				{Match: &design.Match{Regex: "led"}, Out: &design.SigSpec{Kind: design.SigName, Name: "po(0)"}},
+				{Match: &design.Match{Regex: "ddr_ck"}, Signal: &design.SigSpec{Kind: design.SigMap, Name: "ddr_clk", Diff: "pos"}},
+			},
+			Pins: []*design.Pin{{Net: "clk", Pad: "V10"}, {Net: "led", Pad: "P4"}, {Net: "ddr_ck", Pad: "E3"}},
+		},
+	}
+	// pre-seed sigs so 'ddr_clk' is already driven by a device (so the pin consumes it -> output pad -> OBUFDS)
+	sigs := map[string]*Signal{
+		"ddr_clk": {Name: "ddr_clk", Ports: []*SignalPortRef{{Context: Context{Kind: "device", ID: "ddrc"}, Dir: "out"}}},
+	}
+	pins := resolvePins(d, sigs)
+	// clk undriven -> pin drives it (out), pin-context, IBUF
+	if sigs["clk"] == nil || len(sigs["clk"].Ports) != 1 || sigs["clk"].Ports[0].Dir != "out" || sigs["clk"].Ports[0].Context.Kind != "pin" {
+		t.Fatalf("clk join: %+v", sigs["clk"])
+	}
+	// led -> po(0): consumer of base 'po', element recorded
+	po := sigs["po"]
+	if po == nil || len(po.Ports) != 1 || po.Ports[0].Dir != "in" || po.Ports[0].Element != "po(0)" {
+		t.Fatalf("po join: %+v", po)
+	}
+	// ddr_ck differential: pin consumes already-driven ddr_clk (dir "in"), diff pos recorded
+	dc := sigs["ddr_clk"]
+	var pinRef *SignalPortRef
+	for _, p := range dc.Ports {
+		if p.Context.Kind == "pin" {
+			pinRef = p
+		}
+	}
+	if pinRef == nil || pinRef.Dir != "in" || pinRef.Diff != "pos" {
+		t.Fatalf("ddr_clk pin ref: %+v", dc.Ports)
+	}
+	byNet := map[string]*ResolvedPin{}
+	for _, p := range pins {
+		byNet[p.Net] = p
+	}
+	if byNet["clk"].BufferKind != BufIBUF {
+		t.Errorf("clk buffer = %v want IBUF", byNet["clk"].BufferKind)
+	}
+	if byNet["led"].BufferKind != BufOBUF {
+		t.Errorf("led buffer = %v want OBUF", byNet["led"].BufferKind)
+	}
+	// bare differential consumed by design -> output differential pad
+	if byNet["ddr_ck"].BufferKind != BufOBUFDS {
+		t.Errorf("ddr_ck buffer = %v want OBUFDS", byNet["ddr_ck"].BufferKind)
+	}
+}
+
+func TestBufferKindDirect(t *testing.T) {
+	bf := false
+	if k := bufferKind(folded{buff: &bf, signalRef: "x"}, "out"); k != BufDirect {
+		t.Errorf("buff:false -> %v want Direct", k)
+	}
+}
