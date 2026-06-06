@@ -137,4 +137,11 @@ func TestBareSignalAutoDirection(t *testing.T) {
 	if d := bareSignalDir(map[string]*Signal{}, "s"); d != "out" {
 		t.Errorf("absent signal -> pin should drive (out), got %q", d)
 	}
+	// buffer and inout also count as existing drivers -> pin consumes (in)
+	for _, drv := range []string{"buffer", "inout"} {
+		sigs := map[string]*Signal{"s": {Name: "s", Ports: []*SignalPortRef{{Context: Context{Kind: "device", ID: "d"}, Dir: drv}}}}
+		if d := bareSignalDir(sigs, "s"); d != "in" {
+			t.Errorf("%s driver -> pin should consume (in), got %q", drv, d)
+		}
+	}
 }

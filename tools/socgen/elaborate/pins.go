@@ -149,8 +149,7 @@ func bareSignalDir(sigs map[string]*Signal, base string) string {
 		return "out"
 	}
 	for _, p := range s.Ports {
-		switch p.Dir {
-		case "out", "buffer", "inout":
+		if isDriver(p.Dir) {
 			return "in"
 		}
 	}

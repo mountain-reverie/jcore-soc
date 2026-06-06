@@ -88,7 +88,8 @@ const (
 )
 
 // ResolvedPin is a board pin resolved to its signal refs, buffer kind, and attrs.
-// The actual buffer/constraint VHDL is emitted in P5.
+// The actual buffer/constraint VHDL is emitted in P5. BufferKind==BufDirect is the
+// single source of truth for "no I/O buffer" (a buff:false rule).
 type ResolvedPin struct {
 	Net, Pad   string
 	Signal     string // bare-signal ref ("" if in/out/out-en used)
@@ -98,7 +99,6 @@ type ResolvedPin struct {
 	Diff       string
 	BufferKind BufferKind
 	Attrs      map[string]design.Value
-	Buff       bool
 }
 
 // Signal is a global net that one or more ports (device, top/padring, or a
@@ -116,8 +116,7 @@ type SignalPortRef struct {
 	PortName  string
 	Dir       string
 	Type      *ResolvedType
-	SubSignal bool   // pin ref targets an element of a bus/record signal
-	Element   string // the full element ref (e.g. "dr_data_o.dqo(0)"); "" if whole-signal
+	Element   string // the full element ref (e.g. "dr_data_o.dqo(0)") iff a pin targets a bus/record element; "" if whole-signal
 	Diff      string // "pos"|"neg"|"" for differential pin pairs
 }
 

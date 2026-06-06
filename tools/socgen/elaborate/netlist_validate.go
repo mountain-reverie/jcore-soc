@@ -27,12 +27,10 @@ func validateSignals(sigs map[string]*Signal, errs []error) []error {
 		// single driver. A port drives if out/buffer/inout; it consumes if in/inout.
 		var outs, ins []string
 		for _, p := range s.Ports {
-			switch p.Dir {
-			case "out", "buffer", "inout":
+			if isDriver(p.Dir) {
 				outs = append(outs, p.Context.ID+"."+p.PortName)
 			}
-			switch p.Dir {
-			case "in", "inout":
+			if isConsumer(p.Dir) {
 				ins = append(ins, p.Context.ID+"."+p.PortName)
 			}
 		}
@@ -44,6 +42,24 @@ func validateSignals(sigs map[string]*Signal, errs []error) []error {
 		}
 	}
 	return errs
+}
+
+// isDriver reports whether a port direction drives its signal (a source).
+func isDriver(dir string) bool {
+	switch dir {
+	case "out", "buffer", "inout":
+		return true
+	}
+	return false
+}
+
+// isConsumer reports whether a port direction consumes its signal (a sink).
+func isConsumer(dir string) bool {
+	switch dir {
+	case "in", "inout":
+		return true
+	}
+	return false
 }
 
 func sortedKeys(m map[string]bool) []string {
