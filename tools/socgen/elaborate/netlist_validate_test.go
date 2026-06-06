@@ -38,3 +38,61 @@ func TestValidateSignals(t *testing.T) {
 		t.Errorf("clean signal should pass: %v", errs)
 	}
 }
+
+func TestValidateDifferentialException(t *testing.T) {
+	// two pin drivers forming a pos/neg pair -> allowed
+	sigs := map[string]*Signal{"ddr_clk": {Name: "ddr_clk", Type: &ResolvedType{Mark: "std_logic"}, Ports: []*SignalPortRef{
+		{Context: Context{Kind: "pin", ID: "ck"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}, Diff: "pos"},
+		{Context: Context{Kind: "pin", ID: "ck_n"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}, Diff: "neg"},
+	}}}
+	if errs := validateSignals(sigs, nil); len(errs) != 0 {
+		t.Errorf("differential pair should be allowed: %v", errs)
+	}
+}
+
+func TestValidateMultiElementException(t *testing.T) {
+	// multiple pin drivers on distinct elements -> allowed
+	sigs := map[string]*Signal{"dr_data_i": {Name: "dr_data_i", Type: &ResolvedType{Mark: "std_logic"}, Ports: []*SignalPortRef{
+		{Context: Context{Kind: "pin", ID: "dq0"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}, Element: "dr_data_i.dqi(0)"},
+		{Context: Context{Kind: "pin", ID: "dq1"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}, Element: "dr_data_i.dqi(1)"},
+	}}}
+	if errs := validateSignals(sigs, nil); len(errs) != 0 {
+		t.Errorf("distinct-element pins should be allowed: %v", errs)
+	}
+}
+
+func TestValidateMultiDriverStillErrors(t *testing.T) {
+	// two whole-signal device drivers -> still an error
+	sigs := map[string]*Signal{"s": {Name: "s", Type: &ResolvedType{Mark: "std_logic"}, Ports: []*SignalPortRef{
+		{Context: Context{Kind: "device", ID: "a"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}},
+		{Context: Context{Kind: "device", ID: "b"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}},
+	}}}
+	errs := validateSignals(sigs, nil)
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Error(), "driven by multiple ports") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("two device drivers should error; got %v", errs)
+	}
+}
+
+func TestValidateSameElementTwiceErrors(t *testing.T) {
+	// two pins driving the SAME element -> still an error (not distinct)
+	sigs := map[string]*Signal{"bus": {Name: "bus", Type: &ResolvedType{Mark: "std_logic"}, Ports: []*SignalPortRef{
+		{Context: Context{Kind: "pin", ID: "a"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}, Element: "bus.x(0)"},
+		{Context: Context{Kind: "pin", ID: "b"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}, Element: "bus.x(0)"},
+	}}}
+	errs := validateSignals(sigs, nil)
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Error(), "driven by multiple ports") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("two pins on the same element should error; got %v", errs)
+	}
+}
