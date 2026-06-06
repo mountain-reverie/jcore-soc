@@ -16,6 +16,7 @@ type Design struct {
 	MergeSignals    map[string][]string     `yaml:"merge-signals"`
 	ZeroSignals     []string                `yaml:"zero-signals"`
 	IRQ             map[string]*IRQEntry    `yaml:"irq"`
+	Pins            *PinsSpec               `yaml:"pins"`
 }
 
 type DeviceClass struct {
