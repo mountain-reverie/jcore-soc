@@ -36,11 +36,11 @@ func validateSignals(sigs map[string]*Signal, errs []error) []error {
 			}
 		}
 		if len(drivers) > 1 && !multiDriverAllowed(drivers) {
-			names := make([]string, len(drivers))
+			driverNames := make([]string, len(drivers))
 			for i, d := range drivers {
-				names[i] = d.Context.ID + "." + d.PortName
+				driverNames[i] = d.Context.ID + "." + d.PortName
 			}
-			errs = append(errs, fmt.Errorf("signal %q is driven by multiple ports: %s", n, strings.Join(names, " ")))
+			errs = append(errs, fmt.Errorf("signal %q is driven by multiple ports: %s", n, strings.Join(driverNames, " ")))
 		}
 		if len(drivers) == 0 && len(ins) > 0 {
 			errs = append(errs, fmt.Errorf("nothing drives signal %q used by %s", n, strings.Join(ins, " ")))
@@ -76,7 +76,8 @@ func multiDriverAllowed(drivers []*SignalPortRef) bool {
 			return false
 		}
 	}
-	// differential pair: exactly two, one pos and one neg
+	// differential pair: exactly two, one pos and one neg (differential pins are
+	// whole-signal, so Element is expected to be "" and is not consulted here)
 	if len(drivers) == 2 {
 		diffs := map[string]bool{}
 		for _, d := range drivers {

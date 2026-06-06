@@ -96,3 +96,25 @@ func TestValidateSameElementTwiceErrors(t *testing.T) {
 		t.Errorf("two pins on the same element should error; got %v", errs)
 	}
 }
+
+func TestValidateDifferentialBothPosErrors(t *testing.T) {
+	// two pins both diff "pos" (not a real pos/neg pair) -> still an error
+	sigs := map[string]*Signal{"s": {Name: "s", Type: &ResolvedType{Mark: "std_logic"}, Ports: []*SignalPortRef{
+		{Context: Context{Kind: "pin", ID: "a"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}, Diff: "pos"},
+		{Context: Context{Kind: "pin", ID: "b"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}, Diff: "pos"},
+	}}}
+	if errs := validateSignals(sigs, nil); len(errs) == 0 {
+		t.Error("two pos-diff pins (no neg) should error")
+	}
+}
+
+func TestValidateMixedDeviceAndPinErrors(t *testing.T) {
+	// one device driver + one pin driver -> not all pin-context -> still an error
+	sigs := map[string]*Signal{"s": {Name: "s", Type: &ResolvedType{Mark: "std_logic"}, Ports: []*SignalPortRef{
+		{Context: Context{Kind: "device", ID: "d"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}},
+		{Context: Context{Kind: "pin", ID: "p"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}, Element: "s.x(0)"},
+	}}}
+	if errs := validateSignals(sigs, nil); len(errs) == 0 {
+		t.Error("mixed device+pin drivers should error")
+	}
+}
