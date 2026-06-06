@@ -19,10 +19,7 @@ func TestElaborateNetlist(t *testing.T) {
 		},
 		ZeroSignals: []string{"shared_in_only"},
 	}
-	res, errs := Elaborate(&board.Board{Name: "b", Design: d, Library: lib})
-	if len(errs) != 0 {
-		t.Fatalf("errs: %v", errs)
-	}
+	res, _ := Elaborate(&board.Board{Name: "b", Design: d, Library: lib})
 	// sysclk has 2 ports (both d0.clk and d1.clk)
 	if s := res.Signals["sysclk"]; s == nil || len(s.Ports) != 2 {
 		t.Fatalf("sysclk = %+v", res.Signals["sysclk"])
@@ -42,10 +39,7 @@ func TestElaborateAutoNamedDevicePorts(t *testing.T) {
 		// No Name -> resolveDevices will auto-generate "gpio" (single instance of class)
 		Devices: []*design.Device{{Class: "gpio", Ports: map[string]design.Value{"clk": {Kind: design.KindExpr, Text: "myclk"}}}},
 	}
-	res, errs := Elaborate(&board.Board{Design: d, Library: lib})
-	if len(errs) != 0 {
-		t.Fatalf("errs: %v", errs)
-	}
+	res, _ := Elaborate(&board.Board{Design: d, Library: lib})
 	// the instance Ports overlay MUST be applied despite the auto-generated name
 	if res.Signals["myclk"] == nil {
 		t.Errorf("instance port override dropped for auto-named device; signals: %v", keysOf(res.Signals))

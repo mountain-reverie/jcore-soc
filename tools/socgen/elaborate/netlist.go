@@ -40,6 +40,7 @@ func Elaborate(b *board.Board) (*Resolution, []error) {
 		dev.Ports = buildPorts(dev.Name, rc.Entity, spec, env, merge)
 	}
 	res.Signals, errs = gatherSignals(res, b.Design.ZeroSignals, errs)
+	errs = validateSignals(res.Signals, errs)
 	return res, errs
 }
 
