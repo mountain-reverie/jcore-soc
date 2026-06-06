@@ -45,6 +45,51 @@ func TestExpandSig(t *testing.T) {
 	if _, _, kind := expandSig(&design.SigSpec{Kind: design.SigConst, Int: 0}, "p", env); kind != design.SigConst {
 		t.Errorf("const kind=%v", kind)
 	}
+	// SigName (the common scalar-string case) and nil
+	if ref, _, kind := expandSig(&design.SigSpec{Kind: design.SigName, Name: "flash_cs(0)"}, "p", env); ref != "flash_cs(0)" || kind != design.SigName {
+		t.Errorf("name: ref=%q kind=%v", ref, kind)
+	}
+	if ref, diff, kind := expandSig(nil, "p", env); ref != "" || diff != "" || kind != design.SigName {
+		t.Errorf("nil: ref=%q diff=%q kind=%v", ref, diff, kind)
+	}
+}
+
+func TestMatchPinNilMatch(t *testing.T) {
+	if _, ok := matchPin(&design.PinRule{}, "any"); ok {
+		t.Error("a rule with nil Match must not match")
+	}
+}
+
+func TestFoldRulesTriStateLegs(t *testing.T) {
+	rules := []*design.PinRule{
+		{Match: &design.Match{Parts: []design.SeqPart{{Lit: "mcb3_dram_dq"}, {Sym: "n"}}},
+			In:    &design.SigSpec{Kind: design.SigTemplate, Parts: []design.SeqPart{{Lit: "dr_data_i.dqi("}, {Sym: "n"}, {Lit: ")"}}},
+			Out:   &design.SigSpec{Kind: design.SigTemplate, Parts: []design.SeqPart{{Lit: "dr_data_o.dqo("}, {Sym: "n"}, {Lit: ")"}}},
+			OutEn: &design.SigSpec{Kind: design.SigTemplate, Parts: []design.SeqPart{{Lit: "dr_data_o.dq_outen("}, {Sym: "n"}, {Lit: ")"}}}},
+		{Match: &design.Match{Regex: "mcb3_dram_dq8"}, Buff: func() *bool { b := false; return &b }()},
+	}
+	f := foldRules(rules, &design.Pin{Net: "mcb3_dram_dq8", Pad: "L2"})
+	if f.inRef != "dr_data_i.dqi(8)" || f.outRef != "dr_data_o.dqo(8)" || f.outEnRef != "dr_data_o.dq_outen(8)" {
+		t.Errorf("legs: in=%q out=%q outen=%q", f.inRef, f.outRef, f.outEnRef)
+	}
+	if f.buff == nil || *f.buff != false {
+		t.Errorf("buff: %v", f.buff)
+	}
+}
+
+func TestFoldRulesConstAndNoMatch(t *testing.T) {
+	// Out: 0 (constant) -> hasConst set, no outRef
+	cf := foldRules([]*design.PinRule{
+		{Match: &design.Match{Regex: "eth_mdc"}, Out: &design.SigSpec{Kind: design.SigConst, Int: 0}},
+	}, &design.Pin{Net: "eth_mdc"})
+	if !cf.hasConst || cf.outRef != "" {
+		t.Errorf("const: hasConst=%v outRef=%q", cf.hasConst, cf.outRef)
+	}
+	// no rule matches -> zero folded with a non-nil empty attrs map
+	nf := foldRules([]*design.PinRule{{Match: &design.Match{Regex: "other"}}}, &design.Pin{Net: "lonely"})
+	if nf.attrs == nil || len(nf.attrs) != 0 || nf.signalRef != "" || nf.inRef != "" || nf.buff != nil {
+		t.Errorf("no-match folded not zero: %+v", nf)
+	}
 }
 
 func TestFoldRulesAttrsLastWins(t *testing.T) {

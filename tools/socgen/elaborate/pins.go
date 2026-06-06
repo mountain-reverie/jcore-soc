@@ -1,6 +1,7 @@
 package elaborate
 
 import (
+	"maps"
 	"regexp"
 	"strconv"
 
@@ -99,9 +100,7 @@ func foldRules(rules []*design.PinRule, pin *design.Pin) folded {
 		if !ok {
 			continue
 		}
-		for k, v := range r.Attrs {
-			f.attrs[k] = v
-		}
+		maps.Copy(f.attrs, r.Attrs)
 		if r.Buff != nil {
 			f.buff = r.Buff
 		}
