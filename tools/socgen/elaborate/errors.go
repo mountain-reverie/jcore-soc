@@ -23,6 +23,7 @@ var (
 	// the two apart.
 	ErrLeftAddrBitTooSmall = errors.New("left-addr-bit too small for registers")
 	ErrLeftAddrBit         = errors.New("left-addr-bit out of range")
+	ErrDataBusPorts        = errors.New("malformed data-bus port pair")
 )
 
 // ResolveError reports a device/class/entity resolution failure. Ctx names the

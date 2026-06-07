@@ -43,6 +43,7 @@ func Elaborate(b *board.Board) (*Resolution, error) {
 		}
 		dev.Ports = buildPorts(dev.Name, rc.Entity, spec, env, merge)
 	}
+	errs = append(errs, classifyDataBus(res.Devices))
 	topEnts, terr := resolveEntities("top", b.Design.TopEntities, b.Library, merge)
 	res.TopEntities = topEnts
 	errs = append(errs, terr)
