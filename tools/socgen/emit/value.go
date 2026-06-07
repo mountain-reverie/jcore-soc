@@ -25,11 +25,7 @@ func emitValue(v design.Value) vhdl.Expr {
 	case design.KindInt:
 		return &vhdl.BasicLit{Kind: vhdl.INT, Value: strconv.FormatInt(v.Int, 10)}
 	case design.KindFloat:
-		s := strconv.FormatFloat(v.Float, 'g', -1, 64)
-		if !strings.ContainsAny(s, ".eE") {
-			s += ".0"
-		}
-		return &vhdl.BasicLit{Kind: vhdl.REAL, Value: s}
+		return &vhdl.BasicLit{Kind: vhdl.REAL, Value: vhdlReal(v.Float)}
 	case design.KindBool:
 		if v.Bool {
 			return &vhdl.Ident{Name: "true"}
@@ -43,6 +39,22 @@ func emitValue(v design.Value) vhdl.Expr {
 	default: // KindExpr — verbatim VHDL text
 		return &vhdl.Ident{Name: v.Text}
 	}
+}
+
+// vhdlReal formats a float as a VHDL-93 real literal. A VHDL real literal
+// requires a decimal point in the mantissa, even in exponential form (e.g.
+// "1.0e21", not "1e21"). strconv's shortest 'g' form omits it, so we insert
+// ".0" into the mantissa when absent.
+func vhdlReal(f float64) string {
+	s := strconv.FormatFloat(f, 'g', -1, 64)
+	mantissa, exp := s, ""
+	if i := strings.IndexAny(s, "eE"); i >= 0 {
+		mantissa, exp = s[:i], s[i:]
+	}
+	if !strings.Contains(mantissa, ".") {
+		mantissa += ".0"
+	}
+	return mantissa + exp
 }
 
 // sortedKeys returns the map keys of a generic map in deterministic order.
