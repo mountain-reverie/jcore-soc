@@ -1,6 +1,7 @@
 package vhdl
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -51,7 +52,7 @@ func newParserFromExpr(src []byte) *parser {
 // errorf records a parse error at the given source position, rendered through
 // the file's position table (file:line:col).
 func (p *parser) errorf(at Pos, format string, args ...any) {
-	p.errs = append(p.errs, fmt.Errorf("%s: "+format, append([]any{p.file.Position(at)}, args...)...))
+	p.errs = append(p.errs, &ParseError{Pos: p.file.Position(at), Msg: fmt.Sprintf(format, args...)})
 }
 
 // cur returns the current token. If the index is past the end of the slice
@@ -423,9 +424,12 @@ func WithCPPInclude(dir string) Option {
 }
 
 // ParseFile parses src (named filename) into a DesignFile. fset records source
-// positions; returned errors are rendered via fset.Position. A nil or empty
-// error slice means a clean parse.
-func ParseFile(fset *FileSet, filename string, src []byte, opts ...Option) (*DesignFile, []error) {
+// positions; returned errors are rendered via fset.Position. A nil error means
+// a clean parse; otherwise the returned error joins one or more *ParseError
+// diagnostics (use errutil.Errors / errors.As to inspect). The returned
+// *DesignFile is still non-nil when parse diagnostics are present (best-effort
+// recovery); only a C-preprocessor failure returns a nil tree with a *CPPError.
+func ParseFile(fset *FileSet, filename string, src []byte, opts ...Option) (*DesignFile, error) {
 	var cfg parseConfig
 	for _, o := range opts {
 		o(&cfg)
@@ -433,14 +437,14 @@ func ParseFile(fset *FileSet, filename string, src []byte, opts ...Option) (*Des
 	if cfg.cpp != "" {
 		out, err := runCPP(cfg, filename, src)
 		if err != nil {
-			return nil, []error{fmt.Errorf("%s: cpp (%s) failed: %w", filename, cfg.cpp, err)}
+			return nil, &CPPError{Filename: filename, CPP: cfg.cpp, Err: err}
 		}
 		src = out
 	}
 	f := fset.AddFile(filename, len(src))
 	p := newParser(src, f)
 	df := p.parseFile()
-	return df, p.errs
+	return df, errors.Join(p.errs...)
 }
 
 // parseDottedName reads a possibly-dotted name (e.g. ieee.std_logic_1164.all)
@@ -448,31 +452,34 @@ func ParseFile(fset *FileSet, filename string, src []byte, opts ...Option) (*Des
 func (p *parser) parseDottedName() string {
 	tok := p.cur()
 	var text string
-	if tok.Kind == IDENT || tok.Kind == EXTIDENT {
+	switch {
+	case tok.Kind == IDENT || tok.Kind == EXTIDENT:
 		p.advance()
 		text = tok.Lit
-	} else if tok.Kind > kwStart && tok.Kind < kwEnd {
+	case tok.Kind > kwStart && tok.Kind < kwEnd:
 		p.advance()
 		text = tok.Kind.String()
-	} else {
+	default:
 		p.errorf(tok.Pos, "expected name, got %v %q", tok.Kind, tok.Lit)
 		return ""
 	}
+dotLoop:
 	for p.at(DOT) {
 		p.advance() // consume '.'
 		next := p.cur()
-		if next.Kind == IDENT || next.Kind == EXTIDENT || next.Kind == ALL {
+		switch {
+		case next.Kind == IDENT || next.Kind == EXTIDENT || next.Kind == ALL:
 			p.advance()
 			seg := next.Lit
 			if seg == "" {
 				seg = next.Kind.String()
 			}
 			text += "." + seg
-		} else if next.Kind > kwStart && next.Kind < kwEnd {
+		case next.Kind > kwStart && next.Kind < kwEnd:
 			p.advance()
 			text += "." + next.Kind.String()
-		} else {
-			break
+		default:
+			break dotLoop
 		}
 	}
 	return text

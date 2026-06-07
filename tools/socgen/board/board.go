@@ -2,6 +2,7 @@ package board
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -28,7 +29,7 @@ var vhdlExt = regexp.MustCompile(`\.vh[hd]$`)
 func readFileList(path string) ([]string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read file list %s: %w", path, err)
+		return nil, &FileListError{Kind: ErrReadList, Target: path, Err: err}
 	}
 	var out []string
 	for _, ln := range strings.Split(string(data), "\n") {
@@ -38,21 +39,29 @@ func readFileList(path string) ([]string, error) {
 		}
 	}
 	if len(out) == 0 {
-		return nil, fmt.Errorf("empty file list %s", path)
+		return nil, &FileListError{Kind: ErrEmptyList, Target: path}
 	}
 	return out, nil
 }
 
 // loadFrom composes spec-load + library-build + validate for a board whose VHDL
 // file set is already known (no make). Load (Task 2) wraps it with Files.
-func loadFrom(root, name string, files []string) (*Board, []error) {
-	d, derrs := design.Load(filepath.Join(root, "targets", "boards", name, "design.yaml"))
-	lib, lerrs := Library(files)
-	errs := append(append([]error{}, derrs...), lerrs...)
-	if d != nil {
-		errs = append(errs, design.Validate(d, lib)...)
+func loadFrom(root, name string, files []string) (*Board, error) {
+	d, derr := design.Load(filepath.Join(root, "targets", "boards", name, "design.yaml"))
+	lib, lerr := Library(files)
+	var errs []error
+	if lerr != nil {
+		errs = append(errs, lerr)
 	}
-	return &Board{Name: name, Design: d, Library: lib}, errs
+	if derr != nil {
+		errs = append(errs, derr)
+	}
+	if d != nil {
+		if verr := design.Validate(d, lib); verr != nil {
+			errs = append(errs, verr)
+		}
+	}
+	return &Board{Name: name, Design: d, Library: lib}, errors.Join(errs...)
 }
 
 // Files runs the build's file-list target for the named board (root = the
@@ -63,19 +72,32 @@ func Files(root, name string) ([]string, error) {
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("make %s vhdl_list.txt: %w: %s", name, err, tailStr(stderr.String()))
+		return nil, &FileListError{
+			Kind:   ErrMake,
+			Target: name,
+			Err:    fmt.Errorf("%w: %s", err, tailStr(stderr.String())),
+		}
 	}
 	return readFileList(filepath.Join(root, "output", name, "vhdl_list.txt"))
 }
 
 // Load loads the board's YAML spec, builds the interface Library from its full
 // VHDL file set (via make), and validates the spec against it. Returns a
-// best-effort Board plus all collected errors (load + parse + validation).
-func Load(root, name string) (*Board, []error) {
+// best-effort Board plus all collected errors (load + parse + validation). If the
+// file-list step (Files) fails, the returned Board has a nil Library (nothing can
+// be parsed without the file list); callers must guard on the error before using
+// b.Library.
+func Load(root, name string) (*Board, error) {
 	files, err := Files(root, name)
 	if err != nil {
-		d, derrs := design.Load(filepath.Join(root, "targets", "boards", name, "design.yaml"))
-		return &Board{Name: name, Design: d}, append(derrs, err)
+		d, derr := design.Load(filepath.Join(root, "targets", "boards", name, "design.yaml"))
+		// The file-list failure is the primary error (it's why nothing could be
+		// built); list it first, then any secondary spec-load error.
+		errs := []error{err}
+		if derr != nil {
+			errs = append(errs, derr)
+		}
+		return &Board{Name: name, Design: d}, errors.Join(errs...)
 	}
 	return loadFrom(root, name, files)
 }

@@ -42,10 +42,10 @@ func reverseMerge(m map[string][]string) map[string]string {
 // with the device's port spec (global-signal / value / special-kind), types
 // resolved via the generics, normal ports auto-named and merge-renamed.
 func buildPorts(devName string, ent *iface.Entity, spec map[string]design.Value, env map[string]int64, merge map[string]string) []*ResolvedPort {
-	var out []*ResolvedPort
 	if ent == nil {
-		return out
+		return nil
 	}
+	out := make([]*ResolvedPort, 0, len(ent.Ports))
 	for _, p := range ent.Ports {
 		rp := &ResolvedPort{
 			Name: p.Name,

@@ -1,11 +1,14 @@
 package vhdl
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/j-core/jcore-soc/tools/socgen/internal/errutil"
 )
 
 func mustParseExpr(t *testing.T, src string) Expr {
@@ -135,7 +138,7 @@ func TestExprRelationalAndLogical(t *testing.T) {
 	}
 }
 
-func parse(t *testing.T, src string) (*DesignFile, []error) {
+func parse(t *testing.T, src string) (*DesignFile, error) {
 	t.Helper()
 	return ParseFile(NewFileSet(), "t.vhd", []byte(src))
 }
@@ -143,7 +146,7 @@ func parse(t *testing.T, src string) (*DesignFile, []error) {
 func parseDecls(t *testing.T, src string) []Decl {
 	t.Helper()
 	df, errs := parse(t, "package p is\n"+src+"\nend package;")
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	return df.Units[0].(*PackageDecl).Decls
@@ -189,7 +192,7 @@ entity cpu is
     clk : in  std_logic;
     d   : out std_logic_vector(W-1 downto 0));
 end entity cpu;`)
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	e := df.Units[0].(*EntityDecl)
@@ -267,12 +270,12 @@ func TestParseSubprogramDecls(t *testing.T) {
 
 	// round-trip: the parsed decls must survive print->reparse.
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte("package p is\nfunction to_slv(b : std_logic; s : integer) return std_logic_vector;\nend package;"))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 {
+	if errs2 != nil {
 		t.Fatalf("reparse errs: %v\n%s", errs2, out)
 	}
 	if !equalAST(df, df2) {
@@ -284,7 +287,7 @@ func TestParseExtendedIdDesignator(t *testing.T) {
 	// Extended-identifier designator: function \?=\ (...) return ...;
 	const src = "package p is\nfunction \\?=\\ (l, r : bit) return bit;\nend package;"
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("parse errors: %v", errs)
 	}
 	pkg, ok := df.Units[0].(*PackageDecl)
@@ -303,7 +306,7 @@ func TestParseExtendedIdDesignator(t *testing.T) {
 	// Round-trip: print → reparse → equalAST
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 {
+	if errs2 != nil {
 		t.Fatalf("reparse errors: %v\n--- printed ---\n%s", errs2, out)
 	}
 	if !equalAST(df, df2) {
@@ -342,13 +345,13 @@ func TestParseExtendedIdDesignatorBody(t *testing.T) {
   end function \?=\;
 end package body;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("parse errors: %v", errs)
 	}
 	// Round-trip.
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 {
+	if errs2 != nil {
 		t.Fatalf("reparse errors: %v\n--- printed ---\n%s", errs2, out)
 	}
 	if !equalAST(df, df2) {
@@ -363,12 +366,12 @@ end package body;`
   end function "+";
 end package body;`
 	df3, errs3 := ParseFile(NewFileSet(), "t.vhd", []byte(src2))
-	if len(errs3) != 0 {
+	if errs3 != nil {
 		t.Fatalf("stringlit-closing-label parse errors: %v", errs3)
 	}
 	out3 := Print(df3)
 	df4, errs4 := ParseFile(NewFileSet(), "t.vhd", []byte(out3))
-	if len(errs4) != 0 || !equalAST(df3, df4) {
+	if errs4 != nil || !equalAST(df3, df4) {
 		t.Fatalf("stringlit-closing-label not AST-stable:\n%s", out3)
 	}
 
@@ -380,12 +383,12 @@ end package body;`
   end function f;
 end package body;`
 	df5, errs5 := ParseFile(NewFileSet(), "t.vhd", []byte(src3))
-	if len(errs5) != 0 {
+	if errs5 != nil {
 		t.Fatalf("ident-closing-label parse errors: %v", errs5)
 	}
 	out5 := Print(df5)
 	df6, errs6 := ParseFile(NewFileSet(), "t.vhd", []byte(out5))
-	if len(errs6) != 0 || !equalAST(df5, df6) {
+	if errs6 != nil || !equalAST(df5, df6) {
 		t.Fatalf("ident-closing-label not AST-stable:\n%s", out5)
 	}
 }
@@ -412,18 +415,18 @@ func TestParseAttributeDecls(t *testing.T) {
 	}
 	// round-trip
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte("package p is\nattribute num_words of reg8x4_data : subtype is 4;\nend package;"))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("attr spec not AST-stable: errs=%v\n%s", errs2, out)
 	}
 
 	// malformed entity class (not a reserved word) must be rejected.
 	_, errs3 := ParseFile(NewFileSet(), "t.vhd", []byte("package p is\nattribute foo of x : notakeyword is 1;\nend package;"))
-	if len(errs3) == 0 {
+	if errs3 == nil {
 		t.Fatal("expected an error for non-keyword entity class")
 	}
 }
@@ -445,12 +448,12 @@ func TestParseAliasDecls(t *testing.T) {
 	}
 	// round-trip
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte("package p is\nalias destv : std_logic_vector(7 downto 0) is dest;\nend package;"))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("alias not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -460,7 +463,7 @@ func TestParseAliasSignature(t *testing.T) {
 		t.Helper()
 		full := "package p is\n" + src + "\nend package;"
 		df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(full))
-		if len(errs) != 0 {
+		if errs != nil {
 			t.Fatalf("parse errors: %v", errs)
 		}
 		pkg := df.Units[0].(*PackageDecl)
@@ -471,7 +474,7 @@ func TestParseAliasSignature(t *testing.T) {
 		// round-trip
 		out := Print(df)
 		df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-		if len(errs2) != 0 || !equalAST(df, df2) {
+		if errs2 != nil || !equalAST(df, df2) {
 			t.Fatalf("not AST-stable: errs=%v\n%s", errs2, out)
 		}
 		return a
@@ -547,12 +550,12 @@ func TestParseGroupDecls(t *testing.T) {
 	}
 	// round-trip
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte("package p is\ngroup local_ports is (signal <>);\ngroup sigs : global_ports(rx, tx);\nend package;"))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("group not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -562,19 +565,20 @@ func TestDeferredUnitTagged(t *testing.T) {
 	// Verify that parsing such a file yields at least one error containing
 	// "deferred", exercising the deferral-tagging mechanism.
 	src := "architecture a of e is begin b: block begin end block; end architecture;"
-	_, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) == 0 {
+	_, err := ParseFile(NewFileSet(), "t.vhd", []byte(src))
+	if err == nil {
 		t.Fatalf("expected deferral errors for block statement, got none")
 	}
 	found := false
-	for _, e := range errs {
-		if strings.Contains(e.Error(), "deferred") {
+	for _, e := range errutil.Errors(err) {
+		var pe *ParseError
+		if errors.As(e, &pe) && strings.Contains(pe.Msg, "deferred") {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Fatalf("expected an error containing \"deferred\", got: %v", errs)
+		t.Fatalf("expected an error containing \"deferred\", got: %v", err)
 	}
 }
 
@@ -586,7 +590,7 @@ func TestParseEntityDeclarativePart(t *testing.T) {
   subtype word_t is std_logic;
 end entity e;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	e := df.Units[0].(*EntityDecl)
@@ -599,7 +603,7 @@ end entity e;`
 	// round-trip
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("entity declarative part not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -612,7 +616,7 @@ begin
   y <= a and b;
 end architecture rtl;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	arch, ok := df.Units[0].(*ArchitectureBody)
@@ -631,7 +635,7 @@ end architecture rtl;`
 	// round-trip
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("architecture not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -646,7 +650,7 @@ begin
   clk <= '0' after 5 ns when rst = '1' else '1';   -- conditional arm WITH after
 end architecture;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	st := df.Units[0].(*ArchitectureBody).Stmts
@@ -675,7 +679,7 @@ end architecture;`
 	// round-trip
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("conditional assign not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -690,7 +694,7 @@ begin
   c1 : component comp_y port map (x => y);
 end architecture;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	arch := df.Units[0].(*ArchitectureBody)
@@ -723,7 +727,7 @@ end architecture;`
 	// round-trip
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("instantiation not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -739,7 +743,7 @@ begin
   end generate;
 end architecture;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	arch := df.Units[0].(*ArchitectureBody)
@@ -760,7 +764,7 @@ end architecture;`
 	// round-trip
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("generate not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -777,7 +781,7 @@ begin
   end process proc;
 end architecture;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	arch := df.Units[0].(*ArchitectureBody)
@@ -800,7 +804,7 @@ end architecture;`
 	// round-trip
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("process not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -820,7 +824,7 @@ begin
   end process;
 end architecture;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	pr := df.Units[0].(*ArchitectureBody).Stmts[0].(*ProcessStmt)
@@ -834,7 +838,7 @@ end architecture;`
 	// round-trip
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("if not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -854,7 +858,7 @@ begin
   end process;
 end architecture;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	pr := df.Units[0].(*ArchitectureBody).Stmts[0].(*ProcessStmt)
@@ -871,7 +875,7 @@ end architecture;`
 	// round-trip
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("case not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -887,7 +891,7 @@ begin
   end process;
 end architecture;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	st := df.Units[0].(*ArchitectureBody).Stmts[0].(*ProcessStmt).Stmts
@@ -913,7 +917,7 @@ end architecture;`
 	// round-trip
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("wait not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -929,7 +933,7 @@ begin
   end process;
 end architecture;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	pr := df.Units[0].(*ArchitectureBody).Stmts[0].(*ProcessStmt)
@@ -940,7 +944,7 @@ end architecture;`
 	// round-trip
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("for-loop not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -960,7 +964,7 @@ begin
   end process;
 end architecture;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	st := df.Units[0].(*ArchitectureBody).Stmts[0].(*ProcessStmt).Stmts
@@ -984,7 +988,7 @@ end architecture;`
 	// round-trip
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("loop control not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -998,7 +1002,7 @@ begin
   end process;
 end architecture;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	pr := df.Units[0].(*ArchitectureBody).Stmts[0].(*ProcessStmt)
@@ -1013,7 +1017,7 @@ end architecture;`
 	// round-trip
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("return not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -1033,7 +1037,7 @@ func TestParseSubprogramBody(t *testing.T) {
 begin
 end architecture;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	arch := df.Units[0].(*ArchitectureBody)
@@ -1056,7 +1060,7 @@ end architecture;`
 	// round-trip
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("subprogram body not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -1076,12 +1080,12 @@ func TestParsePhysicalLiteral(t *testing.T) {
 	}
 	// round-trip inside a constant default
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte("package p is\nconstant period : time := 10 ns;\nend package;"))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("physical literal not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -1099,7 +1103,7 @@ package body p is
   end function;
 end package body p;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	if len(df.Units) != 2 {
@@ -1118,7 +1122,7 @@ end package body p;`
 	// round-trip
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("package body not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -1131,7 +1135,7 @@ begin
   q <= a;
 end architecture;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	arch := df.Units[0].(*ArchitectureBody)
@@ -1155,7 +1159,7 @@ begin
   end process;
 end architecture;`
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(src2))
-	if len(errs2) != 0 {
+	if errs2 != nil {
 		t.Fatalf("errs2: %v", errs2)
 	}
 	sa := df2.Units[0].(*ArchitectureBody).Stmts[0].(*ProcessStmt).Stmts[0].(*SignalAssignStmt)
@@ -1167,7 +1171,7 @@ end architecture;`
 		d, e := ParseFile(NewFileSet(), "t.vhd", []byte(s))
 		out := Print(d)
 		d2, e2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-		if len(e) != 0 || len(e2) != 0 || !equalAST(d, d2) {
+		if e != nil || e2 != nil || !equalAST(d, d2) {
 			t.Fatalf("waveform not AST-stable: e=%v e2=%v\n%s", e, e2, out)
 		}
 	}
@@ -1184,7 +1188,7 @@ begin
   end process;
 end architecture;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	arch := df.Units[0].(*ArchitectureBody)
@@ -1208,7 +1212,7 @@ end architecture;`
 	// round-trip
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("assert/report not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -1223,7 +1227,7 @@ begin
   end process;
 end architecture;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	arch := df.Units[0].(*ArchitectureBody)
@@ -1243,7 +1247,7 @@ end architecture;`
 	// round-trip
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("procedure call not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -1258,7 +1262,7 @@ func TestParseConfigurationBlock(t *testing.T) {
   end for;
 end configuration cfg;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	cfg, ok := df.Units[0].(*ConfigurationDecl)
@@ -1274,7 +1278,7 @@ end configuration cfg;`
 	// round-trip
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("config not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -1296,12 +1300,12 @@ func TestParseSharedVariable(t *testing.T) {
 	}
 	// round-trip
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte("package p is\nshared variable s : integer := 0;\nend package;"))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("shared variable not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -1321,7 +1325,7 @@ func TestParseComponentConfiguration(t *testing.T) {
   end for;
 end configuration;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	top := df.Units[0].(*ConfigurationDecl).Block
@@ -1343,7 +1347,7 @@ end configuration;`
 	// round-trip
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("component config not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -1355,7 +1359,7 @@ func TestParseConfigurationSpec(t *testing.T) {
 begin
 end architecture;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	arch := df.Units[0].(*ArchitectureBody)
@@ -1373,7 +1377,7 @@ end architecture;`
 	// round-trip
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("config spec not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -1409,12 +1413,12 @@ func TestParseFileAndAccessAndUse(t *testing.T) {
 	}
 	// round-trip
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte("package p is\nuse work.textio.all;\nfile f2 : text open read_mode is \"data.txt\";\ntype ft is file of character;\nend package;"))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("file/access/use not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -1452,22 +1456,22 @@ func TestParseFileDeclModes(t *testing.T) {
 	}
 	// round-trip: VHDL-87 out mode
 	dfOut, errs := ParseFile(NewFileSet(), "t.vhd", []byte("package p is\nfile f0 : text is out \"cpu0.acc\";\nend package;"))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("parse errs: %v", errs)
 	}
 	outStr := Print(dfOut)
 	dfOut2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(outStr))
-	if len(errs2) != 0 || !equalAST(dfOut, dfOut2) {
+	if errs2 != nil || !equalAST(dfOut, dfOut2) {
 		t.Fatalf("file decl out mode not AST-stable: errs=%v\n%s", errs2, outStr)
 	}
 	// round-trip: VHDL-87 in mode
 	dfIn, errs := ParseFile(NewFileSet(), "t.vhd", []byte("package p is\nfile f1 : text is in \"input.txt\";\nend package;"))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("parse errs: %v", errs)
 	}
 	outStr = Print(dfIn)
 	dfIn2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(outStr))
-	if len(errs2) != 0 || !equalAST(dfIn, dfIn2) {
+	if errs2 != nil || !equalAST(dfIn, dfIn2) {
 		t.Fatalf("file decl in mode not AST-stable: errs=%v\n%s", errs2, outStr)
 	}
 }
@@ -1508,12 +1512,12 @@ begin
   rec.d(STABLE)(19 downto 4) <= x;
 end architecture;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("suffix-chain name not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -1540,7 +1544,7 @@ func TestParseNamedCallArgs(t *testing.T) {
 		df, errs := ParseFile(NewFileSet(), "t.vhd", []byte("package p is\nconstant k : t := "+src+";\nend package;"))
 		out := Print(df)
 		df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-		if len(errs) != 0 || len(errs2) != 0 || !equalAST(df, df2) {
+		if errs != nil || errs2 != nil || !equalAST(df, df2) {
 			t.Fatalf("call args not AST-stable for %q: e=%v e2=%v\n%s", src, errs, errs2, out)
 		}
 	}
@@ -1555,7 +1559,7 @@ begin
          c when others;
 end architecture;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	sa, ok := df.Units[0].(*ArchitectureBody).Stmts[0].(*SelectedSignalAssign)
@@ -1571,7 +1575,7 @@ end architecture;`
 	// round-trip
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("selected assign not AST-stable: errs=%v\n%s", errs2, out)
 	}
 }
@@ -1587,7 +1591,7 @@ begin
   end process;
 end architecture;`
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	pr := df.Units[0].(*ArchitectureBody).Stmts[0].(*ProcessStmt)
@@ -1609,7 +1613,7 @@ end architecture;`
 	// round-trip
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 || !equalAST(df, df2) {
+	if errs2 != nil || !equalAST(df, df2) {
 		t.Fatalf("for-range type mark not AST-stable: errs=%v\n%s", errs2, out)
 	}
 
@@ -1621,7 +1625,7 @@ begin
   end generate;
 end architecture;`
 	df3, errs3 := ParseFile(NewFileSet(), "t.vhd", []byte(src2))
-	if len(errs3) != 0 {
+	if errs3 != nil {
 		t.Fatalf("generate errs: %v", errs3)
 	}
 	gs, ok := df3.Units[0].(*ArchitectureBody).Stmts[0].(*GenerateStmt)
@@ -1634,7 +1638,7 @@ end architecture;`
 	// round-trip
 	out3 := Print(df3)
 	df4, errs4 := ParseFile(NewFileSet(), "t.vhd", []byte(out3))
-	if len(errs4) != 0 || !equalAST(df3, df4) {
+	if errs4 != nil || !equalAST(df3, df4) {
 		t.Fatalf("generate plain range not AST-stable: errs=%v\n%s", errs4, out3)
 	}
 }
@@ -1691,16 +1695,17 @@ func TestParseAllocator(t *testing.T) {
 func TestParseWithCPP(t *testing.T) {
 	// bad-exe: must NOT panic, must return errors; no gcc guard — works without gcc.
 	t.Run("bad_exe", func(t *testing.T) {
-		_, errs := ParseFile(NewFileSet(), "t.vhd", []byte("entity e is end entity;\n"), WithCPP("definitely-not-a-real-cpp-xyz"))
-		if len(errs) == 0 {
-			t.Fatal("expected errors for bad cpp exe, got none")
+		_, err := ParseFile(NewFileSet(), "t.vhd", []byte("entity e is end entity;\n"), WithCPP("definitely-not-a-real-cpp-xyz"))
+		var ce *CPPError
+		if !errors.As(err, &ce) {
+			t.Fatalf("expected *CPPError for bad cpp exe, got %v", err)
 		}
 	})
 
 	// option-is-the-enabler: WITHOUT WithCPP, '#' is illegal, so we get errors.
 	t.Run("no_cpp_hash_fails", func(t *testing.T) {
 		_, errs := ParseFile(NewFileSet(), "t.vhd", []byte("#define FOO\nentity e is end entity;\n"))
-		if len(errs) == 0 {
+		if errs == nil {
 			t.Fatal("expected errors: '#' is illegal in VHDL without cpp")
 		}
 	})
@@ -1714,12 +1719,12 @@ func TestParseWithCPP(t *testing.T) {
 	t.Run("define_consumed", func(t *testing.T) {
 		src := "#define FOO\nentity e is end entity;\n"
 		f1, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src), WithCPP("gcc"))
-		if len(errs) != 0 {
+		if errs != nil {
 			t.Fatalf("unexpected errors: %v", errs)
 		}
 		out := Print(f1)
 		f2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-		if len(errs2) != 0 {
+		if errs2 != nil {
 			t.Fatalf("reparse errors: %v", errs2)
 		}
 		if !equalAST(f1, f2) {
@@ -1731,7 +1736,7 @@ func TestParseWithCPP(t *testing.T) {
 	t.Run("token_paste", func(t *testing.T) {
 		src := "#define MK(x) x ## _t\nentity MK(foo) is end entity;\n"
 		f1, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src), WithCPP("gcc"))
-		if len(errs) != 0 {
+		if errs != nil {
 			t.Fatalf("unexpected errors: %v", errs)
 		}
 		// Assert entity name is foo_t.
@@ -1748,7 +1753,7 @@ func TestParseWithCPP(t *testing.T) {
 		// Also round-trip.
 		out := Print(f1)
 		f2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-		if len(errs2) != 0 {
+		if errs2 != nil {
 			t.Fatalf("reparse errors: %v", errs2)
 		}
 		if !equalAST(f1, f2) {
@@ -1762,12 +1767,12 @@ func TestParseWithCPP(t *testing.T) {
 func roundTripSrc(t *testing.T, src string) DesignUnit {
 	t.Helper()
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("parse errors: %v", errs)
 	}
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-	if len(errs2) != 0 {
+	if errs2 != nil {
 		t.Fatalf("reparse errors: %v\n--- printed ---\n%s", errs2, out)
 	}
 	if !equalAST(df, df2) {
@@ -1820,7 +1825,7 @@ func TestParseMultiUnitContext(t *testing.T) {
 	// Sub-case 1: context clause between two design units.
 	src1 := "library a;\nentity e is end entity;\nlibrary b;\nuse b.x.all;\narchitecture r of e is begin end architecture;\n"
 	df1, errs1 := ParseFile(NewFileSet(), "t.vhd", []byte(src1))
-	if len(errs1) != 0 {
+	if errs1 != nil {
 		t.Fatalf("case1: parse errors: %v", errs1)
 	}
 	if len(df1.Context) != 3 {
@@ -1832,7 +1837,7 @@ func TestParseMultiUnitContext(t *testing.T) {
 	// round-trip: printer hoists context to top; reparse must yield equalAST
 	out1 := Print(df1)
 	df1b, errs1b := ParseFile(NewFileSet(), "t.vhd", []byte(out1))
-	if len(errs1b) != 0 {
+	if errs1b != nil {
 		t.Fatalf("case1: reparse errors: %v\n--- printed ---\n%s", errs1b, out1)
 	}
 	if !equalAST(df1, df1b) {
@@ -1842,7 +1847,7 @@ func TestParseMultiUnitContext(t *testing.T) {
 	// Sub-case 2: secondary use-led unit (use clause after first entity).
 	src2 := "entity e is end entity;\nuse work.p.all;\narchitecture r of e is begin end architecture;\n"
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(src2))
-	if len(errs2) != 0 {
+	if errs2 != nil {
 		t.Fatalf("case2: parse errors: %v", errs2)
 	}
 	if len(df2.Context) != 1 {
@@ -1853,7 +1858,7 @@ func TestParseMultiUnitContext(t *testing.T) {
 	}
 	out2 := Print(df2)
 	df2b, errs2b := ParseFile(NewFileSet(), "t.vhd", []byte(out2))
-	if len(errs2b) != 0 {
+	if errs2b != nil {
 		t.Fatalf("case2: reparse errors: %v\n--- printed ---\n%s", errs2b, out2)
 	}
 	if !equalAST(df2, df2b) {
@@ -1863,7 +1868,7 @@ func TestParseMultiUnitContext(t *testing.T) {
 	// Sub-case 3: regression — leading context clauses still work (no regression).
 	src3 := "library ieee;\nuse ieee.std_logic_1164.all;\nentity e is end entity;\n"
 	df3, errs3 := ParseFile(NewFileSet(), "t.vhd", []byte(src3))
-	if len(errs3) != 0 {
+	if errs3 != nil {
 		t.Fatalf("case3: parse errors: %v", errs3)
 	}
 	if len(df3.Context) != 2 {
@@ -1874,7 +1879,7 @@ func TestParseMultiUnitContext(t *testing.T) {
 	}
 	out3 := Print(df3)
 	df3b, errs3b := ParseFile(NewFileSet(), "t.vhd", []byte(out3))
-	if len(errs3b) != 0 {
+	if errs3b != nil {
 		t.Fatalf("case3: reparse errors: %v\n--- printed ---\n%s", errs3b, out3)
 	}
 	if !equalAST(df3, df3b) {
@@ -2028,7 +2033,7 @@ func TestParseSuffixAttribute(t *testing.T) {
 constant C : time := (0 => dr_tmp(i)'LAST_EVENT);
 end package;`
 	df2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(src2))
-	if len(errs2) != 0 {
+	if errs2 != nil {
 		t.Fatalf("case2: parse errors: %v", errs2)
 	}
 	// Check that an AttributeName node exists somewhere in the tree.
@@ -2045,7 +2050,7 @@ end package;`
 	// round-trip
 	out2 := Print(df2)
 	df2b, errs2b := ParseFile(NewFileSet(), "t.vhd", []byte(out2))
-	if len(errs2b) != 0 {
+	if errs2b != nil {
 		t.Fatalf("case2: reparse errors: %v\n--- printed ---\n%s", errs2b, out2)
 	}
 	if !equalAST(df2, df2b) {
@@ -2081,12 +2086,12 @@ end package;`
 func roundTripWithOpts(t *testing.T, filename, src string, opts ...Option) *DesignFile {
 	t.Helper()
 	df, errs := ParseFile(NewFileSet(), filename, []byte(src), opts...)
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("parse errors: %v", errs)
 	}
 	out := Print(df)
 	df2, errs2 := ParseFile(NewFileSet(), filename, []byte(out))
-	if len(errs2) != 0 {
+	if errs2 != nil {
 		t.Fatalf("reparse errors: %v\n--- printed ---\n%s", errs2, out)
 	}
 	if !equalAST(df, df2) {
@@ -2188,14 +2193,14 @@ func TestProbeCpuTb(t *testing.T) {
 	}
 
 	df1, errs1 := ParseFile(NewFileSet(), tbPath, src, opts...)
-	if len(errs1) != 0 {
-		t.Logf("PROBE: cpu_tb.vhd parse errors (does NOT round-trip): first error: %v", errs1[0])
+	if errs1 != nil {
+		t.Logf("PROBE: cpu_tb.vhd parse errors (does NOT round-trip): first error: %v", errutil.Errors(errs1)[0])
 		return
 	}
 	out := Print(df1)
 	df2, errs2 := ParseFile(NewFileSet(), tbPath, []byte(out))
-	if len(errs2) != 0 {
-		t.Logf("PROBE: cpu_tb.vhd does NOT round-trip; first reparse error: %v", errs2[0])
+	if errs2 != nil {
+		t.Logf("PROBE: cpu_tb.vhd does NOT round-trip; first reparse error: %v", errutil.Errors(errs2)[0])
 		return
 	}
 	if !equalAST(df1, df2) {

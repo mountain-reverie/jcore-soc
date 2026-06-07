@@ -1,7 +1,6 @@
 package design
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -72,23 +71,23 @@ func stripRemove(n *yaml.Node) {
 
 func spliceInclude(n *yaml.Node, dir string, stack []string) error {
 	if len(stack) >= maxIncludeDepth {
-		return fmt.Errorf("include depth exceeded at %q", n.Value)
+		return &IncludeError{Kind: ErrIncludeDepth, Path: n.Value}
 	}
 	p := filepath.Join(dir, n.Value)
 	abs, aerr := filepath.Abs(p)
 	if aerr != nil {
-		return fmt.Errorf("include %s: %w", p, aerr)
+		return &IncludeError{Kind: ErrIncludeRead, Path: p, Err: aerr}
 	}
 	if slices.Contains(stack, abs) {
-		return fmt.Errorf("include cycle: %s", abs)
+		return &IncludeError{Kind: ErrIncludeCycle, Path: abs}
 	}
 	data, err := os.ReadFile(p)
 	if err != nil {
-		return fmt.Errorf("include %s: %w", p, err)
+		return &IncludeError{Kind: ErrIncludeRead, Path: p, Err: err}
 	}
 	var doc yaml.Node
 	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return fmt.Errorf("include %s: %w", p, err)
+		return &IncludeError{Kind: ErrIncludeRead, Path: p, Err: err}
 	}
 	root := &doc
 	if doc.Kind == yaml.DocumentNode && len(doc.Content) == 1 {
@@ -111,7 +110,7 @@ func mergeMapping(n *yaml.Node) error {
 		k, v := n.Content[i], n.Content[i+1]
 		if k.Value == "<<" {
 			if mergeVal != nil {
-				return fmt.Errorf("line %d: multiple << merge keys in one mapping", n.Line)
+				return &SpecError{Line: n.Line, Msg: "multiple << merge keys in one mapping"}
 			}
 			mergeVal = v
 			continue
@@ -125,7 +124,7 @@ func mergeMapping(n *yaml.Node) error {
 			mv = mv.Alias
 		}
 		if mv == nil || mv.Kind != yaml.MappingNode {
-			return fmt.Errorf("line %d: << value must be a mapping", n.Line)
+			return &SpecError{Line: n.Line, Msg: "<< value must be a mapping"}
 		}
 		deepMergeInto(n, mv) // siblings (already in n) win over merged
 	}

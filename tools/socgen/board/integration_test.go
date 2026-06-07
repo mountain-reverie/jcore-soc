@@ -2,8 +2,9 @@ package board
 
 import (
 	"os"
-	"strings"
 	"testing"
+
+	"github.com/j-core/jcore-soc/tools/socgen/internal/errutil"
 )
 
 // TestBoardMimasV2 runs the real make file-list + parse + validate for mimas_v2.
@@ -21,11 +22,11 @@ func TestBoardMimasV2(t *testing.T) {
 	if len(files) < 100 {
 		t.Fatalf("expected >100 board files, got %d", len(files))
 	}
-	lib, perrs := Library(files)
+	lib, perr := Library(files)
 	// STRICT: every board file must parse.
-	if len(perrs) != 0 {
-		t.Fatalf("expected 0 parse failures over %d files, got %d:\n%s",
-			len(files), len(perrs), errsJoin(perrs))
+	if perr != nil {
+		t.Fatalf("expected 0 parse failures over %d files, got %d:\n%v",
+			len(files), len(errutil.Errors(perr)), perr)
 	}
 	// config.vhd is in the set -> CFG_* constants are in the library.
 	if _, ok := lib.Package("config"); !ok {
@@ -41,9 +42,9 @@ func TestBoardMimasV2(t *testing.T) {
 		}
 	}
 	// Full-board validation of the migrated mimas_v2 spec.
-	b, verrs := Load(root, "mimas_v2")
-	t.Logf("mimas_v2 Load: %d total errors", len(verrs))
-	for _, e := range verrs {
+	b, verr := Load(root, "mimas_v2")
+	t.Logf("mimas_v2 Load: %d total errors", len(errutil.Errors(verr)))
+	for _, e := range errutil.Errors(verr) {
 		t.Logf("  %v", e)
 	}
 	// With 0 parse failures, a uartlite-class device's entity must resolve.
@@ -52,14 +53,4 @@ func TestBoardMimasV2(t *testing.T) {
 			t.Error("uartlitedb must resolve from the full board library")
 		}
 	}
-}
-
-func errsJoin(errs []error) string {
-	var b strings.Builder
-	for _, e := range errs {
-		b.WriteString("  ")
-		b.WriteString(e.Error())
-		b.WriteByte('\n')
-	}
-	return b.String()
 }

@@ -1,6 +1,7 @@
 package design
 
 import (
+	"errors"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -96,9 +97,9 @@ pins:
 
 func TestParsePinNames(t *testing.T) {
 	src := "# comment\nCLK_100MHz V10\n\nUART_TX A8\nmcb3_dram_a0  J7\n"
-	pins, errs := parsePinNames([]byte(src))
-	if len(errs) != 0 {
-		t.Fatalf("errs: %v", errs)
+	pins, err := parsePinNames([]byte(src))
+	if err != nil {
+		t.Fatalf("errs: %v", err)
 	}
 	want := []Pin{{"clk_100mhz", "V10"}, {"uart_tx", "A8"}, {"mcb3_dram_a0", "J7"}}
 	if len(pins) != len(want) {
@@ -122,9 +123,9 @@ IC3      A1       GND        io       GND
          A7       IO_L10N_0  io                *** unconnected ***
          A8       IO_L33N_0  io       HDMI-D2_N
 `
-	pins, errs := parsePinList([]byte(src), "IC3")
-	if len(errs) != 0 {
-		t.Fatalf("errs: %v", errs)
+	pins, err := parsePinList([]byte(src), "IC3")
+	if err != nil {
+		t.Fatalf("errs: %v", err)
 	}
 	// unconnected dropped; net normalized: lower, '-'->'_', '!' removed
 	want := []Pin{{"gnd", "A1"}, {"usb0_n", "A2"}, {"vid_en", "A3"}, {"hdmi_d2_n", "A8"}}
@@ -139,8 +140,9 @@ IC3      A1       GND        io       GND
 }
 
 func TestParsePinListPartNotFound(t *testing.T) {
-	pins, errs := parsePinList([]byte("Part Pad Pin Dir Net\nIC9 A1 GND io GND\n"), "IC3")
-	if len(pins) != 0 || len(errs) != 1 {
-		t.Fatalf("expected one error and no pins: pins=%+v errs=%v", pins, errs)
+	pins, err := parsePinList([]byte("Part Pad Pin Dir Net\nIC9 A1 GND io GND\n"), "IC3")
+	var pe *PinFileError
+	if len(pins) != 0 || !errors.As(err, &pe) || pe.Part != "IC3" {
+		t.Fatalf("expected a PinFileError part-not-found and no pins: pins=%+v err=%v", pins, err)
 	}
 }

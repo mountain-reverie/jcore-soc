@@ -1,7 +1,7 @@
 package elaborate
 
 import (
-	"strings"
+	"errors"
 	"testing"
 )
 
@@ -19,23 +19,23 @@ func pr(id, port, dir, typ string) *SignalPortRef {
 func TestValidateSignals(t *testing.T) {
 	// multiple drivers
 	multi := map[string]*Signal{"x": sig("x", pr("a", "o1", "out", "std_logic"), pr("b", "o2", "out", "std_logic"))}
-	if errs := validateSignals(multi, nil); len(errs) == 0 || !strings.Contains(errs[0].Error(), "multiple") {
-		t.Errorf("want multiple-driver error, got %v", errs)
+	if err := validateSignals(multi); !errors.Is(err, ErrMultiDriver) {
+		t.Errorf("want multiple-driver error, got %v", err)
 	}
 	// undriven
 	und := map[string]*Signal{"y": sig("y", pr("a", "i1", "in", "std_logic"))}
-	if errs := validateSignals(und, nil); len(errs) == 0 || !strings.Contains(errs[0].Error(), "nothing drives") {
-		t.Errorf("want undriven error, got %v", errs)
+	if err := validateSignals(und); !errors.Is(err, ErrUndrivenSignal) {
+		t.Errorf("want undriven error, got %v", err)
 	}
 	// type mismatch
 	mis := map[string]*Signal{"z": sig("z", pr("a", "o", "out", "std_logic"), pr("b", "i", "in", "std_logic_vector(7 downto 0)"))}
-	if errs := validateSignals(mis, nil); len(errs) == 0 || !strings.Contains(errs[0].Error(), "type mismatch") {
-		t.Errorf("want type-mismatch error, got %v", errs)
+	if err := validateSignals(mis); !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("want type-mismatch error, got %v", err)
 	}
 	// clean: one out, one in, same type
 	clean := map[string]*Signal{"w": sig("w", pr("a", "o", "out", "std_logic"), pr("b", "i", "in", "std_logic"))}
-	if errs := validateSignals(clean, nil); len(errs) != 0 {
-		t.Errorf("clean signal should pass: %v", errs)
+	if err := validateSignals(clean); err != nil {
+		t.Errorf("clean signal should pass: %v", err)
 	}
 }
 
@@ -45,8 +45,8 @@ func TestValidateDifferentialException(t *testing.T) {
 		{Context: Context{Kind: "pin", ID: "ck"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}, Diff: "pos"},
 		{Context: Context{Kind: "pin", ID: "ck_n"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}, Diff: "neg"},
 	}}}
-	if errs := validateSignals(sigs, nil); len(errs) != 0 {
-		t.Errorf("differential pair should be allowed: %v", errs)
+	if err := validateSignals(sigs); err != nil {
+		t.Errorf("differential pair should be allowed: %v", err)
 	}
 }
 
@@ -56,8 +56,8 @@ func TestValidateMultiElementException(t *testing.T) {
 		{Context: Context{Kind: "pin", ID: "dq0"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}, Element: "dr_data_i.dqi(0)"},
 		{Context: Context{Kind: "pin", ID: "dq1"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}, Element: "dr_data_i.dqi(1)"},
 	}}}
-	if errs := validateSignals(sigs, nil); len(errs) != 0 {
-		t.Errorf("distinct-element pins should be allowed: %v", errs)
+	if err := validateSignals(sigs); err != nil {
+		t.Errorf("distinct-element pins should be allowed: %v", err)
 	}
 }
 
@@ -67,15 +67,8 @@ func TestValidateMultiDriverStillErrors(t *testing.T) {
 		{Context: Context{Kind: "device", ID: "a"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}},
 		{Context: Context{Kind: "device", ID: "b"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}},
 	}}}
-	errs := validateSignals(sigs, nil)
-	found := false
-	for _, e := range errs {
-		if strings.Contains(e.Error(), "driven by multiple ports") {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("two device drivers should error; got %v", errs)
+	if err := validateSignals(sigs); !errors.Is(err, ErrMultiDriver) {
+		t.Errorf("two device drivers should error; got %v", err)
 	}
 }
 
@@ -85,15 +78,8 @@ func TestValidateSameElementTwiceErrors(t *testing.T) {
 		{Context: Context{Kind: "pin", ID: "a"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}, Element: "bus.x(0)"},
 		{Context: Context{Kind: "pin", ID: "b"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}, Element: "bus.x(0)"},
 	}}}
-	errs := validateSignals(sigs, nil)
-	found := false
-	for _, e := range errs {
-		if strings.Contains(e.Error(), "driven by multiple ports") {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("two pins on the same element should error; got %v", errs)
+	if err := validateSignals(sigs); !errors.Is(err, ErrMultiDriver) {
+		t.Errorf("two pins on the same element should error; got %v", err)
 	}
 }
 
@@ -103,7 +89,7 @@ func TestValidateDifferentialBothPosErrors(t *testing.T) {
 		{Context: Context{Kind: "pin", ID: "a"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}, Diff: "pos"},
 		{Context: Context{Kind: "pin", ID: "b"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}, Diff: "pos"},
 	}}}
-	if errs := validateSignals(sigs, nil); len(errs) == 0 {
+	if err := validateSignals(sigs); !errors.Is(err, ErrMultiDriver) {
 		t.Error("two pos-diff pins (no neg) should error")
 	}
 }
@@ -114,7 +100,23 @@ func TestValidateMixedDeviceAndPinErrors(t *testing.T) {
 		{Context: Context{Kind: "device", ID: "d"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}},
 		{Context: Context{Kind: "pin", ID: "p"}, Dir: "out", Type: &ResolvedType{Mark: "std_logic"}, Element: "s.x(0)"},
 	}}}
-	if errs := validateSignals(sigs, nil); len(errs) == 0 {
+	if err := validateSignals(sigs); !errors.Is(err, ErrMultiDriver) {
 		t.Error("mixed device+pin drivers should error")
+	}
+}
+
+// TestErrorMessages is a smoke test for the .Error() rendering of each typed error.
+func TestErrorMessages(t *testing.T) {
+	re := &ResolveError{Kind: ErrEntityNotFound, Ctx: `class "spi"`, Name: "spidb"}
+	if got := re.Error(); got != `class "spi": unable to map to entity "spidb"` {
+		t.Errorf("ResolveError.Error() = %q", got)
+	}
+	se := &SignalError{Kind: ErrUndrivenSignal, Signal: "clk", Detail: "d0.clk"}
+	if got := se.Error(); got != `nothing drives signal "clk" used by d0.clk` {
+		t.Errorf("SignalError.Error() = %q", got)
+	}
+	ae := &AddrError{Kind: ErrBadRegion, Device: "flash", Base: 0xb0000000}
+	if got := ae.Error(); got != `device "flash" base address 0xb0000000 is invalid: bits 31-28 must be 0xA` {
+		t.Errorf("AddrError.Error() = %q", got)
 	}
 }

@@ -1,8 +1,10 @@
 package elaborate
 
 import (
-	"strings"
+	"errors"
 	"testing"
+
+	"github.com/j-core/jcore-soc/tools/socgen/internal/errutil"
 )
 
 func u64(v uint64) *uint64 { return &v }
@@ -19,19 +21,21 @@ func TestValidateBaseAddr(t *testing.T) {
 			{Name: "nomap", Class: "c"},                                // BaseAddr nil -> ignored
 		},
 	}
-	errs := validateAddresses(res, nil)
-	joined := ""
-	for _, e := range errs {
-		joined += e.Error() + "\n"
+	err := validateAddresses(res)
+	if !addrErrFor(err, "badregion", ErrBadRegion) {
+		t.Errorf("expected 0xA region error for badregion; got: %v", err)
 	}
-	if !strings.Contains(joined, `device "badregion"`) || !strings.Contains(joined, "bits 31-28 must be 0xA") {
-		t.Errorf("expected 0xA region error for badregion; got:\n%s", joined)
+	if !addrErrFor(err, "overspec", ErrOverSpec) {
+		t.Errorf("expected over-specification error for overspec; got: %v", err)
 	}
-	if !strings.Contains(joined, `device "overspec"`) || !strings.Contains(joined, "internal address range") {
-		t.Errorf("expected over-specification error for overspec; got:\n%s", joined)
-	}
-	if strings.Contains(joined, `device "good"`) || strings.Contains(joined, `device "nomap"`) {
-		t.Errorf("good/nomap must produce no error; got:\n%s", joined)
+	// good/nomap must produce no base-address error (region or over-spec). A
+	// good/overspec range overlap is a separate, legitimate error and is ignored.
+	for _, e := range errutil.Errors(err) {
+		var ae *AddrError
+		if errors.As(e, &ae) && (ae.Device == "good" || ae.Device == "nomap") &&
+			(errors.Is(ae, ErrBadRegion) || errors.Is(ae, ErrOverSpec)) {
+			t.Errorf("good/nomap must produce no base-address error; got: %v", e)
+		}
 	}
 }
 
@@ -42,18 +46,9 @@ func TestValidateBaseAddrBothChecksAppend(t *testing.T) {
 		Classes: map[string]*ResolvedClass{"c": {Name: "c", LeftAddrBit: 5}},
 		Devices: []*ResolvedDevice{{Name: "bad", Class: "c", BaseAddr: u64(0xb0000001)}},
 	}
-	errs := validateAddresses(res, nil)
-	region, overspec := false, false
-	for _, e := range errs {
-		if strings.Contains(e.Error(), "bits 31-28 must be 0xA") {
-			region = true
-		}
-		if strings.Contains(e.Error(), "internal address range") {
-			overspec = true
-		}
-	}
-	if !region || !overspec {
-		t.Errorf("expected BOTH region and over-spec errors; region=%v overspec=%v errs=%v", region, overspec, errs)
+	err := validateAddresses(res)
+	if !errors.Is(err, ErrBadRegion) || !errors.Is(err, ErrOverSpec) {
+		t.Errorf("expected BOTH region and over-spec errors; err=%v", err)
 	}
 }
 
@@ -65,15 +60,17 @@ func TestValidateAddrOverlap(t *testing.T) {
 			{Name: "b", Class: "c", BaseAddr: u64(0xabcd0080)}, // overlaps a
 		},
 	}
-	errs := validateAddresses(res, nil)
+	err := validateAddresses(res)
 	count := 0
-	for _, e := range errs {
-		if strings.Contains(e.Error(), "memory regions overlap") && strings.Contains(e.Error(), `"a"`) && strings.Contains(e.Error(), `"b"`) {
+	for _, e := range errutil.Errors(err) {
+		var ae *AddrError
+		if errors.As(e, &ae) && errors.Is(ae, ErrAddrOverlap) &&
+			((ae.Device == "a" && ae.Other == "b") || (ae.Device == "b" && ae.Other == "a")) {
 			count++
 		}
 	}
 	if count != 1 {
-		t.Errorf("expected exactly one a/b overlap error, got %d; errs: %v", count, errs)
+		t.Errorf("expected exactly one a/b overlap error, got %d; err: %v", count, err)
 	}
 }
 
@@ -83,15 +80,17 @@ func TestValidateAddrOverlapReserved(t *testing.T) {
 		Classes: map[string]*ResolvedClass{"c": {Name: "c", LeftAddrBit: 7}},
 		Devices: []*ResolvedDevice{{Name: "clash", Class: "c", BaseAddr: u64(0xabcd0600)}},
 	}
-	errs := validateAddresses(res, nil)
+	err := validateAddresses(res)
 	found := false
-	for _, e := range errs {
-		if strings.Contains(e.Error(), "memory regions overlap") && strings.Contains(e.Error(), "cpumreg") {
+	for _, e := range errutil.Errors(err) {
+		var ae *AddrError
+		if errors.As(e, &ae) && errors.Is(ae, ErrAddrOverlap) &&
+			(ae.Device == "cpumreg" || ae.Other == "cpumreg") {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("expected clash-vs-cpumreg overlap error; got %v", errs)
+		t.Errorf("expected clash-vs-cpumreg overlap error; got %v", err)
 	}
 }
 
@@ -106,9 +105,18 @@ func TestValidateAddrNoOverlap(t *testing.T) {
 			{Name: "b", Class: "c", BaseAddr: u64(0xabcd0040)},
 		},
 	}
-	for _, e := range validateAddresses(res, nil) {
-		if strings.Contains(e.Error(), "overlap") {
-			t.Errorf("unexpected overlap error: %v", e)
+	if err := validateAddresses(res); errors.Is(err, ErrAddrOverlap) {
+		t.Errorf("unexpected overlap error: %v", err)
+	}
+}
+
+// addrErrFor reports whether err carries an AddrError of kind for the named device.
+func addrErrFor(err error, device string, kind error) bool {
+	for _, e := range errutil.Errors(err) {
+		var ae *AddrError
+		if errors.As(e, &ae) && errors.Is(ae, kind) && ae.Device == device {
+			return true
 		}
 	}
+	return false
 }

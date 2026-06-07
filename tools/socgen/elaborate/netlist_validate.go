@@ -1,14 +1,15 @@
 package elaborate
 
 import (
-	"fmt"
+	"errors"
 	"sort"
 	"strings"
 )
 
 // validateSignals checks each global signal for type consistency, a single
 // driver, and that consumed signals are driven. Best-effort; appends errors.
-func validateSignals(sigs map[string]*Signal, errs []error) []error {
+func validateSignals(sigs map[string]*Signal) error {
+	var errs []error
 	names := make([]string, 0, len(sigs))
 	for n := range sigs {
 		names = append(names, n)
@@ -22,7 +23,7 @@ func validateSignals(sigs map[string]*Signal, errs []error) []error {
 			types[p.Type.String()] = true
 		}
 		if len(types) > 1 {
-			errs = append(errs, fmt.Errorf("type mismatch for signal %q: %s", n, strings.Join(sortedKeys(types), " vs ")))
+			errs = append(errs, &SignalError{Kind: ErrTypeMismatch, Signal: n, Detail: strings.Join(sortedKeys(types), " vs ")})
 		}
 		// single driver. A port drives if out/buffer/inout; it consumes if in/inout.
 		var drivers []*SignalPortRef
@@ -40,19 +41,19 @@ func validateSignals(sigs map[string]*Signal, errs []error) []error {
 			for i, d := range drivers {
 				driverNames[i] = d.Context.ID + "." + d.PortName
 			}
-			errs = append(errs, fmt.Errorf("signal %q is driven by multiple ports: %s", n, strings.Join(driverNames, " ")))
+			errs = append(errs, &SignalError{Kind: ErrMultiDriver, Signal: n, Detail: strings.Join(driverNames, " ")})
 		}
 		if len(drivers) == 0 && len(ins) > 0 {
-			errs = append(errs, fmt.Errorf("nothing drives signal %q used by %s", n, strings.Join(ins, " ")))
+			errs = append(errs, &SignalError{Kind: ErrUndrivenSignal, Signal: n, Detail: strings.Join(ins, " ")})
 		}
 	}
-	return errs
+	return errors.Join(errs...)
 }
 
 // isDriver reports whether a port direction drives its signal (a source).
 func isDriver(dir string) bool {
 	switch dir {
-	case "out", "buffer", "inout":
+	case dirOut, dirBuffer, dirInout:
 		return true
 	}
 	return false
@@ -61,7 +62,7 @@ func isDriver(dir string) bool {
 // isConsumer reports whether a port direction consumes its signal (a sink).
 func isConsumer(dir string) bool {
 	switch dir {
-	case "in", "inout":
+	case dirIn, dirInout:
 		return true
 	}
 	return false
@@ -72,7 +73,7 @@ func isConsumer(dir string) bool {
 // All drivers must be pin-context for either exception to apply.
 func multiDriverAllowed(drivers []*SignalPortRef) bool {
 	for _, d := range drivers {
-		if d.Context.Kind != "pin" {
+		if d.Context.Kind != ctxKindPin {
 			return false
 		}
 	}

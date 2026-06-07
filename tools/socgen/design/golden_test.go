@@ -26,9 +26,9 @@ func loadBoard(t *testing.T, board string) *Design {
 	if _, err := os.Stat(p); err != nil {
 		t.Skipf("%s not migrated yet", p)
 	}
-	d, errs := Load(p)
-	if len(errs) != 0 {
-		t.Fatalf("Load(%s) errors: %v", p, errs)
+	d, err := Load(p)
+	if err != nil {
+		t.Fatalf("Load(%s) errors: %v", p, err)
 	}
 	return d
 }

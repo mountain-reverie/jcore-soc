@@ -1,14 +1,15 @@
 package iface
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/j-core/jcore-soc/tools/socgen/vhdl"
 )
 
 // Extract builds the interface model from parsed design files. It never panics;
-// problems (duplicate names) are returned as errors alongside a best-effort Library.
-func Extract(files []*vhdl.DesignFile) (*Library, []error) {
+// problems (duplicate names) are returned as a joined error alongside a
+// best-effort Library.
+func Extract(files []*vhdl.DesignFile) (*Library, error) {
 	lib := &Library{
 		Entities:       map[string]*Entity{},
 		Packages:       map[string]*Package{},
@@ -21,30 +22,31 @@ func Extract(files []*vhdl.DesignFile) (*Library, []error) {
 		for _, u := range df.Units {
 			switch n := u.(type) {
 			case *vhdl.EntityDecl:
-				errs = lib.addEntity(n, errs)
+				errs = append(errs, lib.addEntity(n))
 			case *vhdl.ArchitectureBody:
 				lib.addArchitecture(n)
 			case *vhdl.PackageDecl:
-				errs = lib.addPackage(n, errs)
+				errs = append(errs, lib.addPackage(n))
 			case *vhdl.ConfigurationDecl:
-				errs = lib.addConfiguration(n, errs)
+				errs = append(errs, lib.addConfiguration(n))
 			}
 		}
 	}
-	return lib, errs
+	return lib, errors.Join(errs...)
 }
 
-func (l *Library) addEntity(n *vhdl.EntityDecl, errs []error) []error {
+func (l *Library) addEntity(n *vhdl.EntityDecl) error {
 	key := lower(n.Name)
+	var err error
 	if _, dup := l.Entities[key]; dup {
-		errs = append(errs, dupErr("entity", n.Name))
+		err = &DuplicateError{Kind: ErrDuplicateDecl, Decl: "entity", Symbol: n.Name}
 	}
 	l.Entities[key] = &Entity{
 		Name:     n.Name,
 		Generics: toGenerics(n.Generics),
 		Ports:    toPorts(n.Ports),
 	}
-	return errs
+	return err
 }
 
 func (l *Library) addArchitecture(n *vhdl.ArchitectureBody) {
@@ -54,10 +56,11 @@ func (l *Library) addArchitecture(n *vhdl.ArchitectureBody) {
 	})
 }
 
-func (l *Library) addPackage(n *vhdl.PackageDecl, errs []error) []error {
+func (l *Library) addPackage(n *vhdl.PackageDecl) error {
 	key := lower(n.Name)
+	var errs []error
 	if _, dup := l.Packages[key]; dup {
-		errs = append(errs, dupErr("package", n.Name))
+		errs = append(errs, &DuplicateError{Kind: ErrDuplicateDecl, Decl: "package", Symbol: n.Name})
 	}
 	p := &Package{Name: n.Name}
 	for _, d := range n.Decls {
@@ -69,34 +72,35 @@ func (l *Library) addPackage(n *vhdl.PackageDecl, errs []error) []error {
 					Type:  TypeRef{Mark: dd.SubtypeMark, Constraint: dd.Constraint},
 					Value: dd.Default,
 				})
-				errs = l.addSymbol(cn, n.Name, "constant", dd, errs)
+				errs = append(errs, l.addSymbol(cn, n.Name, "constant", dd))
 			}
 		case *vhdl.TypeDecl:
 			p.Types = append(p.Types, &TypeEntry{Name: dd.Name, Node: dd})
-			errs = l.addSymbol(dd.Name, n.Name, "type", dd, errs)
+			errs = append(errs, l.addSymbol(dd.Name, n.Name, "type", dd))
 		case *vhdl.SubtypeDecl:
 			p.Types = append(p.Types, &TypeEntry{Name: dd.Name, Node: dd})
-			errs = l.addSymbol(dd.Name, n.Name, "subtype", dd, errs)
+			errs = append(errs, l.addSymbol(dd.Name, n.Name, "subtype", dd))
 		case *vhdl.ComponentDecl:
 			p.Components = append(p.Components, &Component{
 				Name:     dd.Name,
 				Generics: toGenerics(dd.Generics),
 				Ports:    toPorts(dd.Ports),
 			})
-			errs = l.addSymbol(dd.Name, n.Name, "component", dd, errs)
+			errs = append(errs, l.addSymbol(dd.Name, n.Name, "component", dd))
 		}
 	}
 	l.Packages[key] = p
-	return errs
+	return errors.Join(errs...)
 }
 
-func (l *Library) addSymbol(name, pkg, kind string, node vhdl.Node, errs []error) []error {
+func (l *Library) addSymbol(name, pkg, kind string, node vhdl.Node) error {
 	key := lower(name)
+	var err error
 	if prev, dup := l.index[key]; dup {
-		errs = append(errs, fmt.Errorf("duplicate symbol %q in package %s (also in %s)", name, pkg, prev.Package))
+		err = &DuplicateError{Kind: ErrDuplicateSymbol, Symbol: name, Pkg: pkg, AlsoIn: prev.Package}
 	}
 	l.index[key] = Symbol{Package: pkg, Kind: kind, Node: node}
-	return errs
+	return err
 }
 
 func toPorts(ids []*vhdl.InterfaceDecl) []*Port {
@@ -113,17 +117,18 @@ func toPorts(ids []*vhdl.InterfaceDecl) []*Port {
 	return out
 }
 
-func (l *Library) addConfiguration(n *vhdl.ConfigurationDecl, errs []error) []error {
+func (l *Library) addConfiguration(n *vhdl.ConfigurationDecl) error {
 	key := lower(n.Name)
+	var err error
 	if _, dup := l.Configurations[key]; dup {
-		errs = append(errs, dupErr("configuration", n.Name))
+		err = &DuplicateError{Kind: ErrDuplicateDecl, Decl: "configuration", Symbol: n.Name}
 	}
 	arch := ""
 	if n.Block != nil {
 		arch = n.Block.Spec
 	}
 	l.Configurations[key] = &Configuration{Name: n.Name, Entity: n.Entity, Arch: arch, Node: n}
-	return errs
+	return err
 }
 
 func toGenerics(ids []*vhdl.InterfaceDecl) []*Generic {

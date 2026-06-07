@@ -60,14 +60,14 @@ func (r *IRQRef) UnmarshalYAML(n *yaml.Node) error {
 	if n.Kind == yaml.MappingNode {
 		m := map[string]*IRQEntry{}
 		if err := n.Decode(&m); err != nil {
-			return fmt.Errorf("line %d: invalid irq map: %w", n.Line, err)
+			return &SpecError{Line: n.Line, Msg: "invalid irq map", Err: err}
 		}
 		r.Named = m
 		return nil
 	}
 	i, err := strconv.Atoi(n.Value)
 	if err != nil {
-		return fmt.Errorf("line %d: invalid irq %q: %w", n.Line, n.Value, err)
+		return &SpecError{Line: n.Line, Msg: fmt.Sprintf("invalid irq %q", n.Value), Err: err}
 	}
 	r.Int = &i
 	return nil
@@ -106,7 +106,7 @@ type Hex uint64
 func (h *Hex) UnmarshalYAML(n *yaml.Node) error {
 	u, err := strconv.ParseUint(n.Value, 0, 64) // base 0 -> auto 0x/decimal
 	if err != nil {
-		return fmt.Errorf("line %d: invalid address %q: %w", n.Line, n.Value, err)
+		return &SpecError{Line: n.Line, Msg: fmt.Sprintf("invalid address %q", n.Value), Err: err}
 	}
 	*h = Hex(u)
 	return nil
@@ -140,13 +140,13 @@ func (v *Value) UnmarshalYAML(n *yaml.Node) error {
 	if n.Kind == yaml.MappingNode {
 		m := map[string]any{}
 		if err := n.Decode(&m); err != nil {
-			return fmt.Errorf("line %d: %w", n.Line, err)
+			return &SpecError{Line: n.Line, Msg: "invalid value map", Err: err}
 		}
 		v.Kind, v.Map = KindMap, m
 		return nil
 	}
 	if n.Kind != yaml.ScalarNode {
-		return fmt.Errorf("line %d: unsupported generic/port value kind %v", n.Line, n.Kind)
+		return &SpecError{Line: n.Line, Msg: fmt.Sprintf("unsupported generic/port value kind %v", n.Kind)}
 	}
 	switch n.Tag {
 	case "!str":
@@ -154,19 +154,19 @@ func (v *Value) UnmarshalYAML(n *yaml.Node) error {
 	case "!!int":
 		i, err := strconv.ParseInt(n.Value, 0, 64)
 		if err != nil {
-			return fmt.Errorf("line %d: invalid int %q: %w", n.Line, n.Value, err)
+			return &SpecError{Line: n.Line, Msg: fmt.Sprintf("invalid int %q", n.Value), Err: err}
 		}
 		v.Kind, v.Int = KindInt, i
 	case "!!float":
 		f, err := strconv.ParseFloat(n.Value, 64)
 		if err != nil {
-			return fmt.Errorf("line %d: invalid float %q: %w", n.Line, n.Value, err)
+			return &SpecError{Line: n.Line, Msg: fmt.Sprintf("invalid float %q", n.Value), Err: err}
 		}
 		v.Kind, v.Float = KindFloat, f
 	case "!!bool":
 		b, err := strconv.ParseBool(n.Value)
 		if err != nil {
-			return fmt.Errorf("line %d: invalid bool %q: %w", n.Line, n.Value, err)
+			return &SpecError{Line: n.Line, Msg: fmt.Sprintf("invalid bool %q", n.Value), Err: err}
 		}
 		v.Kind, v.Bool = KindBool, b
 	default: // "!!str" and any other plain scalar -> verbatim VHDL

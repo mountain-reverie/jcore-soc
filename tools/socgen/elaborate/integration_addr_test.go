@@ -1,8 +1,8 @@
 package elaborate
 
 import (
+	"errors"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/j-core/jcore-soc/tools/socgen/board"
@@ -19,13 +19,8 @@ func TestElaborateAddrMimasV2(t *testing.T) {
 	if b.Design == nil || b.Library == nil {
 		t.Skip("board.Load incomplete")
 	}
-	_, errs := Elaborate(b)
-	for _, e := range errs {
-		m := e.Error()
-		if strings.Contains(m, "bits 31-28 must be 0xA") ||
-			strings.Contains(m, "internal address range") ||
-			strings.Contains(m, "memory regions overlap") {
-			t.Errorf("unexpected address-validation error on mimas_v2: %v", e)
-		}
+	_, err := Elaborate(b)
+	if errors.Is(err, ErrBadRegion) || errors.Is(err, ErrOverSpec) || errors.Is(err, ErrAddrOverlap) {
+		t.Errorf("unexpected address-validation error on mimas_v2: %v", err)
 	}
 }

@@ -1,18 +1,20 @@
 package iface
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/j-core/jcore-soc/tools/socgen/internal/errutil"
 	"github.com/j-core/jcore-soc/tools/socgen/vhdl"
 )
 
 func parse(t *testing.T, src string) *vhdl.DesignFile {
 	t.Helper()
-	df, errs := vhdl.ParseFile(vhdl.NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
-		t.Fatalf("parse errors: %v", errs)
+	df, err := vhdl.ParseFile(vhdl.NewFileSet(), "t.vhd", []byte(src))
+	if err != nil {
+		t.Fatalf("parse errors: %v", err)
 	}
 	return df
 }
@@ -23,9 +25,9 @@ func TestExtractEntity(t *testing.T) {
   port (clk, rst : in std_logic;
         data : out std_logic_vector(15 downto 0));
 end entity;`)
-	lib, errs := Extract([]*vhdl.DesignFile{df})
-	if len(errs) != 0 {
-		t.Fatalf("extract errors: %v", errs)
+	lib, err := Extract([]*vhdl.DesignFile{df})
+	if err != nil {
+		t.Fatalf("extract errors: %v", err)
 	}
 	e, ok := lib.Entity("uart")
 	if !ok {
@@ -60,9 +62,9 @@ end entity;`)
 
 func TestExtractArchitecture(t *testing.T) {
 	df := parse(t, `architecture rtl of uart is begin end architecture;`)
-	lib, errs := Extract([]*vhdl.DesignFile{df})
-	if len(errs) != 0 {
-		t.Fatalf("extract errors: %v", errs)
+	lib, err := Extract([]*vhdl.DesignFile{df})
+	if err != nil {
+		t.Fatalf("extract errors: %v", err)
 	}
 	archs := lib.ArchitecturesOf("uart")
 	if len(archs) != 1 {
@@ -84,9 +86,9 @@ func TestExtractPackage(t *testing.T) {
     port (clk : in std_logic; full : out std_logic);
   end component;
 end package;`)
-	lib, errs := Extract([]*vhdl.DesignFile{df})
-	if len(errs) != 0 {
-		t.Fatalf("extract errors: %v", errs)
+	lib, err := Extract([]*vhdl.DesignFile{df})
+	if err != nil {
+		t.Fatalf("extract errors: %v", err)
 	}
 	p, ok := lib.Package("bus_pkg")
 	if !ok {
@@ -123,9 +125,9 @@ func TestExtractConfiguration(t *testing.T) {
   for rtl
   end for;
 end configuration;`)
-	lib, errs := Extract([]*vhdl.DesignFile{df})
-	if len(errs) != 0 {
-		t.Fatalf("extract errors: %v", errs)
+	lib, err := Extract([]*vhdl.DesignFile{df})
+	if err != nil {
+		t.Fatalf("extract errors: %v", err)
 	}
 	c, ok := lib.Configuration("cfg")
 	if !ok {
@@ -139,16 +141,24 @@ end configuration;`)
 func TestExtractDuplicateEntity(t *testing.T) {
 	a := parse(t, `entity dup is end entity;`)
 	b := parse(t, `entity dup is end entity;`)
-	_, errs := Extract([]*vhdl.DesignFile{a, b})
-	if len(errs) == 0 {
-		t.Fatal("expected a duplicate-entity error")
+	_, err := Extract([]*vhdl.DesignFile{a, b})
+	if !errors.Is(err, ErrDuplicateDecl) {
+		t.Fatalf("expected ErrDuplicateDecl, got %v", err)
+	}
+	var de *DuplicateError
+	if !errors.As(err, &de) || de.Decl != "entity" || de.Symbol != "dup" {
+		t.Fatalf("DuplicateError = %+v", de)
+	}
+	// message-format smoke: the one preserved string assertion for this package.
+	if de.Error() != "duplicate entity declaration: dup" {
+		t.Errorf("Error() = %q", de.Error())
 	}
 }
 
 func TestExtractEmpty(t *testing.T) {
-	lib, errs := Extract(nil)
-	if lib == nil || len(errs) != 0 {
-		t.Fatalf("empty input: lib=%v errs=%v", lib, errs)
+	lib, err := Extract(nil)
+	if lib == nil || err != nil {
+		t.Fatalf("empty input: lib=%v err=%v", lib, err)
 	}
 	if _, ok := lib.Entity("nope"); ok {
 		t.Error("empty lib should have no entities")
@@ -193,20 +203,20 @@ func TestExtractCorpusSmoke(t *testing.T) {
 		"components/cpu/cpu2j0_pkg.vhd",
 		"components/uartlite/uartlitedb.vhd",
 	}
-	var files []*vhdl.DesignFile
+	files := make([]*vhdl.DesignFile, 0, len(rels))
 	for _, rel := range rels {
 		src, err := os.ReadFile(filepath.Join(root, rel))
 		if err != nil {
 			t.Skipf("corpus file missing: %s", rel)
 		}
-		df, errs := vhdl.ParseFile(vhdl.NewFileSet(), rel, src)
-		if len(errs) != 0 {
-			t.Skipf("parse %s: %v", rel, errs)
+		df, perr := vhdl.ParseFile(vhdl.NewFileSet(), rel, src)
+		if perr != nil {
+			t.Skipf("parse %s: %v", rel, perr)
 		}
 		files = append(files, df)
 	}
-	lib, errs := Extract(files)
-	for _, e := range errs {
+	lib, err := Extract(files)
+	for _, e := range errutil.Errors(err) {
 		t.Logf("extract note: %v", e)
 	}
 	if len(lib.Packages) == 0 {
@@ -224,26 +234,42 @@ func TestExtractCorpusSmoke(t *testing.T) {
 func TestExtractDuplicatePackage(t *testing.T) {
 	a := parse(t, `package dup is end package;`)
 	b := parse(t, `package dup is end package;`)
-	_, errs := Extract([]*vhdl.DesignFile{a, b})
-	if len(errs) == 0 {
-		t.Fatal("expected a duplicate-package error")
+	_, err := Extract([]*vhdl.DesignFile{a, b})
+	if !errors.Is(err, ErrDuplicateDecl) {
+		t.Fatalf("expected ErrDuplicateDecl, got %v", err)
+	}
+	var de *DuplicateError
+	if !errors.As(err, &de) || de.Decl != "package" || de.Symbol != "dup" {
+		t.Fatalf("DuplicateError = %+v", de)
 	}
 }
 
 func TestExtractDuplicateConfiguration(t *testing.T) {
 	a := parse(t, `configuration c of e is for rtl end for; end configuration;`)
 	b := parse(t, `configuration c of e is for rtl end for; end configuration;`)
-	_, errs := Extract([]*vhdl.DesignFile{a, b})
-	if len(errs) == 0 {
-		t.Fatal("expected a duplicate-configuration error")
+	_, err := Extract([]*vhdl.DesignFile{a, b})
+	if !errors.Is(err, ErrDuplicateDecl) {
+		t.Fatalf("expected ErrDuplicateDecl, got %v", err)
+	}
+	var de *DuplicateError
+	if !errors.As(err, &de) || de.Decl != "configuration" || de.Symbol != "c" {
+		t.Fatalf("DuplicateError = %+v", de)
 	}
 }
 
 func TestExtractDuplicateSymbol(t *testing.T) {
 	a := parse(t, `package p1 is constant SYM_COMMON : integer := 1; end package;`)
 	b := parse(t, `package p2 is constant SYM_COMMON : integer := 2; end package;`)
-	_, errs := Extract([]*vhdl.DesignFile{a, b})
-	if len(errs) == 0 {
-		t.Fatal("expected a duplicate-symbol error (SYM_COMMON in p1 and p2)")
+	_, err := Extract([]*vhdl.DesignFile{a, b})
+	if !errors.Is(err, ErrDuplicateSymbol) {
+		t.Fatalf("expected ErrDuplicateSymbol, got %v", err)
+	}
+	var de *DuplicateError
+	if !errors.As(err, &de) || de.Symbol != "SYM_COMMON" || de.Pkg != "p2" || de.AlsoIn != "p1" {
+		t.Fatalf("DuplicateError = %+v", de)
+	}
+	// message smoke for the ErrDuplicateSymbol branch of Error()
+	if got := de.Error(); got != `duplicate symbol "SYM_COMMON" in package p2 (also in p1)` {
+		t.Errorf("Error() = %q", got)
 	}
 }

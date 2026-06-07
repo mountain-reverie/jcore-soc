@@ -149,17 +149,17 @@ func splitSignal(ref string) (base, element string) {
 func bareSignalDir(sigs map[string]*Signal, base string) string {
 	s := sigs[base]
 	if s == nil {
-		return "out"
+		return dirOut
 	}
 	for _, p := range s.Ports {
-		if p.Context.Kind == "pin" {
+		if p.Context.Kind == ctxKindPin {
 			continue
 		}
 		if isDriver(p.Dir) {
-			return "in"
+			return dirIn
 		}
 	}
-	return "out"
+	return dirOut
 }
 
 // resolvePins folds the rules over each pin, joins the resulting legs into the
@@ -170,7 +170,7 @@ func resolvePins(d *design.Design, sigs map[string]*Signal) []*ResolvedPin {
 	if d == nil || d.Pins == nil {
 		return nil
 	}
-	var out []*ResolvedPin
+	out := make([]*ResolvedPin, 0, len(d.Pins.Pins))
 	for _, pin := range d.Pins.Pins {
 		f := foldRules(d.Pins.Rules, pin)
 		// Skip pins with no signal connection (matched only attr rules, or nothing):
@@ -191,17 +191,17 @@ func resolvePins(d *design.Design, sigs map[string]*Signal) []*ResolvedPin {
 		if f.inRef != "" {
 			base, elem := splitSignal(f.inRef)
 			rp.In = f.inRef
-			addPinPort(sigs, pin.Net, "in", base, elem, "out", "")
+			addPinPort(sigs, pin.Net, "in", base, elem, dirOut, "")
 		}
 		if f.outRef != "" {
 			base, elem := splitSignal(f.outRef)
 			rp.Out = f.outRef
-			addPinPort(sigs, pin.Net, "out", base, elem, "in", "")
+			addPinPort(sigs, pin.Net, "out", base, elem, dirIn, "")
 		}
 		if f.outEnRef != "" {
 			base, elem := splitSignal(f.outEnRef)
 			rp.OutEn = f.outEnRef
-			addPinPort(sigs, pin.Net, "out-en", base, elem, "in", "")
+			addPinPort(sigs, pin.Net, "out-en", base, elem, dirIn, "")
 		}
 		rp.BufferKind = bufferKind(f, bareDir)
 		out = append(out, rp)
@@ -220,7 +220,7 @@ func addPinPort(sigs map[string]*Signal, net, leg, base, element, dir, diff stri
 		sigs[base] = s
 	}
 	s.Ports = append(s.Ports, &SignalPortRef{
-		Context:  Context{Kind: "pin", ID: net},
+		Context:  Context{Kind: ctxKindPin, ID: net},
 		PortName: "pin." + net + "." + leg,
 		Dir:      dir,
 		Type:     s.Type,
@@ -242,11 +242,11 @@ func bufferKind(f folded, bareDir string) BufferKind {
 		// a bare single-ended (or differential) signal pin: input pad if it drives
 		// the net, output pad if it consumes it.
 		switch {
-		case f.signalDiff != "" && bareDir == "out":
+		case f.signalDiff != "" && bareDir == dirOut:
 			return BufIBUFDS
 		case f.signalDiff != "":
 			return BufOBUFDS
-		case bareDir == "out":
+		case bareDir == dirOut:
 			return BufIBUF
 		default:
 			return BufOBUF

@@ -1,7 +1,6 @@
 package iface
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/j-core/jcore-soc/tools/socgen/vhdl"
@@ -119,5 +118,3 @@ func (l *Library) Configuration(name string) (*Configuration, bool) {
 }
 
 func lower(s string) string { return strings.ToLower(s) }
-
-func dupErr(kind, name string) error { return fmt.Errorf("duplicate %s declaration: %s", kind, name) }
