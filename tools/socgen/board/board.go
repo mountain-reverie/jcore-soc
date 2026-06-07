@@ -83,7 +83,10 @@ func Files(root, name string) ([]string, error) {
 
 // Load loads the board's YAML spec, builds the interface Library from its full
 // VHDL file set (via make), and validates the spec against it. Returns a
-// best-effort Board plus all collected errors (load + parse + validation).
+// best-effort Board plus all collected errors (load + parse + validation). If the
+// file-list step (Files) fails, the returned Board has a nil Library (nothing can
+// be parsed without the file list); callers must guard on the error before using
+// b.Library.
 func Load(root, name string) (*Board, error) {
 	files, err := Files(root, name)
 	if err != nil {
