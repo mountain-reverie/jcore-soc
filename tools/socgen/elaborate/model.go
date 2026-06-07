@@ -32,6 +32,7 @@ type Resolution struct {
 	TopEntities     map[string]*ResolvedEntity // by top-entity name (P4d)
 	PadringEntities map[string]*ResolvedEntity // by padring-entity name (P4d)
 	Signals         map[string]*Signal         // global net-list, populated by Elaborate
+	Pins            []*ResolvedPin             // resolved pins (P4d-ii)
 }
 
 type ResolvedClass struct {
@@ -73,6 +74,33 @@ type ResolvedEntity struct {
 	Ports    []*ResolvedPort
 }
 
+// BufferKind is the semantic I/O buffer a pin needs; emit (P5) instantiates it.
+type BufferKind int
+
+const (
+	BufDirect BufferKind = iota // buff:false — direct wire, no buffer
+	BufIBUF
+	BufOBUF
+	BufOBUFT
+	BufIOBUF
+	BufIBUFDS
+	BufOBUFDS
+)
+
+// ResolvedPin is a board pin resolved to its signal refs, buffer kind, and attrs.
+// The actual buffer/constraint VHDL is emitted in P5. BufferKind==BufDirect is the
+// single source of truth for "no I/O buffer" (a buff:false rule).
+type ResolvedPin struct {
+	Net, Pad   string
+	Signal     string // bare-signal ref ("" if in/out/out-en used)
+	In         string
+	Out        string
+	OutEn      string
+	Diff       string
+	BufferKind BufferKind
+	Attrs      map[string]design.Value
+}
+
 // Signal is a global net that one or more ports (device, top/padring, or a
 // synthetic driver) are connected to.
 type Signal struct {
@@ -84,15 +112,17 @@ type Signal struct {
 // SignalPortRef is a reference from a signal to one of its participating ports
 // (device, top-entity, padring-entity, or synthetic driver).
 type SignalPortRef struct {
-	Context  Context
-	PortName string
-	Dir      string
-	Type     *ResolvedType
+	Context   Context
+	PortName  string
+	Dir       string
+	Type      *ResolvedType
+	Element   string // the full element ref (e.g. "dr_data_o.dqo(0)") iff a pin targets a bus/record element; "" if whole-signal
+	Diff      string // "pos"|"neg"|"" for differential pin pairs
 }
 
 // Context identifies the source of a SignalPortRef (device instance, top/padring
 // entity, or synthetic driver).
 type Context struct {
-	Kind string // "device" | "zero" | "top" | "padring"
+	Kind string // "device" | "zero" | "top" | "padring" | "pin"
 	ID   string
 }

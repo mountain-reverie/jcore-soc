@@ -43,15 +43,19 @@ func Elaborate(b *board.Board) (*Resolution, []error) {
 	}
 	res.TopEntities, errs = resolveEntities("top", b.Design.TopEntities, b.Library, merge, errs)
 	res.PadringEntities, errs = resolveEntities("padring", b.Design.PadringEntities, b.Library, merge, errs)
-	res.Signals, errs = gatherSignals(res, b.Design.ZeroSignals, errs)
+	res.Signals, errs = gatherSignals(res, errs)
+	// Pins resolve AFTER gather (bare-signal direction reads existing drivers) and
+	// BEFORE zero-signals (so a pin-driven signal isn't given a synthetic driver).
+	res.Pins = resolvePins(b.Design, res.Signals)
+	applyZeroSignals(res.Signals, b.Design.ZeroSignals)
 	errs = validateSignals(res.Signals, errs)
 	return res, errs
 }
 
 // gatherSignals groups KindSignal ports (across devices, top entities and padring
-// entities) by global-signal name, then adds synthetic zero-signal drivers for
-// any undriven listed signal.
-func gatherSignals(res *Resolution, zero []string, errs []error) (map[string]*Signal, []error) {
+// entities) by global-signal name. Pins and zero-signals are joined afterwards by
+// Elaborate (order matters — see Elaborate).
+func gatherSignals(res *Resolution, errs []error) (map[string]*Signal, []error) {
 	sigs := map[string]*Signal{}
 	for _, dev := range res.Devices {
 		addPortsToSignals(sigs, Context{Kind: "device", ID: dev.Name}, dev.Ports)
@@ -62,11 +66,16 @@ func gatherSignals(res *Resolution, zero []string, errs []error) (map[string]*Si
 	for _, name := range sortedEntityNames(res.PadringEntities) {
 		addPortsToSignals(sigs, Context{Kind: "padring", ID: name}, res.PadringEntities[name].Ports)
 	}
-	// zero-signals: add a synthetic :out driver to an undriven listed signal
+	return sigs, errs
+}
+
+// applyZeroSignals adds a synthetic :out driver to each listed signal that exists
+// but is undriven. No-op for names not present in the net-list.
+func applyZeroSignals(sigs map[string]*Signal, zero []string) {
 	for _, z := range zero {
 		s := sigs[z]
 		if s == nil {
-			continue // a zero-signal that no port references — nothing to drive
+			continue
 		}
 		driven := false
 		for _, pr := range s.Ports {
@@ -84,7 +93,6 @@ func gatherSignals(res *Resolution, zero []string, errs []error) (map[string]*Si
 			})
 		}
 	}
-	return sigs, errs
 }
 
 // addPortsToSignals records each KindSignal port under its global-signal name.

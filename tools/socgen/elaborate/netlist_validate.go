@@ -25,25 +25,77 @@ func validateSignals(sigs map[string]*Signal, errs []error) []error {
 			errs = append(errs, fmt.Errorf("type mismatch for signal %q: %s", n, strings.Join(sortedKeys(types), " vs ")))
 		}
 		// single driver. A port drives if out/buffer/inout; it consumes if in/inout.
-		var outs, ins []string
+		var drivers []*SignalPortRef
+		var ins []string
 		for _, p := range s.Ports {
-			switch p.Dir {
-			case "out", "buffer", "inout":
-				outs = append(outs, p.Context.ID+"."+p.PortName)
+			if isDriver(p.Dir) {
+				drivers = append(drivers, p)
 			}
-			switch p.Dir {
-			case "in", "inout":
+			if isConsumer(p.Dir) {
 				ins = append(ins, p.Context.ID+"."+p.PortName)
 			}
 		}
-		if len(outs) > 1 {
-			errs = append(errs, fmt.Errorf("signal %q is driven by multiple ports: %s", n, strings.Join(outs, " ")))
+		if len(drivers) > 1 && !multiDriverAllowed(drivers) {
+			driverNames := make([]string, len(drivers))
+			for i, d := range drivers {
+				driverNames[i] = d.Context.ID + "." + d.PortName
+			}
+			errs = append(errs, fmt.Errorf("signal %q is driven by multiple ports: %s", n, strings.Join(driverNames, " ")))
 		}
-		if len(outs) == 0 && len(ins) > 0 {
+		if len(drivers) == 0 && len(ins) > 0 {
 			errs = append(errs, fmt.Errorf("nothing drives signal %q used by %s", n, strings.Join(ins, " ")))
 		}
 	}
 	return errs
+}
+
+// isDriver reports whether a port direction drives its signal (a source).
+func isDriver(dir string) bool {
+	switch dir {
+	case "out", "buffer", "inout":
+		return true
+	}
+	return false
+}
+
+// isConsumer reports whether a port direction consumes its signal (a sink).
+func isConsumer(dir string) bool {
+	switch dir {
+	case "in", "inout":
+		return true
+	}
+	return false
+}
+
+// multiDriverAllowed permits >1 driver in two pin-only cases: a differential
+// pos/neg pair (exactly two), or every driver targeting a distinct bus element.
+// All drivers must be pin-context for either exception to apply.
+func multiDriverAllowed(drivers []*SignalPortRef) bool {
+	for _, d := range drivers {
+		if d.Context.Kind != "pin" {
+			return false
+		}
+	}
+	// differential pair: exactly two, one pos and one neg (differential pins are
+	// whole-signal, so Element is expected to be "" and is not consulted here)
+	if len(drivers) == 2 {
+		diffs := map[string]bool{}
+		for _, d := range drivers {
+			diffs[d.Diff] = true
+		}
+		if diffs["pos"] && diffs["neg"] && len(diffs) == 2 {
+			return true
+		}
+	}
+	// distinct bus elements: every driver targets a different non-empty element
+	seen := map[string]bool{}
+	for _, d := range drivers {
+		if d.Element == "" || seen[d.Element] {
+			return false
+		}
+		seen[d.Element] = true
+	}
+	return true
 }
 
 func sortedKeys(m map[string]bool) []string {
