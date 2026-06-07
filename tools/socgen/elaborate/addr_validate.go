@@ -10,8 +10,11 @@ import (
 const maxLeftAddrBit = 62
 
 // validateAddresses performs the elaborate-phase cross-device address checks:
-// each memory-mapped device's base address is well-formed (Task 1), and no two
-// device ranges overlap (Task 2). Best-effort; appends errors; never panics.
+// each memory-mapped device's base address is well-formed (0xA region +
+// over-specification), and no two device/reserved ranges overlap. Best-effort:
+// unlike the Clojure soc_gen (which gates later checks behind `when-not error?`),
+// every independent check runs and ALL issues are surfaced in one pass; a device
+// may therefore yield more than one error. Appends errors; never panics.
 func validateAddresses(res *Resolution, errs []error) []error {
 	if res == nil {
 		return errs
@@ -79,6 +82,7 @@ func deviceSpan(dev *ResolvedDevice, rc *ResolvedClass) (lo, hi uint64, ok bool)
 
 // checkAddrOverlap reports every pair of overlapping address ranges among the
 // memory-mapped devices and the reserved regions. Deterministic (sorted) output.
+// Precondition: res != nil (validateAddresses, the only caller, guarantees it).
 func checkAddrOverlap(res *Resolution, errs []error) []error {
 	ranges := make([]addrRange, 0, len(res.Devices)+len(reservedRegions))
 	for _, dev := range res.Devices {

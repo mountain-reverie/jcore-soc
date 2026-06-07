@@ -15,7 +15,7 @@ func TestValidateBaseAddr(t *testing.T) {
 		Devices: []*ResolvedDevice{
 			{Name: "good", Class: "c", BaseAddr: u64(0xabcd0000)},      // valid
 			{Name: "badregion", Class: "c", BaseAddr: u64(0xb0000000)}, // bits 31-28 != 0xA
-			{Name: "overspec", Class: "c", BaseAddr: u64(0xabcd0001)},  // low 6 bits non-zero
+			{Name: "overspec", Class: "c", BaseAddr: u64(0xabcd0001)},  // bit 0 set (within the low 6 bits that must be zero)
 			{Name: "nomap", Class: "c"},                                // BaseAddr nil -> ignored
 		},
 	}
