@@ -158,7 +158,7 @@ func resolveRegs(class string, dc *design.DeviceClass) ([]*ResolvedReg, int, [2]
 	leftBit := required
 	if dc.LeftAddrBit > 0 {
 		if dc.LeftAddrBit < required {
-			errs = append(errs, &ResolveError{Kind: ErrLeftAddrBit, Ctx: ctx,
+			errs = append(errs, &ResolveError{Kind: ErrLeftAddrBitTooSmall, Ctx: ctx,
 				Detail: fmt.Sprintf("left-addr-bit %d too small for registers, must be at least %d", dc.LeftAddrBit, required)})
 		}
 		if dc.LeftAddrBit > required {

@@ -148,7 +148,7 @@ func TestResolveRegsLeftAddrTooSmall(t *testing.T) {
 		{Name: "a", Addr: iptr(0), Width: iptr(16)}, // needs left-addr-bit >= ceil(log2 16)-1 = 3
 	}}
 	_, err := resolveClass("c", dc, lib)
-	if !errors.Is(err, ErrLeftAddrBit) {
+	if !errors.Is(err, ErrLeftAddrBitTooSmall) {
 		t.Fatalf("want left-addr-bit-too-small error, got %v", err)
 	}
 }
