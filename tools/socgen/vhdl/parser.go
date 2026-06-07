@@ -426,8 +426,9 @@ func WithCPPInclude(dir string) Option {
 // ParseFile parses src (named filename) into a DesignFile. fset records source
 // positions; returned errors are rendered via fset.Position. A nil error means
 // a clean parse; otherwise the returned error joins one or more *ParseError
-// diagnostics (use errutil.Errors / errors.As to inspect). A C-preprocessor
-// failure returns a *CPPError.
+// diagnostics (use errutil.Errors / errors.As to inspect). The returned
+// *DesignFile is still non-nil when parse diagnostics are present (best-effort
+// recovery); only a C-preprocessor failure returns a nil tree with a *CPPError.
 func ParseFile(fset *FileSet, filename string, src []byte, opts ...Option) (*DesignFile, error) {
 	var cfg parseConfig
 	for _, o := range opts {

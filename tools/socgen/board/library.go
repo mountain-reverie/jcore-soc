@@ -26,7 +26,7 @@ func Library(files []string) (*iface.Library, []error) {
 		}
 		df, perr := vhdl.ParseFile(vhdl.NewFileSet(), f, src)
 		if perr != nil {
-			errs = append(errs, fmt.Errorf("parse %s: %v", f, perr))
+			errs = append(errs, fmt.Errorf("parse %s: %w", f, perr))
 			continue
 		}
 		dfs = append(dfs, df)

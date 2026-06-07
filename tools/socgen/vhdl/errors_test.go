@@ -2,6 +2,7 @@ package vhdl
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -16,9 +17,14 @@ func TestParseErrorMessageFormat(t *testing.T) {
 	if !errors.As(err, &pe) {
 		t.Fatalf("expected *ParseError, got %T: %v", err, err)
 	}
-	// Position renders as filename:line:col, followed by ": " and the message.
-	if got := pe.Error(); got != pe.Pos.String()+": "+pe.Msg {
-		t.Fatalf("ParseError.Error() = %q, want %q", got, pe.Pos.String()+": "+pe.Msg)
+	// Pin the actual rendered format: "<filename>:<line>:<col>: <message>". The bad
+	// attribute decl is on line 2, so the diagnostic must render with that prefix.
+	got := pe.Error()
+	if !strings.HasPrefix(got, "t.vhd:2:") {
+		t.Fatalf("ParseError.Error() = %q, want prefix %q", got, "t.vhd:2:")
+	}
+	if !strings.HasSuffix(got, ": "+pe.Msg) {
+		t.Fatalf("ParseError.Error() = %q, want it to end with %q", got, ": "+pe.Msg)
 	}
 	if pe.Pos.Filename != "t.vhd" {
 		t.Fatalf("expected filename t.vhd, got %q", pe.Pos.Filename)
