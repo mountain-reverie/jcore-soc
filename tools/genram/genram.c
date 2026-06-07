@@ -14,12 +14,19 @@
 #include <string.h>
 #include <malloc.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 #ifndef RAMSIZE
 #define RAMSIZE 32768 /* unit : byte */
 #endif
 #define MAXLINE 1000
 #define MAXWORD 100
+
+/* forward declarations (functions are defined below main) — required so modern
+   GCC (14+) does not treat the calls in main as implicit declarations (an error
+   by default since GCC 14). */
+char *SkipSpace(char *pStr);
+int ChkHex(char *str);
 
 
 /*=============*/
@@ -31,7 +38,7 @@ int main(int argc, char *argv[])
 	FILE	*ramFp;
 	char	memLine[MAXLINE];
 	char	hex[MAXWORD];
-	char	*pMemLine, *pHex, *SkipSpace();
+	char	*pMemLine, *pHex;
 	int	i, j, errStx, recType, numCode;
 	unsigned long ram[RAMSIZE];
 	unsigned long addr;
