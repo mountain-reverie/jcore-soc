@@ -46,6 +46,25 @@ type Resolution struct {
 	PadringEntities map[string]*ResolvedEntity // by padring-entity name (P4d)
 	Signals         map[string]*Signal         // global net-list, populated by Elaborate
 	Pins            []*ResolvedPin             // resolved pins (P4d-ii)
+	DataBus         *PeripheralBusModel        // P5b; nil if no data-bus devices
+}
+
+// PeripheralBusModel is the resolved data-bus master topology (P5b).
+type PeripheralBusModel struct {
+	MasterBus    string      // final master bus name (e.g. "cpu0" or "cpu01")
+	Connected    []string    // connected master bus names (sorted)
+	Disconnected []string    // disconnected master bus names (sorted) -> loopback
+	MuxStages    []*MuxStage // arbitration mux chain (empty for a single master)
+	DecodeMode   string      // "simple" | "exact"
+}
+
+// MuxStage is one multi-master arbitration mux instantiation.
+type MuxStage struct {
+	Label  string // instance label, e.g. "cpus_mux"
+	Entity string // mux entity, e.g. "multi_master_bus_mux"
+	In1    string // first master bus name
+	In2    string // second master bus name
+	Out    string // produced bus name, e.g. "cpu01"
 }
 
 type ResolvedClass struct {
