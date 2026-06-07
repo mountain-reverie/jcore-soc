@@ -24,9 +24,17 @@ type TypeRef struct {
 func (t TypeRef) String() string { return vhdl.SubtypeString(t.Mark, t.Constraint) }
 
 type Entity struct {
-	Name     string
-	Generics []*Generic
-	Ports    []*Port
+	Name            string
+	Generics        []*Generic
+	Ports           []*Port
+	PeripheralBuses []*PeripheralBus
+}
+
+// PeripheralBus is an entity `group <name> : peripheral_bus(<ports>)` declaration:
+// a bus master and the (master-relative) data-bus port names it owns.
+type PeripheralBus struct {
+	Name  string
+	Ports []string
 }
 
 type Port struct {
