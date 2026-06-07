@@ -1,0 +1,32 @@
+# Curated lint baseline: the default linters plus a few high-value ones, with the
+# opinionated/high-churn linters explicitly disabled. Goal: `golangci-lint run`
+# clean without fighting the codebase's deliberate style.
+run:
+  timeout: 5m
+linters:
+  enable:
+    - errorlint      # flags == / type-switch on errors -> use errors.Is/As
+    - gocritic
+    - perfsprint
+    - prealloc
+    - usestdlibvars
+    - goconst
+  disable:
+    - varnamelen
+    - exhaustruct
+    - wsl
+    - nlreturn
+    - lll
+    - cyclop
+    - gocognit
+    - ireturn
+    - depguard
+    - mnd
+    - paralleltest
+    - testpackage
+    - gochecknoglobals
+    - tagliatelle
+    - err113
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
