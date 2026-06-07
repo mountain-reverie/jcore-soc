@@ -17,12 +17,20 @@ var (
 	ErrUnknownGeneric     = errors.New("unknown generic")
 	ErrDuplicateName      = errors.New("duplicate device name")
 	ErrRegisterOverlap    = errors.New("register overlap")
-	ErrLeftAddrBit        = errors.New("left-addr-bit invalid")
+	// ErrLeftAddrBitTooSmall: a class's configured left-addr-bit can't cover its
+	// registers (resolveRegs, design-time). Distinct from ErrLeftAddrBit, the
+	// elaboration-time range guard in validateAddresses — so errors.Is can tell
+	// the two apart.
+	ErrLeftAddrBitTooSmall = errors.New("left-addr-bit too small for registers")
+	ErrLeftAddrBit         = errors.New("left-addr-bit out of range")
 )
 
 // ResolveError reports a device/class/entity resolution failure. Ctx names the
-// subject (e.g. `class "spi"` / `device "flash"`); Detail carries the formatted
-// specifics where the message is richer than Name alone.
+// subject (e.g. `class "spi"` / `device "flash"`). Detail carries the formatted
+// specifics where the message is richer than Name alone; when Detail is set it is
+// the whole message and Name does NOT appear in Error() — but Name remains
+// populated for errors.As consumers, so callers must not assume the two are
+// redundant.
 type ResolveError struct {
 	Kind   error
 	Ctx    string
