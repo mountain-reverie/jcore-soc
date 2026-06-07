@@ -91,11 +91,12 @@ func Load(root, name string) (*Board, error) {
 	files, err := Files(root, name)
 	if err != nil {
 		d, derr := design.Load(filepath.Join(root, "targets", "boards", name, "design.yaml"))
-		var errs []error
+		// The file-list failure is the primary error (it's why nothing could be
+		// built); list it first, then any secondary spec-load error.
+		errs := []error{err}
 		if derr != nil {
 			errs = append(errs, derr)
 		}
-		errs = append(errs, err)
 		return &Board{Name: name, Design: d}, errors.Join(errs...)
 	}
 	return loadFrom(root, name, files)
