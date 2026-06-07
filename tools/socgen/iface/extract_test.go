@@ -146,7 +146,7 @@ func TestExtractDuplicateEntity(t *testing.T) {
 		t.Fatalf("expected ErrDuplicateDecl, got %v", err)
 	}
 	var de *DuplicateError
-	if !errors.As(err, &de) || de.DKind != "entity" || de.Symbol != "dup" {
+	if !errors.As(err, &de) || de.Decl != "entity" || de.Symbol != "dup" {
 		t.Fatalf("DuplicateError = %+v", de)
 	}
 	// message-format smoke: the one preserved string assertion for this package.
@@ -239,7 +239,7 @@ func TestExtractDuplicatePackage(t *testing.T) {
 		t.Fatalf("expected ErrDuplicateDecl, got %v", err)
 	}
 	var de *DuplicateError
-	if !errors.As(err, &de) || de.DKind != "package" || de.Symbol != "dup" {
+	if !errors.As(err, &de) || de.Decl != "package" || de.Symbol != "dup" {
 		t.Fatalf("DuplicateError = %+v", de)
 	}
 }
@@ -252,7 +252,7 @@ func TestExtractDuplicateConfiguration(t *testing.T) {
 		t.Fatalf("expected ErrDuplicateDecl, got %v", err)
 	}
 	var de *DuplicateError
-	if !errors.As(err, &de) || de.DKind != "configuration" || de.Symbol != "c" {
+	if !errors.As(err, &de) || de.Decl != "configuration" || de.Symbol != "c" {
 		t.Fatalf("DuplicateError = %+v", de)
 	}
 }
@@ -267,5 +267,9 @@ func TestExtractDuplicateSymbol(t *testing.T) {
 	var de *DuplicateError
 	if !errors.As(err, &de) || de.Symbol != "SYM_COMMON" || de.Pkg != "p2" || de.AlsoIn != "p1" {
 		t.Fatalf("DuplicateError = %+v", de)
+	}
+	// message smoke for the ErrDuplicateSymbol branch of Error()
+	if got := de.Error(); got != `duplicate symbol "SYM_COMMON" in package p2 (also in p1)` {
+		t.Errorf("Error() = %q", got)
 	}
 }

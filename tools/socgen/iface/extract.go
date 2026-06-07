@@ -39,7 +39,7 @@ func (l *Library) addEntity(n *vhdl.EntityDecl) error {
 	key := lower(n.Name)
 	var err error
 	if _, dup := l.Entities[key]; dup {
-		err = &DuplicateError{Kind: ErrDuplicateDecl, DKind: "entity", Symbol: n.Name}
+		err = &DuplicateError{Kind: ErrDuplicateDecl, Decl: "entity", Symbol: n.Name}
 	}
 	l.Entities[key] = &Entity{
 		Name:     n.Name,
@@ -60,7 +60,7 @@ func (l *Library) addPackage(n *vhdl.PackageDecl) error {
 	key := lower(n.Name)
 	var errs []error
 	if _, dup := l.Packages[key]; dup {
-		errs = append(errs, &DuplicateError{Kind: ErrDuplicateDecl, DKind: "package", Symbol: n.Name})
+		errs = append(errs, &DuplicateError{Kind: ErrDuplicateDecl, Decl: "package", Symbol: n.Name})
 	}
 	p := &Package{Name: n.Name}
 	for _, d := range n.Decls {
@@ -121,7 +121,7 @@ func (l *Library) addConfiguration(n *vhdl.ConfigurationDecl) error {
 	key := lower(n.Name)
 	var err error
 	if _, dup := l.Configurations[key]; dup {
-		err = &DuplicateError{Kind: ErrDuplicateDecl, DKind: "configuration", Symbol: n.Name}
+		err = &DuplicateError{Kind: ErrDuplicateDecl, Decl: "configuration", Symbol: n.Name}
 	}
 	arch := ""
 	if n.Block != nil {

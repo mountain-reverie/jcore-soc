@@ -21,4 +21,9 @@ func TestErrors(t *testing.T) {
 	if got := Errors(errors.Join(nil, a, nil)); len(got) != 1 {
 		t.Errorf("joined-with-nils -> %d want 1", len(got))
 	}
+	// nested join-of-joins must flatten fully to its leaves
+	c := errors.New("c")
+	if got := Errors(errors.Join(a, errors.Join(b, c))); len(got) != 3 {
+		t.Errorf("nested join -> %d want 3", len(got))
+	}
 }
