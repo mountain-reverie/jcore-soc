@@ -141,14 +141,20 @@ func splitSignal(ref string) (base, element string) {
 }
 
 // bareSignalDir infers the net-list direction of a bare-`signal:` pin port: if
-// the target signal already has a driver, the pin consumes it ("in"); otherwise
-// the pin drives it ("out"). Absent signal -> the pin drives.
+// the target signal already has a NON-pin driver (device/top/padring), the pin
+// consumes it ("in"); otherwise the pin drives it ("out"). Absent signal -> the
+// pin drives. Pin-context ports are skipped so that one member of a differential
+// pair (or one of several pins on the same bare signal) does not flip the
+// inferred direction of the others — all members must agree on direction.
 func bareSignalDir(sigs map[string]*Signal, base string) string {
 	s := sigs[base]
 	if s == nil {
 		return "out"
 	}
 	for _, p := range s.Ports {
+		if p.Context.Kind == "pin" {
+			continue
+		}
 		if isDriver(p.Dir) {
 			return "in"
 		}

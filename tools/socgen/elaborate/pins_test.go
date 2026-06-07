@@ -146,6 +146,42 @@ func TestBareSignalAutoDirection(t *testing.T) {
 	}
 }
 
+func TestResolvePinsDifferentialConsistentDirection(t *testing.T) {
+	rules := []*design.PinRule{
+		{Match: &design.Match{Regex: "ck_n"}, Signal: &design.SigSpec{Kind: design.SigMap, Name: "ddr_clk", Diff: "neg"}},
+		{Match: &design.Match{Regex: "ck_p"}, Signal: &design.SigSpec{Kind: design.SigMap, Name: "ddr_clk", Diff: "pos"}},
+	}
+	mk := func() *design.Design {
+		return &design.Design{Pins: &design.PinsSpec{Rules: rules, Pins: []*design.Pin{{Net: "ck_n", Pad: "A"}, {Net: "ck_p", Pad: "B"}}}}
+	}
+	// undriven net -> BOTH pins drive (input pads) -> both IBUFDS, same direction.
+	sigs := map[string]*Signal{}
+	pins := resolvePins(mk(), sigs)
+	bufs := map[string]BufferKind{}
+	for _, p := range pins {
+		bufs[p.Net] = p.BufferKind
+	}
+	dirs := map[string]string{}
+	for _, pr := range sigs["ddr_clk"].Ports {
+		dirs[pr.Diff] = pr.Dir
+	}
+	if dirs["neg"] != dirs["pos"] {
+		t.Errorf("differential pair must share direction: neg=%q pos=%q", dirs["neg"], dirs["pos"])
+	}
+	if bufs["ck_n"] != BufIBUFDS || bufs["ck_p"] != BufIBUFDS {
+		t.Errorf("undriven differential -> both IBUFDS, got ck_n=%v ck_p=%v", bufs["ck_n"], bufs["ck_p"])
+	}
+	// device-driven net -> BOTH pins consume (output pads) -> both OBUFDS.
+	sigs2 := map[string]*Signal{"ddr_clk": {Name: "ddr_clk", Ports: []*SignalPortRef{{Context: Context{Kind: "device", ID: "ddrc"}, Dir: "out"}}}}
+	bufs2 := map[string]BufferKind{}
+	for _, p := range resolvePins(mk(), sigs2) {
+		bufs2[p.Net] = p.BufferKind
+	}
+	if bufs2["ck_n"] != BufOBUFDS || bufs2["ck_p"] != BufOBUFDS {
+		t.Errorf("device-driven differential -> both OBUFDS, got ck_n=%v ck_p=%v", bufs2["ck_n"], bufs2["ck_p"])
+	}
+}
+
 func TestResolvePinsJoinAndBuffer(t *testing.T) {
 	d := &design.Design{
 		Pins: &design.PinsSpec{
