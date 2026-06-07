@@ -51,6 +51,23 @@ func Elaborate(b *board.Board) (*Resolution, error) {
 	res.PadringEntities = padEnts
 	errs = append(errs, perr)
 	res.Signals = gatherSignals(res)
+	// data-bus topology (P5b): only when there are data-bus devices.
+	hasBus := false
+	for _, dev := range res.Devices {
+		if dev.DataBus {
+			hasBus = true
+			break
+		}
+	}
+	if hasBus {
+		mode := "simple"
+		if b.Design.System != nil && b.Design.System.DataBusDecode != "" {
+			mode = b.Design.System.DataBusDecode
+		}
+		dbm, derr := resolvePeripheralBuses(gatherPeripheralBuses(res), b.Design.PeripheralBuses, mode)
+		res.DataBus = dbm
+		errs = append(errs, derr)
+	}
 	// Pins resolve AFTER gather (bare-signal direction reads existing drivers) and
 	// BEFORE zero-signals (so a pin-driven signal isn't given a synthetic driver).
 	res.Pins = resolvePins(b.Design, res.Signals)
