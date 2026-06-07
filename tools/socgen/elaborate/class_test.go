@@ -14,9 +14,9 @@ func buildLib(t *testing.T, srcs ...string) *iface.Library {
 	t.Helper()
 	var files []*vhdl.DesignFile
 	for i, s := range srcs {
-		df, errs := vhdl.ParseFile(vhdl.NewFileSet(), "t.vhd", []byte(s))
-		if len(errs) != 0 {
-			t.Fatalf("parse src %d: %v", i, errs)
+		df, err := vhdl.ParseFile(vhdl.NewFileSet(), "t.vhd", []byte(s))
+		if err != nil {
+			t.Fatalf("parse src %d: %v", i, err)
 		}
 		files = append(files, df)
 	}

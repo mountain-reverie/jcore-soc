@@ -15,9 +15,9 @@ func buildLib(t *testing.T, srcs ...string) *iface.Library {
 	t.Helper()
 	var files []*vhdl.DesignFile
 	for i, s := range srcs {
-		df, errs := vhdl.ParseFile(vhdl.NewFileSet(), "t.vhd", []byte(s))
-		if len(errs) != 0 {
-			t.Fatalf("parse src %d: %v", i, errs)
+		df, err := vhdl.ParseFile(vhdl.NewFileSet(), "t.vhd", []byte(s))
+		if err != nil {
+			t.Fatalf("parse src %d: %v", i, err)
 		}
 		files = append(files, df)
 	}
@@ -117,9 +117,9 @@ func TestValidateAgainstCorpus(t *testing.T) {
 		if err != nil {
 			t.Skipf("missing %s", rel)
 		}
-		df, errs := vhdl.ParseFile(vhdl.NewFileSet(), rel, src)
-		if len(errs) != 0 {
-			t.Skipf("parse %s: %v", rel, errs)
+		df, perr := vhdl.ParseFile(vhdl.NewFileSet(), rel, src)
+		if perr != nil {
+			t.Skipf("parse %s: %v", rel, perr)
 		}
 		files = append(files, df)
 	}

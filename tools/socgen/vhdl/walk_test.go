@@ -4,7 +4,7 @@ import "testing"
 
 func TestInspectCountsIdents(t *testing.T) {
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte("package p is\n  constant c : integer := a + b;\nend package;"))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	n := 0
@@ -21,7 +21,7 @@ func TestInspectCountsIdents(t *testing.T) {
 
 func TestInspectPruneStopsDescent(t *testing.T) {
 	df, errs := ParseFile(NewFileSet(), "t.vhd", []byte("package p is\n  constant c : integer := a + b;\nend package;"))
-	if len(errs) != 0 {
+	if errs != nil {
 		t.Fatalf("errs: %v", errs)
 	}
 	idents := 0

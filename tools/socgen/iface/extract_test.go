@@ -10,9 +10,9 @@ import (
 
 func parse(t *testing.T, src string) *vhdl.DesignFile {
 	t.Helper()
-	df, errs := vhdl.ParseFile(vhdl.NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
-		t.Fatalf("parse errors: %v", errs)
+	df, err := vhdl.ParseFile(vhdl.NewFileSet(), "t.vhd", []byte(src))
+	if err != nil {
+		t.Fatalf("parse errors: %v", err)
 	}
 	return df
 }
@@ -199,9 +199,9 @@ func TestExtractCorpusSmoke(t *testing.T) {
 		if err != nil {
 			t.Skipf("corpus file missing: %s", rel)
 		}
-		df, errs := vhdl.ParseFile(vhdl.NewFileSet(), rel, src)
-		if len(errs) != 0 {
-			t.Skipf("parse %s: %v", rel, errs)
+		df, perr := vhdl.ParseFile(vhdl.NewFileSet(), rel, src)
+		if perr != nil {
+			t.Skipf("parse %s: %v", rel, perr)
 		}
 		files = append(files, df)
 	}

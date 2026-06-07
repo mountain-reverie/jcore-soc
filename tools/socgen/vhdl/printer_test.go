@@ -10,12 +10,12 @@ func TestPrintReparseStable(t *testing.T) {
 	}
 	for _, s := range srcs {
 		f1, errs1 := ParseFile(NewFileSet(), "t.vhd", []byte(s))
-		if len(errs1) != 0 {
+		if errs1 != nil {
 			t.Fatalf("parse1 %q: %v", s, errs1)
 		}
 		out := Print(f1)
 		f2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
-		if len(errs2) != 0 {
+		if errs2 != nil {
 			t.Fatalf("reparse %q -> %q: %v", s, out, errs2)
 		}
 		if !equalAST(f1, f2) {

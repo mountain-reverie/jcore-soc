@@ -71,12 +71,12 @@ func cppOpts(rel string, src []byte) (opts []Option, skip bool) {
 // The reparse of the printed (already-expanded) output uses no options.
 func roundTrips(absPath string, opts []Option, src []byte) bool {
 	f1, errs1 := ParseFile(NewFileSet(), absPath, src, opts...)
-	if len(errs1) != 0 {
+	if errs1 != nil {
 		return false
 	}
 	out := Print(f1)
 	f2, errs2 := ParseFile(NewFileSet(), absPath, []byte(out)) // printed VHDL has no directives
-	if len(errs2) != 0 {
+	if errs2 != nil {
 		return false
 	}
 	return equalAST(f1, f2)
@@ -110,8 +110,7 @@ func TestCorpusRoundTrip(t *testing.T) {
 				t.Skip("cpp file but gcc not available")
 			}
 			if !roundTrips(absPath, opts, src) {
-				var errs []error
-				_, errs = ParseFile(NewFileSet(), absPath, src, opts...)
+				_, errs := ParseFile(NewFileSet(), absPath, src, opts...)
 				t.Fatalf("round-trip failed; parse errs: %v", errs)
 			}
 		})
@@ -135,7 +134,7 @@ func TestCorpusGhdlReanalyze(t *testing.T) {
 				t.Skip("cpp file but gcc not available")
 			}
 			f, errs := ParseFile(NewFileSet(), absPath, src, opts...)
-			if len(errs) != 0 {
+			if errs != nil {
 				t.Fatalf("parse: %v", errs)
 			}
 			out := Print(f)

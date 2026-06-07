@@ -11,9 +11,9 @@ import (
 func parseConstraint(t *testing.T, typ string) (string, vhdl.Expr) {
 	t.Helper()
 	src := "entity e is port (p : in " + typ + "); end entity;"
-	df, errs := vhdl.ParseFile(vhdl.NewFileSet(), "t.vhd", []byte(src))
-	if len(errs) != 0 {
-		t.Fatalf("parse %q: %v", typ, errs)
+	df, err := vhdl.ParseFile(vhdl.NewFileSet(), "t.vhd", []byte(src))
+	if err != nil {
+		t.Fatalf("parse %q: %v", typ, err)
 	}
 	ent := df.Units[0].(*vhdl.EntityDecl)
 	id := ent.Ports[0]

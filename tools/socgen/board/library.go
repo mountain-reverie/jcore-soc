@@ -24,9 +24,9 @@ func Library(files []string) (*iface.Library, []error) {
 			errs = append(errs, fmt.Errorf("read %s: %w", f, err))
 			continue
 		}
-		df, perrs := vhdl.ParseFile(vhdl.NewFileSet(), f, src)
-		if len(perrs) != 0 {
-			errs = append(errs, fmt.Errorf("parse %s: %v", f, perrs[0]))
+		df, perr := vhdl.ParseFile(vhdl.NewFileSet(), f, src)
+		if perr != nil {
+			errs = append(errs, fmt.Errorf("parse %s: %v", f, perr))
 			continue
 		}
 		dfs = append(dfs, df)
