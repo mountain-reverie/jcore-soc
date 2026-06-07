@@ -12,13 +12,9 @@ import (
 )
 
 // lc lower-cases and trims, matching the elaborate package's key/label convention.
-//
-//nolint:unused // consumed by Devices() in P5a Task 2.
 func lc(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
 
 // intLit builds an integer literal expression.
-//
-//nolint:unused // consumed by Devices() in P5a Task 2.
 func intLit(i int) vhdl.Expr { return &vhdl.BasicLit{Kind: vhdl.INT, Value: strconv.Itoa(i)} }
 
 // emitValue renders a design.Value as a VHDL expression. KindExpr is verbatim VHDL
@@ -50,8 +46,6 @@ func emitValue(v design.Value) vhdl.Expr {
 }
 
 // sortedKeys returns the map keys of a generic map in deterministic order.
-//
-//nolint:unused // consumed by Devices() in P5a Task 2.
 func sortedKeys(m map[string]design.Value) []string {
 	ks := make([]string, 0, len(m))
 	for k := range m {
