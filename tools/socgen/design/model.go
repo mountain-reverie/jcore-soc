@@ -17,6 +17,14 @@ type Design struct {
 	ZeroSignals     []string                `yaml:"zero-signals"`
 	IRQ             map[string]*IRQEntry    `yaml:"irq"`
 	Pins            *PinsSpec               `yaml:"pins"`
+	PeripheralBuses map[string]bool         `yaml:"peripheral-buses"`
+	System          *System                 `yaml:"system"`
+}
+
+// System holds the design `system:` block. Only the fields soc_gen consumes are
+// modeled; other keys (dram, pio, …) are ignored by the non-strict loader.
+type System struct {
+	DataBusDecode string `yaml:"data-bus-decode"` // "simple" (default) | "exact"
 }
 
 type DeviceClass struct {
