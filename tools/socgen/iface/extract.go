@@ -42,9 +42,10 @@ func (l *Library) addEntity(n *vhdl.EntityDecl) error {
 		err = &DuplicateError{Kind: ErrDuplicateDecl, Decl: "entity", Symbol: n.Name}
 	}
 	l.Entities[key] = &Entity{
-		Name:     n.Name,
-		Generics: toGenerics(n.Generics),
-		Ports:    toPorts(n.Ports),
+		Name:            n.Name,
+		Generics:        toGenerics(n.Generics),
+		Ports:           toPorts(n.Ports),
+		PeripheralBuses: toPeripheralBuses(n.Decls),
 	}
 	return err
 }
@@ -129,6 +130,16 @@ func (l *Library) addConfiguration(n *vhdl.ConfigurationDecl) error {
 	}
 	l.Configurations[key] = &Configuration{Name: n.Name, Entity: n.Entity, Arch: arch, Node: n}
 	return err
+}
+
+func toPeripheralBuses(decls []vhdl.Decl) []*PeripheralBus {
+	var out []*PeripheralBus
+	for _, d := range decls {
+		if g, ok := d.(*vhdl.GroupDecl); ok && lower(g.TemplateMark) == "peripheral_bus" {
+			out = append(out, &PeripheralBus{Name: g.Name, Ports: append([]string(nil), g.Constituents...)})
+		}
+	}
+	return out
 }
 
 func toGenerics(ids []*vhdl.InterfaceDecl) []*Generic {
