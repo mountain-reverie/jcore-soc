@@ -1,6 +1,7 @@
 package elaborate
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/j-core/jcore-soc/tools/socgen/board"
@@ -12,12 +13,12 @@ import (
 // Classes defined in the board's YAML but not referenced by any device are
 // skipped — they may have empty/absent entity fields and would produce spurious
 // errors. Best-effort; never panics.
-func Devices(b *board.Board) (*Resolution, []error) {
+func Devices(b *board.Board) (*Resolution, error) {
 	res := &Resolution{Classes: map[string]*ResolvedClass{}}
-	var errs []error
 	if b == nil || b.Design == nil || b.Library == nil {
-		return res, errs
+		return res, nil
 	}
+	errs := make([]error, 0, len(b.Design.Devices)+1)
 	// Resolve only the classes actually instantiated by a device.
 	seen := map[string]bool{}
 	for _, dev := range b.Design.Devices {
@@ -37,20 +38,24 @@ func Devices(b *board.Board) (*Resolution, []error) {
 			}
 		}
 		if !ok {
-			errs = append(errs, fmt.Errorf("device %q: unknown class %q", dev.Name, dev.Class))
+			errs = append(errs, &ResolveError{Kind: ErrUnknownClass, Ctx: fmt.Sprintf("device %q", dev.Name), Name: dev.Class,
+				Detail: fmt.Sprintf("unknown class %q", dev.Class)})
 			continue
 		}
-		var rc *ResolvedClass
-		rc, errs = resolveClass(dev.Class, dc, b.Library, errs)
+		rc, err := resolveClass(dev.Class, dc, b.Library)
+		errs = append(errs, err)
 		res.Classes[key] = rc
 	}
-	res.Devices, errs = resolveDevices(b.Design, res.Classes, errs)
-	return res, errs
+	devs, err := resolveDevices(b.Design, res.Classes)
+	res.Devices = devs
+	errs = append(errs, err)
+	return res, errors.Join(errs...)
 }
 
 // resolveDevices assigns unique names and merges effective generics for each
 // device instance (faithful to assign-device-names + the generic merge).
-func resolveDevices(d *design.Design, classes map[string]*ResolvedClass, errs []error) ([]*ResolvedDevice, []error) {
+func resolveDevices(d *design.Design, classes map[string]*ResolvedClass) ([]*ResolvedDevice, error) {
+	errs := make([]error, 0, len(d.Devices))
 	// duplicate explicit-name check + class counts
 	classCount := map[string]int{}
 	nameCount := map[string]int{}
@@ -62,7 +67,8 @@ func resolveDevices(d *design.Design, classes map[string]*ResolvedClass, errs []
 	}
 	for n, c := range nameCount {
 		if c > 1 {
-			errs = append(errs, fmt.Errorf("multiple devices named %q; names must be unique", n))
+			errs = append(errs, &ResolveError{Kind: ErrDuplicateName, Ctx: fmt.Sprintf("device %q", n), Name: n,
+				Detail: fmt.Sprintf("multiple devices named %q; names must be unique", n)})
 		}
 	}
 	used := map[string]bool{}
@@ -100,7 +106,8 @@ func resolveDevices(d *design.Design, classes map[string]*ResolvedClass, errs []
 			}
 			for k := range generics {
 				if !gset[lc(k)] {
-					errs = append(errs, fmt.Errorf("device %q: unknown generic %q for entity %q", name, k, rc.Entity.Name))
+					errs = append(errs, &ResolveError{Kind: ErrUnknownGeneric, Ctx: fmt.Sprintf("device %q", name), Name: k,
+						Detail: fmt.Sprintf("unknown generic %q for entity %q", k, rc.Entity.Name)})
 				}
 			}
 		}
@@ -111,7 +118,7 @@ func resolveDevices(d *design.Design, classes map[string]*ResolvedClass, errs []
 		}
 		out = append(out, &ResolvedDevice{Name: name, Class: dev.Class, Generics: generics, BaseAddr: base})
 	}
-	return out, errs
+	return out, errors.Join(errs...)
 }
 
 func genUniqueName(class string, used map[string]bool) string {

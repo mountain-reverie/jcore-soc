@@ -1,7 +1,7 @@
 package elaborate
 
 import (
-	"fmt"
+	"errors"
 	"sort"
 )
 
@@ -15,10 +15,11 @@ const maxLeftAddrBit = 62
 // unlike the Clojure soc_gen (which gates later checks behind `when-not error?`),
 // every independent check runs and ALL issues are surfaced in one pass; a device
 // may therefore yield more than one error. Appends errors; never panics.
-func validateAddresses(res *Resolution, errs []error) []error {
+func validateAddresses(res *Resolution) error {
 	if res == nil {
-		return errs
+		return nil
 	}
+	var errs []error
 	for _, dev := range res.Devices {
 		if dev.BaseAddr == nil {
 			continue // not memory-mapped
@@ -30,13 +31,13 @@ func validateAddresses(res *Resolution, errs []error) []error {
 		}
 		// bits[31:28] must be 0xA (the jcore memory-mapped device region)
 		if base&0xF0000000 != 0xA0000000 {
-			errs = append(errs, fmt.Errorf("device %q base address 0x%08x is invalid: bits 31-28 must be 0xA", dev.Name, base))
+			errs = append(errs, &AddrError{Kind: ErrBadRegion, Device: dev.Name, Base: base})
 		}
 		// Guard against an out-of-range LeftAddrBit (a bug upstream): a shift by >=64
 		// yields 0, making the mask all-ones and flagging every address. Keep the
 		// "best-effort, never misbehaves" contract explicit.
 		if rc.LeftAddrBit < 0 || rc.LeftAddrBit > maxLeftAddrBit {
-			errs = append(errs, fmt.Errorf("device %q class %q: left-addr-bit %d out of range [0,%d]", dev.Name, dev.Class, rc.LeftAddrBit, maxLeftAddrBit))
+			errs = append(errs, &AddrError{Kind: ErrLeftAddrBit, Device: dev.Name, Class: dev.Class, LeftAddrBit: rc.LeftAddrBit, Max: maxLeftAddrBit})
 			continue
 		}
 		// The low leftAddrBit+1 bits are the device's internal address space and must
@@ -44,10 +45,11 @@ func validateAddresses(res *Resolution, errs []error) []error {
 		// check applies even when LeftAddrBit==0 (then the low 1 bit must be zero).
 		mask := (uint64(1) << uint(rc.LeftAddrBit+1)) - 1
 		if base&mask != 0 {
-			errs = append(errs, fmt.Errorf("device %q base address 0x%08x has non-zero bits in its internal address range (low %d bits)", dev.Name, base, rc.LeftAddrBit+1))
+			errs = append(errs, &AddrError{Kind: ErrOverSpec, Device: dev.Name, Base: base, Bits: rc.LeftAddrBit + 1})
 		}
 	}
-	return checkAddrOverlap(res, errs)
+	errs = append(errs, checkAddrOverlap(res))
+	return errors.Join(errs...)
 }
 
 // addrRange is a named [Lo,Hi] inclusive byte range.
@@ -83,7 +85,8 @@ func deviceSpan(dev *ResolvedDevice, rc *ResolvedClass) (lo, hi uint64, ok bool)
 // checkAddrOverlap reports every pair of overlapping address ranges among the
 // memory-mapped devices and the reserved regions. Deterministic (sorted) output.
 // Precondition: res != nil (validateAddresses, the only caller, guarantees it).
-func checkAddrOverlap(res *Resolution, errs []error) []error {
+func checkAddrOverlap(res *Resolution) error {
+	var errs []error
 	ranges := make([]addrRange, 0, len(res.Devices)+len(reservedRegions))
 	for _, dev := range res.Devices {
 		lo, hi, ok := deviceSpan(dev, res.Classes[lc(dev.Class)])
@@ -102,10 +105,11 @@ func checkAddrOverlap(res *Resolution, errs []error) []error {
 	for i := 0; i < len(ranges); i++ {
 		for j := i + 1; j < len(ranges); j++ {
 			if ranges[i].Lo <= ranges[j].Hi && ranges[j].Lo <= ranges[i].Hi {
-				errs = append(errs, fmt.Errorf("memory regions overlap: %q [0x%08x,0x%08x] and %q [0x%08x,0x%08x]",
-					ranges[i].Name, ranges[i].Lo, ranges[i].Hi, ranges[j].Name, ranges[j].Lo, ranges[j].Hi))
+				errs = append(errs, &AddrError{Kind: ErrAddrOverlap,
+					Device: ranges[i].Name, Lo: ranges[i].Lo, Hi: ranges[i].Hi,
+					Other: ranges[j].Name, OLo: ranges[j].Lo, OHi: ranges[j].Hi})
 			}
 		}
 	}
-	return errs
+	return errors.Join(errs...)
 }

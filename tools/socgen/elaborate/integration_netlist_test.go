@@ -1,11 +1,12 @@
 package elaborate
 
 import (
+	"errors"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/j-core/jcore-soc/tools/socgen/board"
+	"github.com/j-core/jcore-soc/tools/socgen/internal/errutil"
 )
 
 func TestElaborateNetlistMimasV2(t *testing.T) {
@@ -17,7 +18,8 @@ func TestElaborateNetlistMimasV2(t *testing.T) {
 	if b.Design == nil || b.Library == nil {
 		t.Skip("board.Load incomplete")
 	}
-	res, errs := Elaborate(b)
+	res, err := Elaborate(b)
+	errs := errutil.Errors(err)
 	t.Logf("mimas_v2 net-list: %d devices, %d signals, %d errors", len(res.Devices), len(res.Signals), len(errs))
 	// The net-list now spans devices + top/padring entities (P4d). Remaining
 	// validation errors are INFORMATIONAL: a top/padring entity whose entity
@@ -87,7 +89,7 @@ func TestElaborateNetlistMimasV2(t *testing.T) {
 	}
 	undriven := 0
 	for _, e := range errs {
-		if strings.Contains(e.Error(), "nothing drives signal") {
+		if errors.Is(e, ErrUndrivenSignal) {
 			undriven++
 		}
 	}

@@ -1,7 +1,7 @@
 package elaborate
 
 import (
-	"strings"
+	"errors"
 	"testing"
 
 	"github.com/j-core/jcore-soc/tools/socgen/design"
@@ -28,9 +28,9 @@ func TestResolveClassSingleArch(t *testing.T) {
 	lib := buildLib(t,
 		`entity uartlitedb is port (clk : in std_logic); end entity;`,
 		`architecture rtl of uartlitedb is begin end architecture;`)
-	rc, errs := resolveClass("uartlite", &design.DeviceClass{Entity: "uartlitedb"}, lib, nil)
-	if len(errs) != 0 {
-		t.Fatalf("errs: %v", errs)
+	rc, err := resolveClass("uartlite", &design.DeviceClass{Entity: "uartlitedb"}, lib)
+	if err != nil {
+		t.Fatalf("err: %v", err)
 	}
 	if rc.Entity == nil || rc.Entity.Name != "uartlitedb" || rc.ArchName != "rtl" {
 		t.Errorf("rc = %+v (arch %q)", rc, rc.ArchName)
@@ -43,17 +43,17 @@ func TestResolveClassErrors(t *testing.T) {
 		`entity e is end entity;`,
 		`architecture a1 of e is begin end architecture;`,
 		`architecture a2 of e is begin end architecture;`)
-	if _, errs := resolveClass("c", &design.DeviceClass{Entity: "e"}, lib2, nil); len(errs) == 0 || !strings.Contains(errs[0].Error(), "single architecture") {
-		t.Errorf("want ambiguous-arch error, got %v", errs)
+	if _, err := resolveClass("c", &design.DeviceClass{Entity: "e"}, lib2); !errors.Is(err, ErrAmbiguousArch) {
+		t.Errorf("want ambiguous-arch error, got %v", err)
 	}
 	// zero architectures
 	lib0 := buildLib(t, `entity e is end entity;`)
-	if _, errs := resolveClass("c", &design.DeviceClass{Entity: "e"}, lib0, nil); len(errs) == 0 || !strings.Contains(errs[0].Error(), "any architecture") {
-		t.Errorf("want no-arch error, got %v", errs)
+	if _, err := resolveClass("c", &design.DeviceClass{Entity: "e"}, lib0); !errors.Is(err, ErrNoArch) {
+		t.Errorf("want no-arch error, got %v", err)
 	}
 	// unknown entity
-	if _, errs := resolveClass("c", &design.DeviceClass{Entity: "ghost"}, lib0, nil); len(errs) == 0 || !strings.Contains(errs[0].Error(), "unable to map") {
-		t.Errorf("want entity error, got %v", errs)
+	if _, err := resolveClass("c", &design.DeviceClass{Entity: "ghost"}, lib0); !errors.Is(err, ErrEntityNotFound) {
+		t.Errorf("want entity error, got %v", err)
 	}
 }
 
@@ -62,9 +62,9 @@ func TestResolveClassConfiguration(t *testing.T) {
 		`entity cpu is end entity;`,
 		`architecture rtl of cpu is begin end architecture;`,
 		`configuration cpu_cfg of cpu is for rtl end for; end configuration;`)
-	rc, errs := resolveClass("c", &design.DeviceClass{Entity: "cpu", Configuration: "cpu_cfg"}, lib, nil)
-	if len(errs) != 0 {
-		t.Fatalf("errs: %v", errs)
+	rc, err := resolveClass("c", &design.DeviceClass{Entity: "cpu", Configuration: "cpu_cfg"}, lib)
+	if err != nil {
+		t.Fatalf("err: %v", err)
 	}
 	if rc.Config == nil || rc.Config.Name != "cpu_cfg" || rc.ArchName != "rtl" {
 		t.Errorf("config resolution = %+v", rc)
@@ -77,9 +77,9 @@ func TestResolveClassExplicitArch(t *testing.T) {
 		`architecture a1 of e is begin end architecture;`,
 		`architecture a2 of e is begin end architecture;`)
 	// two archs, but explicit selection picks a2 (no ambiguity error)
-	rc, errs := resolveClass("c", &design.DeviceClass{Entity: "e", Architecture: "a2"}, lib, nil)
-	if len(errs) != 0 {
-		t.Fatalf("explicit arch should resolve cleanly: %v", errs)
+	rc, err := resolveClass("c", &design.DeviceClass{Entity: "e", Architecture: "a2"}, lib)
+	if err != nil {
+		t.Fatalf("explicit arch should resolve cleanly: %v", err)
 	}
 	if rc.ArchName != "a2" {
 		t.Errorf("ArchName = %q want a2", rc.ArchName)
@@ -93,15 +93,9 @@ func TestResolveClassArchConfigMismatch(t *testing.T) {
 		`architecture other of e is begin end architecture;`,
 		`configuration ecfg of e is for rtl end for; end configuration;`)
 	// configuration selects rtl, but explicit architecture says "other" -> mismatch
-	_, errs := resolveClass("c", &design.DeviceClass{Entity: "e", Architecture: "other", Configuration: "ecfg"}, lib, nil)
-	found := false
-	for _, e := range errs {
-		if strings.Contains(e.Error(), "mismatch") {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("want arch/config mismatch error, got %v", errs)
+	_, err := resolveClass("c", &design.DeviceClass{Entity: "e", Architecture: "other", Configuration: "ecfg"}, lib)
+	if !errors.Is(err, ErrArchConfigMismatch) {
+		t.Errorf("want arch/config mismatch error, got %v", err)
 	}
 }
 
@@ -110,13 +104,13 @@ func iptr(i int) *int { return &i }
 func TestResolveRegs(t *testing.T) {
 	lib := buildLib(t, `entity e is end entity;`, `architecture a of e is begin end architecture;`)
 	dc := &design.DeviceClass{Entity: "e", Regs: []*design.Reg{
-		{Name: "RX"},                                    // addr 0, width 4 -> [0,3]
+		{Name: "RX"},                                   // addr 0, width 4 -> [0,3]
 		{Name: "tx", Width: iptr(4)},                   // addr 4 -> [4,7]
 		{Name: "ctrl", Addr: iptr(12), Width: iptr(4)}, // explicit [12,15]
 	}}
-	rc, errs := resolveClass("uartlite", dc, lib, nil)
-	if len(errs) != 0 {
-		t.Fatalf("errs: %v", errs)
+	rc, err := resolveClass("uartlite", dc, lib)
+	if err != nil {
+		t.Fatalf("err: %v", err)
 	}
 	if len(rc.Regs) != 3 {
 		t.Fatalf("regs: %d", len(rc.Regs))
@@ -142,9 +136,9 @@ func TestResolveRegsOverlap(t *testing.T) {
 		{Name: "a", Addr: iptr(0), Width: iptr(8)}, // [0,7]
 		{Name: "b", Addr: iptr(4), Width: iptr(4)}, // [4,7] overlaps a
 	}}
-	_, errs := resolveClass("c", dc, lib, nil)
-	if len(errs) == 0 {
-		t.Fatal("want register-overlap error")
+	_, err := resolveClass("c", dc, lib)
+	if !errors.Is(err, ErrRegisterOverlap) {
+		t.Fatalf("want register-overlap error, got %v", err)
 	}
 }
 
@@ -153,8 +147,8 @@ func TestResolveRegsLeftAddrTooSmall(t *testing.T) {
 	dc := &design.DeviceClass{Entity: "e", LeftAddrBit: 1, Regs: []*design.Reg{
 		{Name: "a", Addr: iptr(0), Width: iptr(16)}, // needs left-addr-bit >= ceil(log2 16)-1 = 3
 	}}
-	_, errs := resolveClass("c", dc, lib, nil)
-	if len(errs) == 0 {
-		t.Fatal("want left-addr-bit-too-small error")
+	_, err := resolveClass("c", dc, lib)
+	if !errors.Is(err, ErrLeftAddrBit) {
+		t.Fatalf("want left-addr-bit-too-small error, got %v", err)
 	}
 }

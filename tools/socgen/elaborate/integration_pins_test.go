@@ -1,13 +1,14 @@
 package elaborate
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/j-core/jcore-soc/tools/socgen/board"
 	"github.com/j-core/jcore-soc/tools/socgen/design"
+	"github.com/j-core/jcore-soc/tools/socgen/internal/errutil"
 )
 
 // 3-board pin PARSING (design layer only — no make/VHDL needed): every migrated
@@ -42,10 +43,10 @@ func TestPinsNetlistMimasV2(t *testing.T) {
 	if b.Design == nil || b.Library == nil {
 		t.Skip("board.Load incomplete")
 	}
-	res, errs := Elaborate(b)
+	res, err := Elaborate(b)
 	undriven := 0
-	for _, e := range errs {
-		if strings.Contains(e.Error(), "nothing drives signal") {
+	for _, e := range errutil.Errors(err) {
+		if errors.Is(e, ErrUndrivenSignal) {
 			undriven++
 		}
 	}
@@ -79,8 +80,10 @@ func TestPinsNetlistMimasV2(t *testing.T) {
 		t.Error("expected a pin to drive a device/top/padring-consumed signal")
 	}
 	// differential ddr_clk: two pin drivers (pos/neg) must NOT produce a multi-driver error.
-	for _, e := range errs {
-		if strings.Contains(e.Error(), `signal "ddr_clk" is driven by multiple ports`) {
+	const diffSignal = "ddr_clk"
+	for _, e := range errutil.Errors(err) {
+		var se *SignalError
+		if errors.As(e, &se) && errors.Is(se, ErrMultiDriver) && se.Signal == diffSignal {
 			t.Errorf("ddr_clk differential pair wrongly rejected: %v", e)
 		}
 	}
