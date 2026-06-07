@@ -49,6 +49,7 @@ func Elaborate(b *board.Board) (*Resolution, []error) {
 	res.Pins = resolvePins(b.Design, res.Signals)
 	applyZeroSignals(res.Signals, b.Design.ZeroSignals)
 	errs = validateSignals(res.Signals, errs)
+	errs = validateAddresses(res, errs)
 	return res, errs
 }
 

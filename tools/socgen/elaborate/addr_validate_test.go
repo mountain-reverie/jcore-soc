@@ -56,3 +56,57 @@ func TestValidateBaseAddrBothChecksAppend(t *testing.T) {
 		t.Errorf("expected BOTH region and over-spec errors; region=%v overspec=%v errs=%v", region, overspec, errs)
 	}
 }
+
+func TestValidateAddrOverlap(t *testing.T) {
+	res := &Resolution{
+		Classes: map[string]*ResolvedClass{"c": {Name: "c", LeftAddrBit: 7}}, // span 2^8 = 256
+		Devices: []*ResolvedDevice{
+			{Name: "a", Class: "c", BaseAddr: u64(0xabcd0000)}, // [0xabcd0000, 0xabcd00ff]
+			{Name: "b", Class: "c", BaseAddr: u64(0xabcd0080)}, // overlaps a
+		},
+	}
+	errs := validateAddresses(res, nil)
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Error(), "memory regions overlap") && strings.Contains(e.Error(), `"a"`) && strings.Contains(e.Error(), `"b"`) {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected a/b overlap error; got %v", errs)
+	}
+}
+
+func TestValidateAddrOverlapReserved(t *testing.T) {
+	// a device range overlapping the hard-coded cpumreg region [0xabcd0600,0xabcd06ff]
+	res := &Resolution{
+		Classes: map[string]*ResolvedClass{"c": {Name: "c", LeftAddrBit: 7}},
+		Devices: []*ResolvedDevice{{Name: "clash", Class: "c", BaseAddr: u64(0xabcd0600)}},
+	}
+	errs := validateAddresses(res, nil)
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Error(), "memory regions overlap") && strings.Contains(e.Error(), "cpumreg") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected clash-vs-cpumreg overlap error; got %v", errs)
+	}
+}
+
+func TestValidateAddrNoOverlap(t *testing.T) {
+	// two valid, non-overlapping devices well clear of the reserved regions
+	res := &Resolution{
+		Classes: map[string]*ResolvedClass{"c": {Name: "c", LeftAddrBit: 5}}, // span 64
+		Devices: []*ResolvedDevice{
+			{Name: "a", Class: "c", BaseAddr: u64(0xabcd0000)},
+			{Name: "b", Class: "c", BaseAddr: u64(0xabcd0040)},
+		},
+	}
+	for _, e := range validateAddresses(res, nil) {
+		if strings.Contains(e.Error(), "overlap") {
+			t.Errorf("unexpected overlap error: %v", e)
+		}
+	}
+}
