@@ -66,14 +66,14 @@ func TestValidateAddrOverlap(t *testing.T) {
 		},
 	}
 	errs := validateAddresses(res, nil)
-	found := false
+	count := 0
 	for _, e := range errs {
 		if strings.Contains(e.Error(), "memory regions overlap") && strings.Contains(e.Error(), `"a"`) && strings.Contains(e.Error(), `"b"`) {
-			found = true
+			count++
 		}
 	}
-	if !found {
-		t.Errorf("expected a/b overlap error; got %v", errs)
+	if count != 1 {
+		t.Errorf("expected exactly one a/b overlap error, got %d; errs: %v", count, errs)
 	}
 }
 
@@ -96,7 +96,9 @@ func TestValidateAddrOverlapReserved(t *testing.T) {
 }
 
 func TestValidateAddrNoOverlap(t *testing.T) {
-	// two valid, non-overlapping devices well clear of the reserved regions
+	// two valid, non-overlapping devices, well above the sram [0,0x0FFFFFFF] /
+	// dram [0x10000000,0x1FFFFFFF] reserved windows: a=[0xabcd0000,0xabcd003f],
+	// b=[0xabcd0040,0xabcd007f], both clear of cpumreg [0xabcd0600,0xabcd06ff].
 	res := &Resolution{
 		Classes: map[string]*ResolvedClass{"c": {Name: "c", LeftAddrBit: 5}}, // span 64
 		Devices: []*ResolvedDevice{

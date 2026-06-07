@@ -5,6 +5,10 @@ import (
 	"sort"
 )
 
+// maxLeftAddrBit is the largest LeftAddrBit we can compute a span for without the
+// `1 << (LeftAddrBit+1)` shift reaching/exceeding uint64's width.
+const maxLeftAddrBit = 62
+
 // validateAddresses performs the elaborate-phase cross-device address checks:
 // each memory-mapped device's base address is well-formed (Task 1), and no two
 // device ranges overlap (Task 2). Best-effort; appends errors; never panics.
@@ -28,8 +32,8 @@ func validateAddresses(res *Resolution, errs []error) []error {
 		// Guard against an out-of-range LeftAddrBit (a bug upstream): a shift by >=64
 		// yields 0, making the mask all-ones and flagging every address. Keep the
 		// "best-effort, never misbehaves" contract explicit.
-		if rc.LeftAddrBit < 0 || rc.LeftAddrBit >= 63 {
-			errs = append(errs, fmt.Errorf("device %q class %q: left-addr-bit %d out of range [0,62]", dev.Name, dev.Class, rc.LeftAddrBit))
+		if rc.LeftAddrBit < 0 || rc.LeftAddrBit > maxLeftAddrBit {
+			errs = append(errs, fmt.Errorf("device %q class %q: left-addr-bit %d out of range [0,%d]", dev.Name, dev.Class, rc.LeftAddrBit, maxLeftAddrBit))
 			continue
 		}
 		// The low leftAddrBit+1 bits are the device's internal address space and must
@@ -57,21 +61,32 @@ var reservedRegions = []addrRange{
 	{"cpumreg", 0xabcd0600, 0xabcd06FF},
 }
 
+// deviceSpan returns a memory-mapped device's inclusive [lo,hi] byte range, or
+// ok=false to skip it (not memory-mapped, unresolved class, or an out-of-range
+// LeftAddrBit already flagged by validateAddresses). hi saturates at MaxUint64 so
+// a base near the top of the address space cannot wrap below lo.
+func deviceSpan(dev *ResolvedDevice, rc *ResolvedClass) (lo, hi uint64, ok bool) {
+	if dev.BaseAddr == nil || rc == nil || rc.LeftAddrBit < 0 || rc.LeftAddrBit > maxLeftAddrBit {
+		return 0, 0, false
+	}
+	lo = *dev.BaseAddr
+	hi = lo + (uint64(1) << uint(rc.LeftAddrBit+1)) - 1
+	if hi < lo { // wraparound near the top of the address space
+		hi = ^uint64(0)
+	}
+	return lo, hi, true
+}
+
 // checkAddrOverlap reports every pair of overlapping address ranges among the
 // memory-mapped devices and the reserved regions. Deterministic (sorted) output.
 func checkAddrOverlap(res *Resolution, errs []error) []error {
 	ranges := make([]addrRange, 0, len(res.Devices)+len(reservedRegions))
 	for _, dev := range res.Devices {
-		if dev.BaseAddr == nil {
+		lo, hi, ok := deviceSpan(dev, res.Classes[lc(dev.Class)])
+		if !ok {
 			continue
 		}
-		rc := res.Classes[lc(dev.Class)]
-		if rc == nil || rc.LeftAddrBit < 0 || rc.LeftAddrBit >= 63 {
-			continue // unresolved class or out-of-range left-addr-bit (already errored)
-		}
-		base := *dev.BaseAddr
-		span := uint64(1) << uint(rc.LeftAddrBit+1)
-		ranges = append(ranges, addrRange{dev.Name, base, base + span - 1})
+		ranges = append(ranges, addrRange{dev.Name, lo, hi})
 	}
 	ranges = append(ranges, reservedRegions...)
 	sort.Slice(ranges, func(i, j int) bool {
@@ -83,7 +98,7 @@ func checkAddrOverlap(res *Resolution, errs []error) []error {
 	for i := 0; i < len(ranges); i++ {
 		for j := i + 1; j < len(ranges); j++ {
 			if ranges[i].Lo <= ranges[j].Hi && ranges[j].Lo <= ranges[i].Hi {
-				errs = append(errs, fmt.Errorf("device memory regions overlap: %q [0x%08x,0x%08x] and %q [0x%08x,0x%08x]",
+				errs = append(errs, fmt.Errorf("memory regions overlap: %q [0x%08x,0x%08x] and %q [0x%08x,0x%08x]",
 					ranges[i].Name, ranges[i].Lo, ranges[i].Hi, ranges[j].Name, ranges[j].Lo, ranges[j].Hi))
 			}
 		}
