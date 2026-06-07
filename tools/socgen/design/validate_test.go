@@ -92,6 +92,7 @@ func TestValidateConfiguration(t *testing.T) {
 		`entity cpu is port (clk : in std_logic); end entity;`,
 		`architecture rtl of cpu is begin end architecture;`,
 		`configuration cpu_cfg of cpu is for rtl end for; end configuration;`,
+		`configuration badarch_cfg of cpu is for nope end for; end configuration;`,
 	)
 	// happy path: class resolves entity via configuration; arch rtl exists.
 	ok := &Design{
@@ -108,6 +109,16 @@ func TestValidateConfiguration(t *testing.T) {
 	}
 	if err := Validate(bad, lib); !errors.Is(err, ErrConfigNotFound) {
 		t.Errorf("missing configuration should error with ErrConfigNotFound, got %v", err)
+	}
+	// configuration exists but names an architecture absent from the entity:
+	badArch := &Design{
+		DeviceClasses: map[string]*DeviceClass{"c": {Configuration: "badarch_cfg"}},
+		Devices:       []*Device{{Class: "c", Name: "d0"}},
+	}
+	err := Validate(badArch, lib)
+	var ve *ValidateError
+	if !errors.Is(err, ErrArchNotFound) || !errors.As(err, &ve) || ve.Arch != "nope" || ve.Entity != "cpu" {
+		t.Errorf("expected ErrArchNotFound with Arch=nope Entity=cpu, got %v (%+v)", err, ve)
 	}
 }
 

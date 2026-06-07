@@ -48,7 +48,14 @@ func (e *IncludeError) Error() string {
 	}
 	return fmt.Sprintf("%v: %s", e.Kind, e.Path)
 }
-func (e *IncludeError) Unwrap() error { return e.Kind }
+// Unwrap exposes both the category sentinel and the underlying cause so that
+// errors.Is reaches the Kind AND the wrapped error (e.g. fs.ErrNotExist).
+func (e *IncludeError) Unwrap() []error {
+	if e.Err != nil {
+		return []error{e.Kind, e.Err}
+	}
+	return []error{e.Kind}
+}
 
 var (
 	ErrEntityNotFound     = errors.New("entity not found")
@@ -65,6 +72,7 @@ type ValidateError struct {
 	Ctx    string // e.g. `device "uart0"` / `top-entity "cpus"`
 	Name   string // the offending entity/config/generic/port/class name
 	Entity string // related entity, where applicable
+	Arch   string // the configuration's architecture, for ErrArchNotFound
 }
 
 func (e *ValidateError) Error() string {
@@ -74,7 +82,7 @@ func (e *ValidateError) Error() string {
 	case errors.Is(e.Kind, ErrConfigNotFound):
 		return fmt.Sprintf("%s: configuration %q not found", e.Ctx, e.Name)
 	case errors.Is(e.Kind, ErrArchNotFound):
-		return fmt.Sprintf("%s: configuration %q architecture not found for entity %q", e.Ctx, e.Name, e.Entity)
+		return fmt.Sprintf("%s: configuration %q architecture %q not found for entity %q", e.Ctx, e.Name, e.Arch, e.Entity)
 	case errors.Is(e.Kind, ErrGenericNotOnEntity):
 		return fmt.Sprintf("%s: generic %q not on entity %q", e.Ctx, e.Name, e.Entity)
 	case errors.Is(e.Kind, ErrPortNotOnEntity):
