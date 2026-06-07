@@ -74,6 +74,7 @@ type ResolvedDevice struct {
 	Generics map[string]design.Value // effective (class overlaid by instance)
 	BaseAddr *uint64                 // carried, validated in P4e
 	Ports    []*ResolvedPort
+	DataBus  bool // entity carries a cpu data-bus port pair (set by classifyDataBus)
 }
 
 // ResolvedEntity is a resolved top-entity or padring-entity: an entity bound to
