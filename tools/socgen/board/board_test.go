@@ -1,9 +1,12 @@
 package board
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/j-core/jcore-soc/tools/socgen/internal/errutil"
 )
 
 func writeFile(t *testing.T, dir, rel, content string) string {
@@ -23,9 +26,9 @@ func TestLibraryBestEffort(t *testing.T) {
 	good1 := writeFile(t, dir, "a.vhd", "entity ea is port (clk : in std_logic); end entity;")
 	good2 := writeFile(t, dir, "b.vhd", "package pb is constant K : integer := 1; end package;")
 	bad := writeFile(t, dir, "c.vhd", "entity broken is port (")
-	lib, errs := Library([]string{good1, good2, bad})
-	if len(errs) != 1 {
-		t.Fatalf("want 1 parse error (the broken file), got %d: %v", len(errs), errs)
+	lib, err := Library([]string{good1, good2, bad})
+	if len(errutil.Errors(err)) != 1 {
+		t.Fatalf("want 1 parse error (the broken file), got %d: %v", len(errutil.Errors(err)), err)
 	}
 	if _, ok := lib.Entity("ea"); !ok {
 		t.Error("entity ea should be extracted despite the broken file")
@@ -52,26 +55,49 @@ func TestReadFileList(t *testing.T) {
 			t.Errorf("line %d: got %q want %q", i, got[i], want[i])
 		}
 	}
-	if _, err := readFileList(filepath.Join(dir, "missing.txt")); err == nil {
-		t.Error("missing list should error")
+	missing := filepath.Join(dir, "missing.txt")
+	_, err = readFileList(missing)
+	if err == nil {
+		t.Fatal("missing list should error")
+	}
+	if !errors.Is(err, ErrReadList) {
+		t.Errorf("missing list: want ErrReadList, got %v", err)
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("missing list: want os.ErrNotExist reachable via Unwrap, got %v", err)
+	}
+	var fle *FileListError
+	if !errors.As(err, &fle) {
+		t.Fatalf("missing list: want *FileListError, got %T", err)
+	}
+	if fle.Target != missing {
+		t.Errorf("Target = %q want %q", fle.Target, missing)
 	}
 }
 
 func TestReadFileListEmpty(t *testing.T) {
 	dir := t.TempDir()
 	p := writeFile(t, dir, "vhdl_list.txt", "notes.txt\n\nREADME\n")
-	if _, err := readFileList(p); err == nil {
-		t.Error("a list with no .vhd/.vhh entries should return an error")
+	_, err := readFileList(p)
+	if err == nil {
+		t.Fatal("a list with no .vhd/.vhh entries should return an error")
+	}
+	if !errors.Is(err, ErrEmptyList) {
+		t.Errorf("empty list: want ErrEmptyList, got %v", err)
+	}
+	// message smoke for *FileListError (no underlying Err on ErrEmptyList).
+	if got := err.Error(); got != "empty file list ("+p+")" {
+		t.Errorf("Error() = %q", got)
 	}
 }
 
 func TestLibraryEmpty(t *testing.T) {
-	lib, errs := Library(nil)
+	lib, err := Library(nil)
 	if lib == nil {
 		t.Fatal("Library(nil) should return a non-nil *iface.Library")
 	}
-	if len(errs) != 0 {
-		t.Errorf("Library(nil) should have zero errors, got: %v", errs)
+	if err != nil {
+		t.Errorf("Library(nil) should have zero errors, got: %v", err)
 	}
 }
 
@@ -85,9 +111,9 @@ devices:
 `)
 	ent := writeFile(t, root, "vhdl/uartlitedb.vhd",
 		"entity uartlitedb is port (clk : in std_logic); end entity;")
-	b, errs := loadFrom(root, "tb", []string{ent})
-	if len(errs) != 0 {
-		t.Fatalf("expected clean load+validate, got: %v", errs)
+	b, err := loadFrom(root, "tb", []string{ent})
+	if err != nil {
+		t.Fatalf("expected clean load+validate, got: %v", err)
 	}
 	if b.Design == nil || len(b.Design.Devices) != 1 {
 		t.Fatalf("design = %+v", b.Design)
