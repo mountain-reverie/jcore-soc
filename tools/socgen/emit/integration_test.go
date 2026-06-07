@@ -90,4 +90,10 @@ func TestEmitDevicesMimasV2(t *testing.T) {
 	}
 	t.Logf("mimas_v2 instances: %d bound devices (%d skipped unbound), %d top, %d padring; %d labels in AST",
 		bound, skipped, tops, pads, len(labels))
+
+	// Guard against a vacuous pass: a board-spec or pipeline regression that
+	// silently resolves nothing would make every loop above a no-op.
+	if bound+tops+pads == 0 {
+		t.Fatalf("no devices/top/padring entities resolved for mimas_v2; pipeline regression?")
+	}
 }

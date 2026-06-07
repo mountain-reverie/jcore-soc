@@ -32,6 +32,7 @@ func TestEmitValue(t *testing.T) {
 		{"str", design.Value{Kind: design.KindStr, Text: "hello"}, `"hello"`},
 		{"float_whole", design.Value{Kind: design.KindFloat, Float: 1.0}, "1.0"},
 		{"float_frac", design.Value{Kind: design.KindFloat, Float: 1.5}, "1.5"},
+		{"float_exp", design.Value{Kind: design.KindFloat, Float: 1e21}, "1.0e+21"},
 		{"map", design.Value{Kind: design.KindMap}, "open"},
 		{"str_quoted", design.Value{Kind: design.KindStr, Text: `a"b`}, `"a""b"`},
 	}
