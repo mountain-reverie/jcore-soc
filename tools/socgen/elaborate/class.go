@@ -100,7 +100,7 @@ func chooseArch(ctx, entityName, archName, configName string, lib *iface.Library
 func resolveRegs(class string, dc *design.DeviceClass) ([]*ResolvedReg, int, [2]int, error) {
 	var errs []error
 	addr := 0
-	var regs []*ResolvedReg
+	regs := make([]*ResolvedReg, 0, len(dc.Regs))
 	for _, r := range dc.Regs {
 		width := 4
 		if r.Width != nil {

@@ -15,6 +15,19 @@ const (
 	KindDeferred                // an unsupported map kind (bist/ring/open) — recorded only
 )
 
+// Port directions (entity port modes) and context kinds, factored out of the
+// repeated string literals they label.
+const (
+	dirIn     = "in"
+	dirOut    = "out"
+	dirInout  = "inout"
+	dirBuffer = "buffer"
+
+	ctxKindPin = "pin"
+
+	dirDownto = "downto"
+)
+
 type ResolvedPort struct {
 	Name         string
 	Dir          string        // from the entity port: "in"|"out"|"inout"|"buffer"|""

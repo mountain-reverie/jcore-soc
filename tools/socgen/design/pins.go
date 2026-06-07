@@ -151,7 +151,7 @@ func (s *SigSpec) UnmarshalYAML(n *yaml.Node) error {
 // ignored. The error result is for symmetry with parsePinList; this parser has
 // no error conditions today.
 func parsePinNames(data []byte) ([]*Pin, error) {
-	var pins []*Pin
+	pins := make([]*Pin, 0, strings.Count(string(data), "\n")+1)
 	for line := range strings.SplitSeq(string(data), "\n") {
 		t := strings.TrimSpace(line)
 		if t == "" || strings.HasPrefix(t, "#") {

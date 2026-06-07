@@ -452,31 +452,34 @@ func ParseFile(fset *FileSet, filename string, src []byte, opts ...Option) (*Des
 func (p *parser) parseDottedName() string {
 	tok := p.cur()
 	var text string
-	if tok.Kind == IDENT || tok.Kind == EXTIDENT {
+	switch {
+	case tok.Kind == IDENT || tok.Kind == EXTIDENT:
 		p.advance()
 		text = tok.Lit
-	} else if tok.Kind > kwStart && tok.Kind < kwEnd {
+	case tok.Kind > kwStart && tok.Kind < kwEnd:
 		p.advance()
 		text = tok.Kind.String()
-	} else {
+	default:
 		p.errorf(tok.Pos, "expected name, got %v %q", tok.Kind, tok.Lit)
 		return ""
 	}
+dotLoop:
 	for p.at(DOT) {
 		p.advance() // consume '.'
 		next := p.cur()
-		if next.Kind == IDENT || next.Kind == EXTIDENT || next.Kind == ALL {
+		switch {
+		case next.Kind == IDENT || next.Kind == EXTIDENT || next.Kind == ALL:
 			p.advance()
 			seg := next.Lit
 			if seg == "" {
 				seg = next.Kind.String()
 			}
 			text += "." + seg
-		} else if next.Kind > kwStart && next.Kind < kwEnd {
+		case next.Kind > kwStart && next.Kind < kwEnd:
 			p.advance()
 			text += "." + next.Kind.String()
-		} else {
-			break
+		default:
+			break dotLoop
 		}
 	}
 	return text

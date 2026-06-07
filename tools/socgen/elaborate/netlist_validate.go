@@ -53,7 +53,7 @@ func validateSignals(sigs map[string]*Signal) error {
 // isDriver reports whether a port direction drives its signal (a source).
 func isDriver(dir string) bool {
 	switch dir {
-	case "out", "buffer", "inout":
+	case dirOut, dirBuffer, dirInout:
 		return true
 	}
 	return false
@@ -62,7 +62,7 @@ func isDriver(dir string) bool {
 // isConsumer reports whether a port direction consumes its signal (a sink).
 func isConsumer(dir string) bool {
 	switch dir {
-	case "in", "inout":
+	case dirIn, dirInout:
 		return true
 	}
 	return false
@@ -73,7 +73,7 @@ func isConsumer(dir string) bool {
 // All drivers must be pin-context for either exception to apply.
 func multiDriverAllowed(drivers []*SignalPortRef) bool {
 	for _, d := range drivers {
-		if d.Context.Kind != "pin" {
+		if d.Context.Kind != ctxKindPin {
 			return false
 		}
 	}

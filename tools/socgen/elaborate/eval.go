@@ -101,7 +101,7 @@ func resolveType(mark string, constraint vhdl.Expr, env map[string]int64) *Resol
 		var dir string
 		switch rng.Dir {
 		case vhdl.DOWNTO:
-			dir = "downto"
+			dir = dirDownto
 		case vhdl.TO:
 			dir = "to"
 		default:

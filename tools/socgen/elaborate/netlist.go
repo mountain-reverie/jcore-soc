@@ -86,7 +86,7 @@ func applyZeroSignals(sigs map[string]*Signal, zero []string) {
 		}
 		driven := false
 		for _, pr := range s.Ports {
-			if pr.Dir == "out" {
+			if pr.Dir == dirOut {
 				driven = true
 				break
 			}
@@ -95,7 +95,7 @@ func applyZeroSignals(sigs map[string]*Signal, zero []string) {
 			s.Ports = append(s.Ports, &SignalPortRef{
 				Context:  Context{Kind: "zero", ID: "_zero"},
 				PortName: z,
-				Dir:      "out",
+				Dir:      dirOut,
 				Type:     s.Type,
 			})
 		}

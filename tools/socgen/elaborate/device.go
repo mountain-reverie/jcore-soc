@@ -76,7 +76,7 @@ func resolveDevices(d *design.Design, classes map[string]*ResolvedClass) ([]*Res
 		used[n] = true
 	}
 
-	var out []*ResolvedDevice
+	out := make([]*ResolvedDevice, 0, len(d.Devices))
 	for _, dev := range d.Devices {
 		name := dev.Name
 		if name == "" {

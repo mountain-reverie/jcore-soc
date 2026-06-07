@@ -12,7 +12,7 @@ import (
 // buildLib parses VHDL sources into an iface.Library.
 func buildLib(t *testing.T, srcs ...string) *iface.Library {
 	t.Helper()
-	var files []*vhdl.DesignFile
+	files := make([]*vhdl.DesignFile, 0, len(srcs))
 	for i, s := range srcs {
 		df, err := vhdl.ParseFile(vhdl.NewFileSet(), "t.vhd", []byte(s))
 		if err != nil {
