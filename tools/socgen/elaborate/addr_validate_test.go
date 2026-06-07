@@ -34,3 +34,25 @@ func TestValidateBaseAddr(t *testing.T) {
 		t.Errorf("good/nomap must produce no error; got:\n%s", joined)
 	}
 }
+
+func TestValidateBaseAddrBothChecksAppend(t *testing.T) {
+	// 0xb0000001: wrong region (bits 31-28 != 0xA) AND over-specified (low bit set).
+	// The two checks are independent and must BOTH append (best-effort, no short-circuit).
+	res := &Resolution{
+		Classes: map[string]*ResolvedClass{"c": {Name: "c", LeftAddrBit: 5}},
+		Devices: []*ResolvedDevice{{Name: "bad", Class: "c", BaseAddr: u64(0xb0000001)}},
+	}
+	errs := validateAddresses(res, nil)
+	region, overspec := false, false
+	for _, e := range errs {
+		if strings.Contains(e.Error(), "bits 31-28 must be 0xA") {
+			region = true
+		}
+		if strings.Contains(e.Error(), "internal address range") {
+			overspec = true
+		}
+	}
+	if !region || !overspec {
+		t.Errorf("expected BOTH region and over-spec errors; region=%v overspec=%v errs=%v", region, overspec, errs)
+	}
+}
