@@ -30,8 +30,13 @@ jobs:
       - name: Test (tight timeout)
         # GitHub runners are isolated, so a -timeout is the needed guard here; a
         # runaway just fails the job rather than the dev's machine.
+        #
+        # -p 1 is REQUIRED: the board and elaborate integration tests each shell out
+        # to `make mimas_v2` into the same output/mimas_v2 dir. Run in parallel (the
+        # default), they race on Makefile.tmp ("mv: cannot stat ... Makefile.tmp").
+        # Serializing test binaries with -p 1 matches the local Makefile test target.
         env:
           JCORE_SOC_ROOT: ${{ github.workspace }}
         run: |
           cd tools/socgen
-          timeout -s KILL 150 go test ./... -timeout 90s -count=1
+          timeout -s KILL 150 go test ./... -timeout 90s -count=1 -p 1
