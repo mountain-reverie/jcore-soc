@@ -7,7 +7,7 @@ JCORE_SOC_ROOT ?= $(abspath $(SOCGEN_DIR)/../..)
 GO ?= go
 # Use `env` so the var survives being prefixed by timeout/systemd-run (timeout
 # would otherwise try to exec "JCORE_SOC_ROOT=..." as the command).
-GOTEST := env JCORE_SOC_ROOT=$(JCORE_SOC_ROOT) $(GO) test ./... -timeout 90s -count=1
+GOTEST := env JCORE_SOC_ROOT=$(JCORE_SOC_ROOT) $(GO) test ./... -timeout 90s -count=1 -p 1
 MEMMAX ?= 2G
 
 .PHONY: test test-unsafe build vet
@@ -20,10 +20,10 @@ test:
 	cd $(SOCGEN_DIR) && \
 	if command -v systemd-run >/dev/null 2>&1; then \
 		systemd-run --user --scope -p MemoryMax=$(MEMMAX) -p MemorySwapMax=0 -- \
-			timeout -s KILL 150 $(GOTEST); \
+			timeout -s KILL 240 $(GOTEST); \
 	else \
 		echo "WARNING: systemd-run not found; running with -timeout only (no hard memory cap)"; \
-		timeout -s KILL 150 $(GOTEST); \
+		timeout -s KILL 240 $(GOTEST); \
 	fi
 # Escape hatch with no cap (use only if you understand the risk).
 test-unsafe:
