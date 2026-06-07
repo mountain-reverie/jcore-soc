@@ -1,18 +1,20 @@
 package elaborate
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/j-core/jcore-soc/tools/socgen/design"
+	"github.com/j-core/jcore-soc/tools/socgen/internal/errutil"
 )
 
 func TestChooseArchSingle(t *testing.T) {
 	lib := buildLib(t,
 		`entity e is port (clk : in std_logic); end entity;`,
 		`architecture rtl of e is begin end architecture;`)
-	ent, arch, cfg, hardErr, errs := chooseArch(`class "e"`, "e", "", "", lib, nil)
-	if len(errs) != 0 {
-		t.Fatalf("errs: %v", errs)
+	ent, arch, cfg, hardErr, err := chooseArch(`class "e"`, "e", "", "", lib)
+	if err != nil {
+		t.Fatalf("err: %v", err)
 	}
 	if ent == nil || arch != "rtl" || cfg != nil || hardErr {
 		t.Fatalf("got ent=%v arch=%q cfg=%v hardErr=%v", ent, arch, cfg, hardErr)
@@ -22,9 +24,9 @@ func TestChooseArchSingle(t *testing.T) {
 func TestChooseArchEntityNotFound(t *testing.T) {
 	lib := buildLib(t, `entity e is port (clk : in std_logic); end entity;`,
 		`architecture rtl of e is begin end architecture;`)
-	ent, _, _, hardErr, errs := chooseArch(`class "ghost"`, "ghost", "", "", lib, nil)
-	if ent != nil || !hardErr || len(errs) != 1 {
-		t.Fatalf("expected hard error for missing entity: ent=%v hardErr=%v errs=%v", ent, hardErr, errs)
+	ent, _, _, hardErr, err := chooseArch(`class "ghost"`, "ghost", "", "", lib)
+	if ent != nil || !hardErr || !errors.Is(err, ErrEntityNotFound) {
+		t.Fatalf("expected hard error for missing entity: ent=%v hardErr=%v err=%v", ent, hardErr, err)
 	}
 }
 
@@ -34,9 +36,9 @@ func TestChooseArchAmbiguousIsSoft(t *testing.T) {
 		`entity e is port (clk : in std_logic); end entity;`,
 		`architecture a1 of e is begin end architecture;`,
 		`architecture a2 of e is begin end architecture;`)
-	ent, arch, _, hardErr, errs := chooseArch(`class "e"`, "e", "", "", lib, nil)
-	if ent == nil || arch != "" || hardErr || len(errs) != 1 {
-		t.Fatalf("expected soft ambiguity: ent=%v arch=%q hardErr=%v errs=%v", ent, arch, hardErr, errs)
+	ent, arch, _, hardErr, err := chooseArch(`class "e"`, "e", "", "", lib)
+	if ent == nil || arch != "" || hardErr || !errors.Is(err, ErrAmbiguousArch) {
+		t.Fatalf("expected soft ambiguity: ent=%v arch=%q hardErr=%v err=%v", ent, arch, hardErr, err)
 	}
 	_ = design.KindExpr // keep design import used across the file
 }
@@ -48,9 +50,9 @@ func TestChooseArchCfgAndArchAgree(t *testing.T) {
 		`architecture rtl of e is begin end architecture;`,
 		`architecture other of e is begin end architecture;`,
 		`configuration ecfg of e is for rtl end for; end configuration;`)
-	ent, arch, cfg, hardErr, errs := chooseArch(`class "e"`, "e", "rtl", "ecfg", lib, nil)
-	if len(errs) != 0 || hardErr {
-		t.Fatalf("agreeing arch+config should resolve cleanly: hardErr=%v errs=%v", hardErr, errs)
+	ent, arch, cfg, hardErr, err := chooseArch(`class "e"`, "e", "rtl", "ecfg", lib)
+	if err != nil || hardErr {
+		t.Fatalf("agreeing arch+config should resolve cleanly: hardErr=%v err=%v", hardErr, err)
 	}
 	if ent == nil || arch != "rtl" || cfg == nil || cfg.Name != "ecfg" {
 		t.Fatalf("got ent=%v arch=%q cfg=%v", ent, arch, cfg)
@@ -65,9 +67,9 @@ func TestResolveEntityExplicitEntity(t *testing.T) {
 		Entity: "pll",
 		Ports:  map[string]design.Value{"clk_i": {Kind: design.KindExpr, Text: "ref"}, "clk_o": {Kind: design.KindExpr, Text: "sys"}},
 	}
-	re, errs := resolveEntity("padring", "mypll", te, lib, map[string]string{}, nil)
-	if len(errs) != 0 {
-		t.Fatalf("errs: %v", errs)
+	re, err := resolveEntity("padring", "mypll", te, lib, map[string]string{})
+	if err != nil {
+		t.Fatalf("err: %v", err)
 	}
 	if re.Name != "mypll" || re.Entity == nil || re.ArchName != "rtl" {
 		t.Fatalf("got %+v", re)
@@ -83,9 +85,9 @@ func TestResolveEntityNameDefaultsToKey(t *testing.T) {
 		`entity fpga_reboot is port (clk : in std_logic); end entity;`,
 		`architecture s6 of fpga_reboot is begin end architecture;`)
 	te := &design.TopEntity{Architecture: "s6"}
-	re, errs := resolveEntity("top", "fpga_reboot", te, lib, map[string]string{}, nil)
-	if len(errs) != 0 {
-		t.Fatalf("errs: %v", errs)
+	re, err := resolveEntity("top", "fpga_reboot", te, lib, map[string]string{})
+	if err != nil {
+		t.Fatalf("err: %v", err)
 	}
 	if re.Entity == nil || re.ArchName != "s6" {
 		t.Fatalf("entity-name-from-key or architecture failed: %+v", re)
@@ -95,9 +97,9 @@ func TestResolveEntityNameDefaultsToKey(t *testing.T) {
 func TestResolveEntityUnknownEntity(t *testing.T) {
 	lib := buildLib(t, `entity e is port (clk : in std_logic); end entity;`,
 		`architecture rtl of e is begin end architecture;`)
-	re, errs := resolveEntity("top", "ghost", &design.TopEntity{}, lib, map[string]string{}, nil)
-	if re.Entity != nil || len(errs) != 1 {
-		t.Fatalf("expected one error and nil entity: re=%+v errs=%v", re, errs)
+	re, err := resolveEntity("top", "ghost", &design.TopEntity{}, lib, map[string]string{})
+	if re.Entity != nil || !errors.Is(err, ErrEntityNotFound) {
+		t.Fatalf("expected one error and nil entity: re=%+v err=%v", re, err)
 	}
 }
 
@@ -108,16 +110,16 @@ func TestResolveEntitiesSortedAndAccumulates(t *testing.T) {
 		`entity b is port (clk : in std_logic); end entity;`,
 		`architecture rtl of b is begin end architecture;`)
 	// empty map -> empty result, no errors
-	out, errs := resolveEntities("top", nil, lib, map[string]string{}, nil)
-	if len(out) != 0 || len(errs) != 0 {
-		t.Fatalf("empty map: out=%v errs=%v", out, errs)
+	out, err := resolveEntities("top", nil, lib, map[string]string{})
+	if len(out) != 0 || err != nil {
+		t.Fatalf("empty map: out=%v err=%v", out, err)
 	}
 	// two entries (one resolvable, one unknown entity) -> both keyed, one error
 	ents := map[string]*design.TopEntity{
 		"x": {Entity: "a"},
 		"y": {Entity: "ghost"},
 	}
-	out, errs = resolveEntities("top", ents, lib, map[string]string{}, nil)
+	out, err = resolveEntities("top", ents, lib, map[string]string{})
 	if len(out) != 2 || out["x"] == nil || out["y"] == nil {
 		t.Fatalf("expected both keys resolved: %v", out)
 	}
@@ -127,7 +129,7 @@ func TestResolveEntitiesSortedAndAccumulates(t *testing.T) {
 	if out["y"].Entity != nil {
 		t.Errorf("y should have nil entity (ghost)")
 	}
-	if len(errs) != 1 {
-		t.Errorf("expected exactly one error (ghost), got %v", errs)
+	if n := len(errutil.Errors(err)); n != 1 {
+		t.Errorf("expected exactly one error (ghost), got %d: %v", n, err)
 	}
 }

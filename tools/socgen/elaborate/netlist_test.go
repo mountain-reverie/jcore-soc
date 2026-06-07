@@ -1,10 +1,12 @@
 package elaborate
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/j-core/jcore-soc/tools/socgen/board"
 	"github.com/j-core/jcore-soc/tools/socgen/design"
+	"github.com/j-core/jcore-soc/tools/socgen/internal/errutil"
 )
 
 func TestElaborateNetlist(t *testing.T) {
@@ -113,16 +115,14 @@ func TestElaborateJoinsTopEntity(t *testing.T) {
 			"gen": {Entity: "clkgen", Ports: map[string]design.Value{"clk_o": {Kind: design.KindExpr, Text: "sys"}}},
 		},
 	}
-	res, errs := Elaborate(&board.Board{Design: d, Library: lib})
+	res, err := Elaborate(&board.Board{Design: d, Library: lib})
 	s := res.Signals["sys"]
 	if s == nil || len(s.Ports) != 2 {
 		t.Fatalf("sys should span device + padring (2 ports): %+v", res.Signals["sys"])
 	}
 	// the join drove 'sys' -> no "nothing drives sys" error
-	for _, e := range errs {
-		if e.Error() == `nothing drives signal "sys" used by d0.clk` {
-			t.Errorf("sys should be driven by the padring out port; got error: %v", e)
-		}
+	if undrivenSignal(err, "sys") {
+		t.Errorf("sys should be driven by the padring out port; got error: %v", err)
 	}
 	// the padring entity is recorded on the resolution
 	if res.PadringEntities["gen"] == nil || res.PadringEntities["gen"].Entity == nil {
@@ -138,14 +138,20 @@ func TestElaborateUndrivenWithoutTopDriver(t *testing.T) {
 		DeviceClasses: map[string]*design.DeviceClass{"c": {Entity: "dev"}},
 		Devices:       []*design.Device{{Class: "c", Name: "d0", Ports: map[string]design.Value{"clk": {Kind: design.KindExpr, Text: "lonely"}}}},
 	}
-	_, errs := Elaborate(&board.Board{Design: d, Library: lib})
-	found := false
-	for _, e := range errs {
-		if e.Error() == `nothing drives signal "lonely" used by d0.clk` {
-			found = true
+	_, err := Elaborate(&board.Board{Design: d, Library: lib})
+	if !undrivenSignal(err, "lonely") {
+		t.Errorf("expected 'nothing drives' for an :in-only signal with no top/padring driver; err: %v", err)
+	}
+}
+
+// undrivenSignal reports whether err carries an ErrUndrivenSignal SignalError for
+// the named signal.
+func undrivenSignal(err error, name string) bool {
+	for _, e := range errutil.Errors(err) {
+		var se *SignalError
+		if errors.As(e, &se) && errors.Is(se, ErrUndrivenSignal) && se.Signal == name {
+			return true
 		}
 	}
-	if !found {
-		t.Errorf("expected 'nothing drives' for an :in-only signal with no top/padring driver; errs: %v", errs)
-	}
+	return false
 }

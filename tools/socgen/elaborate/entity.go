@@ -1,6 +1,7 @@
 package elaborate
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 
@@ -13,7 +14,7 @@ import (
 // its architecture/configuration via the shared chooseArch, and builds its ports
 // via the shared buildPorts. kind is "top" or "padring" (error-context only).
 // Best-effort: a port-less, nil-entity ResolvedEntity is returned on bind failure.
-func resolveEntity(kind, name string, te *design.TopEntity, lib *iface.Library, merge map[string]string, errs []error) (*ResolvedEntity, []error) {
+func resolveEntity(kind, name string, te *design.TopEntity, lib *iface.Library, merge map[string]string) (*ResolvedEntity, error) {
 	re := &ResolvedEntity{Name: name}
 	entityName := te.Entity
 	if lc(entityName) == "" {
@@ -23,23 +24,24 @@ func resolveEntity(kind, name string, te *design.TopEntity, lib *iface.Library, 
 	// hardErr is intentionally not checked here: unlike resolveClass (which skips
 	// register resolution on a hard bind failure), a top/padring entity has no such
 	// dependent step, and buildPorts already nil-guards on ent.
-	ent, arch, cfg, _, errs := chooseArch(ctx, entityName, te.Architecture, te.Configuration, lib, errs)
+	ent, arch, cfg, _, err := chooseArch(ctx, entityName, te.Architecture, te.Configuration, lib)
 	re.Entity, re.ArchName, re.Config = ent, arch, cfg
 	env := genericEnv(te.Generics, ent)
 	re.Ports = buildPorts(name, ent, te.Ports, env, merge)
-	return re, errs
+	return re, err
 }
 
 // resolveEntities resolves a whole top-entities or padring-entities map in sorted
 // key order (deterministic error accumulation).
-func resolveEntities(kind string, ents map[string]*design.TopEntity, lib *iface.Library, merge map[string]string, errs []error) (map[string]*ResolvedEntity, []error) {
+func resolveEntities(kind string, ents map[string]*design.TopEntity, lib *iface.Library, merge map[string]string) (map[string]*ResolvedEntity, error) {
+	errs := make([]error, 0, len(ents))
 	out := map[string]*ResolvedEntity{}
 	for _, name := range sortedTopKeys(ents) {
-		var re *ResolvedEntity
-		re, errs = resolveEntity(kind, name, ents[name], lib, merge, errs)
+		re, err := resolveEntity(kind, name, ents[name], lib, merge)
+		errs = append(errs, err)
 		out[name] = re
 	}
-	return out, errs
+	return out, errors.Join(errs...)
 }
 
 func sortedTopKeys(m map[string]*design.TopEntity) []string {

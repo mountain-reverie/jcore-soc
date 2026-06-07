@@ -1,7 +1,7 @@
 package elaborate
 
 import (
-	"strings"
+	"errors"
 	"testing"
 
 	"github.com/j-core/jcore-soc/tools/socgen/board"
@@ -18,9 +18,9 @@ func TestDeviceNaming(t *testing.T) {
 			{Class: "gpio"},              // -> gpio1
 		},
 	}
-	res, errs := Devices(&board.Board{Name: "b", Design: d, Library: lib})
-	if len(errs) != 0 {
-		t.Fatalf("errs: %v", errs)
+	res, err := Devices(&board.Board{Name: "b", Design: d, Library: lib})
+	if err != nil {
+		t.Fatalf("err: %v", err)
 	}
 	names := []string{res.Devices[0].Name, res.Devices[1].Name, res.Devices[2].Name}
 	if names[0] != "led" || names[1] != "gpio0" || names[2] != "gpio1" {
@@ -53,21 +53,19 @@ func TestDeviceGenericMergeAndUnknown(t *testing.T) {
 			{Class: "c", Name: "d1", Generics: map[string]design.Value{"bogus": {}}},
 		},
 	}
-	res, errs := Devices(&board.Board{Design: d, Library: lib})
+	res, err := Devices(&board.Board{Design: d, Library: lib})
 	// d0: instance width=16 overrides class width=8; fast added
 	g := res.Devices[0].Generics
 	if g["width"].Int != 16 || g["fast"].Bool != true {
 		t.Errorf("d0 generics = %+v", g)
 	}
 	// d1: bogus is unknown
-	found := false
-	for _, e := range errs {
-		if strings.Contains(e.Error(), `unknown generic "bogus"`) {
-			found = true
-		}
+	if !errors.Is(err, ErrUnknownGeneric) {
+		t.Errorf("want unknown-generic error, got %v", err)
 	}
-	if !found {
-		t.Errorf("want unknown-generic error, got %v", errs)
+	var re *ResolveError
+	if !errors.As(err, &re) || re.Name != "bogus" {
+		t.Errorf("want ResolveError with Name=bogus, got %v", err)
 	}
 }
 
@@ -77,8 +75,8 @@ func TestDeviceDuplicateName(t *testing.T) {
 		DeviceClasses: map[string]*design.DeviceClass{"c": {Entity: "e"}},
 		Devices:       []*design.Device{{Class: "c", Name: "x"}, {Class: "c", Name: "x"}},
 	}
-	_, errs := Devices(&board.Board{Design: d, Library: lib})
-	if len(errs) == 0 {
-		t.Fatal("want duplicate-name error")
+	_, err := Devices(&board.Board{Design: d, Library: lib})
+	if !errors.Is(err, ErrDuplicateName) {
+		t.Fatalf("want duplicate-name error, got %v", err)
 	}
 }
