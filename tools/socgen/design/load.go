@@ -54,6 +54,12 @@ func Load(path string) (*Design, error) {
 			} else {
 				d.Pins.Pins, perr = parsePinList(data, d.Pins.Part)
 			}
+			// back-fill the pin file path onto a part-not-found error (parsePinList
+			// has no path), so the rendered message names the file.
+			var pfe *PinFileError
+			if errors.As(perr, &pfe) && pfe.Path == "" {
+				pfe.Path = pinPath
+			}
 			errs = append(errs, perr)
 		}
 	}

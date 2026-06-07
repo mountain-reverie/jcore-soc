@@ -34,7 +34,7 @@ func Validate(d *Design, lib *iface.Library) error {
 						}
 					}
 					if !found {
-						errs = append(errs, &ValidateError{Kind: ErrArchNotFound, Ctx: ctx, Name: configName, Entity: cfg.Entity})
+						errs = append(errs, &ValidateError{Kind: ErrArchNotFound, Ctx: ctx, Name: configName, Entity: cfg.Entity, Arch: cfg.Arch})
 					}
 				}
 			}

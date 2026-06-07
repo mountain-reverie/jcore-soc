@@ -97,6 +97,10 @@ func TestIncludeCycle(t *testing.T) {
 	if !errors.Is(err, ErrIncludeCycle) {
 		t.Fatalf("expected an include-cycle error, got %v", err)
 	}
+	var ie *IncludeError
+	if !errors.As(err, &ie) || ie.Path == "" {
+		t.Errorf("expected an *IncludeError carrying the offending path, got %+v", ie)
+	}
 }
 
 func TestSeqConcatOnMerge(t *testing.T) {
