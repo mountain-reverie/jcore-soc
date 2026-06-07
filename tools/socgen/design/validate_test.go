@@ -1,12 +1,13 @@
 package design
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/j-core/jcore-soc/tools/socgen/iface"
+	"github.com/j-core/jcore-soc/tools/socgen/internal/errutil"
 	"github.com/j-core/jcore-soc/tools/socgen/vhdl"
 )
 
@@ -40,8 +41,8 @@ end entity;`)
 				Ports:    map[string]Value{"clk": {Kind: KindExpr, Text: "clk_sys"}}},
 		},
 	}
-	if errs := Validate(d, lib); len(errs) != 0 {
-		t.Fatalf("expected no errors, got: %v", errs)
+	if err := Validate(d, lib); err != nil {
+		t.Fatalf("expected no errors, got: %v", err)
 	}
 }
 
@@ -59,22 +60,31 @@ end entity;`)
 		},
 		TopEntities: map[string]*TopEntity{"t0": {Entity: "ghost_entity"}}, // missing entity
 	}
-	errs := Validate(d, lib)
-	joined := errsToString(errs)
-	for _, want := range []string{"unknown class", "generic \"bogus\"", "port \"missing\"", "entity \"ghost_entity\" not found"} {
-		if !strings.Contains(joined, want) {
-			t.Errorf("missing error %q in:\n%s", want, joined)
+	err := Validate(d, lib)
+	for _, want := range []error{ErrUnknownClass, ErrGenericNotOnEntity, ErrPortNotOnEntity, ErrEntityNotFound} {
+		if !errors.Is(err, want) {
+			t.Errorf("missing error %v in: %v", want, err)
 		}
 	}
-}
-
-func errsToString(errs []error) string {
-	var b strings.Builder
-	for _, e := range errs {
-		b.WriteString(e.Error())
-		b.WriteByte('\n')
+	// field-level checks via errors.As over the flattened leaves.
+	want := map[error]struct{ name, entity string }{
+		ErrGenericNotOnEntity: {"bogus", "uartlitedb"},
+		ErrPortNotOnEntity:    {"missing", "uartlitedb"},
+		ErrEntityNotFound:     {"ghost_entity", ""},
+		ErrUnknownClass:       {"nope", ""},
 	}
-	return b.String()
+	for _, leaf := range errutil.Errors(err) {
+		var ve *ValidateError
+		if !errors.As(leaf, &ve) {
+			t.Errorf("non-ValidateError leaf: %v", leaf)
+			continue
+		}
+		if w, ok := want[ve.Kind]; ok {
+			if ve.Name != w.name || ve.Entity != w.entity {
+				t.Errorf("%v: name=%q entity=%q, want name=%q entity=%q", ve.Kind, ve.Name, ve.Entity, w.name, w.entity)
+			}
+		}
+	}
 }
 
 func TestValidateConfiguration(t *testing.T) {
@@ -88,16 +98,16 @@ func TestValidateConfiguration(t *testing.T) {
 		DeviceClasses: map[string]*DeviceClass{"c": {Configuration: "cpu_cfg"}},
 		Devices:       []*Device{{Class: "c", Name: "cpu0", Ports: map[string]Value{"clk": {Kind: KindExpr, Text: "clk_sys"}}}},
 	}
-	if errs := Validate(ok, lib); len(errs) != 0 {
-		t.Fatalf("config happy path should pass: %v", errs)
+	if err := Validate(ok, lib); err != nil {
+		t.Fatalf("config happy path should pass: %v", err)
 	}
 	// missing configuration:
 	bad := &Design{
 		DeviceClasses: map[string]*DeviceClass{"c": {Configuration: "ghost_cfg"}},
 		Devices:       []*Device{{Class: "c", Name: "d0"}},
 	}
-	if errsToString(Validate(bad, lib)) == "" {
-		t.Error("missing configuration should error")
+	if err := Validate(bad, lib); !errors.Is(err, ErrConfigNotFound) {
+		t.Errorf("missing configuration should error with ErrConfigNotFound, got %v", err)
 	}
 }
 
@@ -130,7 +140,27 @@ func TestValidateAgainstCorpus(t *testing.T) {
 		DeviceClasses: map[string]*DeviceClass{"uartlite": {Entity: "uartlitedb"}},
 		Devices:       []*Device{{Class: "uartlite", Name: "uart0"}},
 	}
-	if errs := Validate(d, lib); len(errs) != 0 {
-		t.Fatalf("uartlitedb should resolve from corpus; got: %v", errs)
+	if err := Validate(d, lib); err != nil {
+		t.Fatalf("uartlitedb should resolve from corpus; got: %v", err)
+	}
+}
+
+// TestErrorMessages is a smoke test that the typed errors render their expected
+// .Error() strings (message substance preserved from the pre-refactor fmt.Errorf).
+func TestErrorMessages(t *testing.T) {
+	se := &SpecError{Line: 7, Msg: "invalid address \"zz\"", Err: errors.New("strconv: bad")}
+	if got, want := se.Error(), `line 7: invalid address "zz": strconv: bad`; got != want {
+		t.Errorf("SpecError = %q, want %q", got, want)
+	}
+	se2 := &SpecError{Line: 3, Msg: "invalid match node"}
+	if got, want := se2.Error(), "line 3: invalid match node"; got != want {
+		t.Errorf("SpecError = %q, want %q", got, want)
+	}
+	ve := &ValidateError{Kind: ErrGenericNotOnEntity, Ctx: "device aic0", Name: "bogus", Entity: "uartlitedb"}
+	if got, want := ve.Error(), `device aic0: generic "bogus" not on entity "uartlitedb"`; got != want {
+		t.Errorf("ValidateError = %q, want %q", got, want)
+	}
+	if got, want := (&ValidateError{Kind: ErrUnknownClass, Ctx: `device "d0"`, Name: "nope"}).Error(), `device "d0": unknown class "nope"`; got != want {
+		t.Errorf("ValidateError = %q, want %q", got, want)
 	}
 }

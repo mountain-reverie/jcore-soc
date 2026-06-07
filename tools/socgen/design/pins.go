@@ -104,7 +104,7 @@ func (m *Match) UnmarshalYAML(n *yaml.Node) error {
 	case yaml.SequenceNode:
 		m.Parts = seqParts(n)
 	default:
-		return fmt.Errorf("line %d: invalid match node", n.Line)
+		return &SpecError{Line: n.Line, Msg: "invalid match node"}
 	}
 	return nil
 }
@@ -115,13 +115,13 @@ func (s *SigSpec) UnmarshalYAML(n *yaml.Node) error {
 		switch n.Tag {
 		case "!!bool":
 			if n.Value != "true" { // only `signal: true` is meaningful (use the pin's own net name)
-				return fmt.Errorf("line %d: signal bool must be true, got %q", n.Line, n.Value)
+				return &SpecError{Line: n.Line, Msg: fmt.Sprintf("signal bool must be true, got %q", n.Value)}
 			}
 			s.Kind = SigTrue
 		case "!!int":
 			i, err := strconv.ParseInt(n.Value, 0, 64)
 			if err != nil {
-				return fmt.Errorf("line %d: invalid int signal %q: %w", n.Line, n.Value, err)
+				return &SpecError{Line: n.Line, Msg: fmt.Sprintf("invalid int signal %q", n.Value), Err: err}
 			}
 			s.Kind, s.Int = SigConst, i
 		default:
@@ -136,11 +136,11 @@ func (s *SigSpec) UnmarshalYAML(n *yaml.Node) error {
 			Diff string `yaml:"diff"`
 		}
 		if err := n.Decode(&m); err != nil {
-			return fmt.Errorf("line %d: invalid signal map: %w", n.Line, err)
+			return &SpecError{Line: n.Line, Msg: "invalid signal map", Err: err}
 		}
 		s.Name, s.Diff = m.Name, m.Diff
 	default:
-		return fmt.Errorf("line %d: invalid signal node", n.Line)
+		return &SpecError{Line: n.Line, Msg: "invalid signal node"}
 	}
 	return nil
 }
@@ -148,11 +148,10 @@ func (s *SigSpec) UnmarshalYAML(n *yaml.Node) error {
 // parsePinNames parses the simple "NAME PAD" .pins format (one pin per line; '#'
 // comments and blank lines skipped; net lower-cased). The pad is optional (a
 // pad-less net yields Pad==""), matching the Clojure parser; any extra fields are
-// ignored. The []error result is for symmetry with parsePinList; this parser has
+// ignored. The error result is for symmetry with parsePinList; this parser has
 // no error conditions today.
-func parsePinNames(data []byte) ([]*Pin, []error) {
+func parsePinNames(data []byte) ([]*Pin, error) {
 	var pins []*Pin
-	var errs []error
 	for line := range strings.SplitSeq(string(data), "\n") {
 		t := strings.TrimSpace(line)
 		if t == "" || strings.HasPrefix(t, "#") {
@@ -165,23 +164,22 @@ func parsePinNames(data []byte) ([]*Pin, []error) {
 		}
 		pins = append(pins, p)
 	}
-	return pins, errs
+	return pins, nil
 }
 
 // parsePinList parses the EAGLE columnar .pins export (columns: Part Pad Pin Dir
 // Net). Lines before the `part` row are skipped; parsing stops at the next blank
 // line; '*** unconnected ***' and '#' lines are dropped; net is normalized
 // (lower-case, '-'->'_', '!' removed).
-func parsePinList(data []byte, part string) ([]*Pin, []error) {
+func parsePinList(data []byte, part string) ([]*Pin, error) {
 	var pins []*Pin
-	var errs []error
 	lines := strings.Split(string(data), "\n")
 	i := 0
 	for i < len(lines) && !strings.HasPrefix(lines[i], part) {
 		i++
 	}
 	if i == len(lines) {
-		return nil, []error{fmt.Errorf("pin-list: part %q not found", part)}
+		return nil, &PinFileError{Part: part}
 	}
 	lines[i] = strings.TrimPrefix(lines[i], part) // strip the part token from the first row
 	for ; i < len(lines); i++ {
@@ -202,5 +200,5 @@ func parsePinList(data []byte, part string) ([]*Pin, []error) {
 		net = strings.ReplaceAll(net, "!", "")
 		pins = append(pins, &Pin{Net: net, Pad: f[0]})
 	}
-	return pins, errs
+	return pins, nil
 }

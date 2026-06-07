@@ -1,6 +1,7 @@
 package design
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -12,14 +13,14 @@ import (
 // resolve, class/top/padring entities resolve (directly or via a configuration),
 // and each generic/port key exists on the resolved entity interface. It returns
 // one error per unresolved reference (best-effort; never panics).
-func Validate(d *Design, lib *iface.Library) []error {
+func Validate(d *Design, lib *iface.Library) error {
 	var errs []error
 
 	resolveEntity := func(entityName, configName, ctx string) *iface.Entity {
 		if configName != "" {
 			cfg, ok := lib.Configuration(configName)
 			if !ok {
-				errs = append(errs, fmt.Errorf("%s: configuration %q not found", ctx, configName))
+				errs = append(errs, &ValidateError{Kind: ErrConfigNotFound, Ctx: ctx, Name: configName})
 				return nil
 			}
 			if cfg.Arch != "" {
@@ -33,7 +34,7 @@ func Validate(d *Design, lib *iface.Library) []error {
 						}
 					}
 					if !found {
-						errs = append(errs, fmt.Errorf("%s: configuration %q architecture %q not found for entity %q", ctx, configName, cfg.Arch, cfg.Entity))
+						errs = append(errs, &ValidateError{Kind: ErrArchNotFound, Ctx: ctx, Name: configName, Entity: cfg.Entity})
 					}
 				}
 			}
@@ -44,7 +45,7 @@ func Validate(d *Design, lib *iface.Library) []error {
 		}
 		e, ok := lib.Entity(entityName)
 		if !ok {
-			errs = append(errs, fmt.Errorf("%s: entity %q not found", ctx, entityName))
+			errs = append(errs, &ValidateError{Kind: ErrEntityNotFound, Ctx: ctx, Name: entityName})
 			return nil
 		}
 		return e
@@ -64,12 +65,12 @@ func Validate(d *Design, lib *iface.Library) []error {
 		}
 		for _, k := range sortedKeys(generics) {
 			if _, ok := gset[strings.ToLower(k)]; !ok {
-				errs = append(errs, fmt.Errorf("%s: generic %q not on entity %q", ctx, k, e.Name))
+				errs = append(errs, &ValidateError{Kind: ErrGenericNotOnEntity, Ctx: ctx, Name: k, Entity: e.Name})
 			}
 		}
 		for _, k := range sortedKeys(ports) {
 			if _, ok := pset[strings.ToLower(k)]; !ok {
-				errs = append(errs, fmt.Errorf("%s: port %q not on entity %q", ctx, k, e.Name))
+				errs = append(errs, &ValidateError{Kind: ErrPortNotOnEntity, Ctx: ctx, Name: k, Entity: e.Name})
 			}
 		}
 	}
@@ -77,7 +78,7 @@ func Validate(d *Design, lib *iface.Library) []error {
 	for _, dev := range d.Devices {
 		cls, ok := d.DeviceClasses[dev.Class]
 		if !ok {
-			errs = append(errs, fmt.Errorf("device %q: unknown class %q", devID(dev), dev.Class))
+			errs = append(errs, &ValidateError{Kind: ErrUnknownClass, Ctx: fmt.Sprintf("device %q", devID(dev)), Name: dev.Class})
 			continue
 		}
 		ctx := "device " + devID(dev)
@@ -96,7 +97,7 @@ func Validate(d *Design, lib *iface.Library) []error {
 		e := resolveEntity(te.Entity, te.Configuration, ctx)
 		checkIface(e, te.Generics, te.Ports, ctx)
 	}
-	return errs
+	return errors.Join(errs...)
 }
 
 func devID(d *Device) string {

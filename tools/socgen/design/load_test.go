@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func loadString(t *testing.T, src string) (*Design, []error) {
+func loadString(t *testing.T, src string) (*Design, error) {
 	t.Helper()
 	dir := t.TempDir()
 	p := filepath.Join(dir, "design.yaml")
@@ -17,7 +17,7 @@ func loadString(t *testing.T, src string) (*Design, []error) {
 }
 
 func TestLoadFlatDecode(t *testing.T) {
-	d, errs := loadString(t, `target: spartan6
+	d, err := loadString(t, `target: spartan6
 devices:
   - class: aic
     name: aic0
@@ -32,8 +32,8 @@ devices:
     ports: { bstb_i: cpu0_data_master_en }
 zero-signals: [icache0_ctrl, dcache0_ctrl]
 `)
-	if len(errs) != 0 {
-		t.Fatalf("load errors: %v", errs)
+	if err != nil {
+		t.Fatalf("load errors: %v", err)
 	}
 	if d.Target != "spartan6" || len(d.Devices) != 1 {
 		t.Fatalf("design = %+v", d)
@@ -74,12 +74,12 @@ zero-signals: [icache0_ctrl, dcache0_ctrl]
 }
 
 func TestLoadBoolCasing(t *testing.T) {
-	d, errs := loadString(t, `devices:
+	d, err := loadString(t, `devices:
   - class: c
     generics: { a: TRUE, b: False, c: true, d: FALSE }
 `)
-	if len(errs) != 0 {
-		t.Fatalf("load errors: %v", errs)
+	if err != nil {
+		t.Fatalf("load errors: %v", err)
 	}
 	g := d.Devices[0].Generics
 	for name, want := range map[string]bool{"a": true, "b": false, "c": true, "d": false} {
@@ -93,15 +93,15 @@ func TestLoadMapValuedPort(t *testing.T) {
 	// NB: `irq?` is written in block style; YAML flow mappings ({...}) reserve
 	// a leading-token `?` as the explicit-key indicator, so `{ irq?: true }`
 	// fails to parse. The real specs use block style for these map values too.
-	d, errs := loadString(t, `devices:
+	d, err := loadString(t, `devices:
   - class: aic
     ports:
       irq_i:
         irq?: true
       sig: cpu0_sig
 `)
-	if len(errs) != 0 {
-		t.Fatalf("load errors: %v", errs)
+	if err != nil {
+		t.Fatalf("load errors: %v", err)
 	}
 	p := d.Devices[0].Ports
 	if p["irq_i"].Kind != KindMap {
@@ -117,13 +117,13 @@ func TestLoadMapValuedPort(t *testing.T) {
 
 // A function-call generic must survive as a verbatim Expr.
 func TestLoadFuncCallValue(t *testing.T) {
-	d, errs := loadString(t, `top-entities:
+	d, err := loadString(t, `top-entities:
   ddr_ctrl:
     entity: ddr_fsm
     generics: { READ_SAMPLE_TM: freq_to_read_sample_tm(CFG_CLK_MEM_FREQ_HZ) }
 `)
-	if len(errs) != 0 {
-		t.Fatalf("load errors: %v", errs)
+	if err != nil {
+		t.Fatalf("load errors: %v", err)
 	}
 	v := d.TopEntities["ddr_ctrl"].Generics["READ_SAMPLE_TM"]
 	if v.Kind != KindExpr || v.Text != "freq_to_read_sample_tm(CFG_CLK_MEM_FREQ_HZ)" {

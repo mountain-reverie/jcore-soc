@@ -1,6 +1,7 @@
 package design
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -28,9 +29,9 @@ func TestIncludeWholeFile(t *testing.T) {
 		"design.yaml":  "device-classes: !include classes.yaml\n",
 		"classes.yaml": "uartlite:\n  entity: uartlitedb\n  left-addr-bit: 3\n",
 	})
-	d, errs := Load(filepath.Join(dir, "design.yaml"))
-	if len(errs) != 0 {
-		t.Fatalf("errs: %v", errs)
+	d, err := Load(filepath.Join(dir, "design.yaml"))
+	if err != nil {
+		t.Fatalf("errs: %v", err)
 	}
 	c, ok := d.DeviceClasses["uartlite"]
 	if !ok || c.Entity != "uartlitedb" || c.LeftAddrBit != 3 {
@@ -49,9 +50,9 @@ name: aic0
 generics: { rtc_sec_length34b: false, c_busperiod: CFG_CLK_CPU_PERIOD_NS }
 `,
 	})
-	d, errs := Load(filepath.Join(dir, "design.yaml"))
-	if len(errs) != 0 {
-		t.Fatalf("errs: %v", errs)
+	d, err := Load(filepath.Join(dir, "design.yaml"))
+	if err != nil {
+		t.Fatalf("errs: %v", err)
 	}
 	dev := d.Devices[0]
 	if dev.Class != "aic" || dev.Name != "aic0" {
@@ -74,9 +75,9 @@ func TestRemoveKeyOnMerge(t *testing.T) {
 `,
 		"base.yaml": "class: x\ngenerics: { drop_me: 1, keep_me: 2 }\n",
 	})
-	d, errs := Load(filepath.Join(dir, "design.yaml"))
-	if len(errs) != 0 {
-		t.Fatalf("errs: %v", errs)
+	d, err := Load(filepath.Join(dir, "design.yaml"))
+	if err != nil {
+		t.Fatalf("errs: %v", err)
 	}
 	g := d.Devices[0].Generics
 	if _, present := g["drop_me"]; present {
@@ -92,9 +93,9 @@ func TestIncludeCycle(t *testing.T) {
 		"a.yaml": "x: !include b.yaml\n",
 		"b.yaml": "y: !include a.yaml\n",
 	})
-	_, errs := Load(filepath.Join(dir, "a.yaml"))
-	if len(errs) == 0 {
-		t.Fatal("expected an include-cycle error")
+	_, err := Load(filepath.Join(dir, "a.yaml"))
+	if !errors.Is(err, ErrIncludeCycle) {
+		t.Fatalf("expected an include-cycle error, got %v", err)
 	}
 }
 
@@ -103,9 +104,9 @@ func TestSeqConcatOnMerge(t *testing.T) {
 		"design.yaml": "merge-signals:\n  <<: !include base.yaml\n  sig: [c]\n",
 		"base.yaml":   "sig: [a, b]\n",
 	})
-	d, errs := Load(filepath.Join(dir, "design.yaml"))
-	if len(errs) != 0 {
-		t.Fatalf("errs: %v", errs)
+	d, err := Load(filepath.Join(dir, "design.yaml"))
+	if err != nil {
+		t.Fatalf("errs: %v", err)
 	}
 	// sequences concatenate, override (sibling) items first then base.
 	got := d.MergeSignals["sig"]
@@ -122,23 +123,24 @@ func TestDepthCap(t *testing.T) {
 	}
 	files["f20.yaml"] = "x: leaf\n"
 	dir := writeFiles(t, files)
-	_, errs := Load(filepath.Join(dir, "f0.yaml"))
-	if len(errs) == 0 {
-		t.Fatal("expected an include-depth error")
+	_, err := Load(filepath.Join(dir, "f0.yaml"))
+	if !errors.Is(err, ErrIncludeDepth) {
+		t.Fatalf("expected an include-depth error, got %v", err)
 	}
 }
 
 func TestNonMappingMergeError(t *testing.T) {
-	_, errs := loadString(t, "devices:\n  - class: c\n    <<: 5\n")
-	if len(errs) == 0 {
-		t.Fatal("expected a non-mapping << error")
+	_, err := loadString(t, "devices:\n  - class: c\n    <<: 5\n")
+	var se *SpecError
+	if !errors.As(err, &se) || se.Msg != "<< value must be a mapping" {
+		t.Fatalf("expected a non-mapping << SpecError, got %v", err)
 	}
 }
 
 func TestStandaloneRemove(t *testing.T) {
-	d, errs := loadString(t, "devices:\n  - class: c\n    name: !remove\n")
-	if len(errs) != 0 {
-		t.Fatalf("errs: %v", errs)
+	d, err := loadString(t, "devices:\n  - class: c\n    name: !remove\n")
+	if err != nil {
+		t.Fatalf("errs: %v", err)
 	}
 	if d.Devices[0].Name != "" {
 		t.Errorf("standalone !remove should drop the key; name = %q", d.Devices[0].Name)

@@ -46,11 +46,16 @@ func readFileList(path string) ([]string, error) {
 // loadFrom composes spec-load + library-build + validate for a board whose VHDL
 // file set is already known (no make). Load (Task 2) wraps it with Files.
 func loadFrom(root, name string, files []string) (*Board, []error) {
-	d, derrs := design.Load(filepath.Join(root, "targets", "boards", name, "design.yaml"))
+	d, derr := design.Load(filepath.Join(root, "targets", "boards", name, "design.yaml"))
 	lib, lerrs := Library(files)
-	errs := append(append([]error{}, derrs...), lerrs...)
+	errs := append([]error{}, lerrs...)
+	if derr != nil {
+		errs = append(errs, derr)
+	}
 	if d != nil {
-		errs = append(errs, design.Validate(d, lib)...)
+		if verr := design.Validate(d, lib); verr != nil {
+			errs = append(errs, verr)
+		}
 	}
 	return &Board{Name: name, Design: d, Library: lib}, errs
 }
@@ -74,8 +79,12 @@ func Files(root, name string) ([]string, error) {
 func Load(root, name string) (*Board, []error) {
 	files, err := Files(root, name)
 	if err != nil {
-		d, derrs := design.Load(filepath.Join(root, "targets", "boards", name, "design.yaml"))
-		return &Board{Name: name, Design: d}, append(derrs, err)
+		d, derr := design.Load(filepath.Join(root, "targets", "boards", name, "design.yaml"))
+		var errs []error
+		if derr != nil {
+			errs = append(errs, derr)
+		}
+		return &Board{Name: name, Design: d}, append(errs, err)
 	}
 	return loadFrom(root, name, files)
 }
