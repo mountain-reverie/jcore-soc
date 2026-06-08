@@ -6,6 +6,7 @@ import (
 
 	"github.com/j-core/jcore-soc/tools/socgen/design"
 	"github.com/j-core/jcore-soc/tools/socgen/elaborate"
+	"github.com/j-core/jcore-soc/tools/socgen/iface"
 	"github.com/j-core/jcore-soc/tools/socgen/vhdl"
 )
 
@@ -68,3 +69,43 @@ func renderDecls2(t *testing.T, decls []vhdl.Decl) string {
 	return vhdl.Print(df)
 }
 func contains3(s, sub string) bool { return strings.Contains(s, sub) }
+
+func TestPadRingAssembly(t *testing.T) {
+	res := &elaborate.Resolution{
+		Pins: []*elaborate.ResolvedPin{
+			{Net: "led0", Pad: "t18", PadDir: "out"},
+		},
+		PadringEntities: map[string]*elaborate.ResolvedEntity{
+			"pll_250": {Name: "pll_250", Entity: &iface.Entity{Name: "pll_250"}, ArchName: "xilinx",
+				Ports: []*elaborate.ResolvedPort{{Name: "rst", Kind: elaborate.KindSignal, GlobalSignal: "pll_rst"}}},
+		},
+		Signals: map[string]*elaborate.Signal{
+			"clk_sys": {Name: "clk_sys", Type: &elaborate.ResolvedType{Mark: "std_logic"}},
+			"pll_rst": {Name: "pll_rst", Type: &elaborate.ResolvedType{Mark: "std_logic"}},
+		},
+		SignalLocations: &elaborate.SignalLocations{
+			PadringTop: []elaborate.PortLoc{{Name: "clk_sys", Dir: "in"}},
+			Padring:    []string{"pll_rst"},
+		},
+	}
+	out, err := PadRing(res)
+	if err != nil {
+		t.Fatalf("PadRing: %v", err)
+	}
+	if _, perr := vhdl.ParseFile(vhdl.NewFileSet(), "pad_ring.vhd", []byte(out)); perr != nil {
+		t.Fatalf("re-parse: %v\n%s", perr, out)
+	}
+	for _, want := range []string{
+		"entity pad_ring is",
+		"pin_led0 : out std_logic",                     // pin port
+		`attribute loc of pin_led0 : signal is "t18";`, // attr
+		"signal pll_rst",                               // Padring internal decl
+		"soc : entity work.soc(impl)",                  // soc instance
+		"clk_sys => clk_sys",                           // soc port map wiring
+		"pll_250 : entity work.pll_250(xilinx)",        // padring-entity instance
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("PadRing output missing %q:\n%s", want, out)
+		}
+	}
+}

@@ -1,6 +1,7 @@
 package emit
 
 import (
+	"errors"
 	"sort"
 
 	"github.com/j-core/jcore-soc/tools/socgen/elaborate"
@@ -78,4 +79,60 @@ func pinAttrs(res *elaborate.Resolution) []vhdl.Decl {
 		})
 	}
 	return out
+}
+
+// socInstStmt instantiates the soc architecture inside pad_ring, wiring each
+// PadringTop port to the same-named pad_ring signal (name => name).
+func socInstStmt(res *elaborate.Resolution) *vhdl.InstantiationStmt {
+	inst := &vhdl.InstantiationStmt{Label: "soc", UnitKind: vhdl.ENTITY, Unit: "work.soc", Arch: "impl"}
+	if res.SignalLocations != nil {
+		for _, pl := range res.SignalLocations.PadringTop {
+			inst.PortMap = append(inst.PortMap, &vhdl.AssocElement{Formal: pl.Name, Actual: &vhdl.Ident{Name: pl.Name}})
+		}
+	}
+	return inst
+}
+
+// PadRing renders the pad_ring.vhd frame: the FPGA top entity (pin_<net> ports +
+// LOC/TIG attributes) and an architecture instantiating soc + the padring entities
+// and declaring the Padring internal signals. I/O buffers (P5d-b) and PIO (P5d-c)
+// are added later. Best-effort; never panics.
+func PadRing(res *elaborate.Resolution) (string, error) {
+	if res == nil {
+		return "", nil
+	}
+	var errs []error
+
+	decls := pinAttrs(res)
+	if res.SignalLocations != nil {
+		names := append([]string(nil), res.SignalLocations.Padring...)
+		sort.Strings(names)
+		for _, n := range names {
+			var typ *elaborate.ResolvedType
+			if s := res.Signals[n]; s != nil {
+				typ = s.Type
+			}
+			mark, con := typeToSubtype(typ)
+			decls = append(decls, &vhdl.SignalDecl{Names: []string{n}, SubtypeMark: mark, Constraint: con})
+		}
+	}
+
+	stmts := []vhdl.Stmt{socInstStmt(res)}
+	for _, name := range sortedTopNames(res.PadringEntities) {
+		re := res.PadringEntities[name]
+		if re.Entity == nil && re.Config == nil {
+			errs = append(errs, &EmitError{Kind: ErrUnboundEntity, Inst: re.Name})
+			continue
+		}
+		stmts = append(stmts, topInstStmt(re))
+	}
+
+	df := &vhdl.DesignFile{
+		Context: socContext(),
+		Units: []vhdl.DesignUnit{
+			&vhdl.EntityDecl{Name: "pad_ring", Ports: padRingPorts(res)},
+			&vhdl.ArchitectureBody{Name: "impl", Entity: "pad_ring", Decls: decls, Stmts: stmts},
+		},
+	}
+	return vhdl.Print(df), errors.Join(errs...)
 }
