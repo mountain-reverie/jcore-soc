@@ -47,6 +47,23 @@ type Resolution struct {
 	Signals         map[string]*Signal         // global net-list, populated by Elaborate
 	Pins            []*ResolvedPin             // resolved pins (P4d-ii)
 	DataBus         *PeripheralBusModel        // P5b; nil if no data-bus devices
+	SignalLocations *SignalLocations           // P5c-i
+}
+
+// PortLoc is a boundary signal that becomes an entity port (P5c).
+type PortLoc struct{ Name, Dir string }
+
+// SignalLocations partitions the net-list into the soc/devices boundary ports and
+// the per-entity internal signals (a port of Clojure categorize-signals). P5c-ii
+// emits from this.
+type SignalLocations struct {
+	PadringTop   []PortLoc         // soc.vhd entity ports (sorted by Name)
+	TopDevices   []PortLoc         // devices.vhd entity ports (sorted by Name)
+	Padring      []string          // padring-internal (sorted)
+	Top          []string          // soc-arch internal (sorted)
+	Devices      []string          // devices-arch internal (sorted)
+	TopExtra     map[string]string // name -> "sig_"+name (output-port also read in top)
+	DevicesExtra map[string]string // name -> "sig_"+name (driven & read across devices)
 }
 
 // PeripheralBusModel is the resolved data-bus master topology (P5b).
