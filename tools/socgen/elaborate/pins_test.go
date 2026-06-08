@@ -243,3 +243,22 @@ func TestBufferKindDirect(t *testing.T) {
 		t.Errorf("buff:false -> %v want Direct", k)
 	}
 }
+
+func TestPadDir(t *testing.T) {
+	cases := []struct {
+		bk      BufferKind
+		bareDir string
+		want    string
+	}{
+		{BufIBUF, "", dirIn}, {BufIBUFDS, "", dirIn},
+		{BufOBUF, "", dirOut}, {BufOBUFT, "", dirOut}, {BufOBUFDS, "", dirOut},
+		{BufIOBUF, "", dirInout},
+		{BufDirect, dirOut, dirIn}, // pin drives net -> input pad
+		{BufDirect, dirIn, dirOut},
+	}
+	for _, c := range cases {
+		if g := padDir(c.bk, c.bareDir); g != c.want {
+			t.Errorf("padDir(%v,%q) = %q, want %q", c.bk, c.bareDir, g, c.want)
+		}
+	}
+}

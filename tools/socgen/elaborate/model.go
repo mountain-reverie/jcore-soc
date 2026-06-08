@@ -149,6 +149,7 @@ type ResolvedPin struct {
 	OutEn      string
 	Diff       string
 	BufferKind BufferKind
+	PadDir     string // the pad's physical direction: "in"|"out"|"inout" (P5d)
 	Attrs      map[string]design.Value
 }
 
