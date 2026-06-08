@@ -42,7 +42,11 @@ func Devices(res *elaborate.Resolution) (string, error) {
 			errs = append(errs, &EmitError{Kind: ErrUnboundEntity, Inst: dev.Name})
 			continue
 		}
-		stmts = append(stmts, instStmt(lc(dev.Name), ent, arch, dev.Generics, dev.Ports))
+		busLit := ""
+		if dev.DataBus {
+			busLit = devLit(dev.Name)
+		}
+		stmts = append(stmts, instStmt(lc(dev.Name), ent, arch, dev.Generics, dev.Ports, busLit))
 	}
 	for _, name := range sortedEntityNames(res.TopEntities) {
 		stmts = appendEntity(stmts, res.TopEntities[name], &errs)
@@ -51,11 +55,20 @@ func Devices(res *elaborate.Resolution) (string, error) {
 		stmts = appendEntity(stmts, res.PadringEntities[name], &errs)
 	}
 
+	context := []vhdl.Node{
+		&vhdl.LibraryClause{Names: []string{"ieee"}},
+		&vhdl.UseClause{Names: []string{"ieee.std_logic_1164.all"}},
+	}
+	if res.DataBus != nil {
+		// Data-bus mux/decode statements precede device instantiations (golden
+		// devices.vhd:88-95); the decls join the signal declarations.
+		decls = append(decls, databusDecls(res)...)
+		stmts = append(databusStmts(res), stmts...)
+		context = append(context, &vhdl.UseClause{Names: []string{"work.data_bus_pack.all"}})
+	}
+
 	df := &vhdl.DesignFile{
-		Context: []vhdl.Node{
-			&vhdl.LibraryClause{Names: []string{"ieee"}},
-			&vhdl.UseClause{Names: []string{"ieee.std_logic_1164.all"}},
-		},
+		Context: context,
 		Units: []vhdl.DesignUnit{
 			&vhdl.EntityDecl{Name: "devices"},
 			&vhdl.ArchitectureBody{Name: "impl", Entity: "devices", Decls: decls, Stmts: stmts},
@@ -72,24 +85,30 @@ func appendEntity(stmts []vhdl.Stmt, re *elaborate.ResolvedEntity, errs *[]error
 		*errs = append(*errs, &EmitError{Kind: ErrUnboundEntity, Inst: re.Name})
 		return stmts
 	}
-	return append(stmts, instStmt(lc(re.Name), re.Entity.Name, re.ArchName, nil, re.Ports))
+	return append(stmts, instStmt(lc(re.Name), re.Entity.Name, re.ArchName, nil, re.Ports, ""))
 }
 
 // instStmt builds one `label : entity work.<entity>(<arch>) generic map(...) port map(...)`.
-func instStmt(label, entity, arch string, generics map[string]design.Value, ports []*elaborate.ResolvedPort) *vhdl.InstantiationStmt {
+// busLit is the device's device_t literal (e.g. "DEV_UART0") for a data-bus
+// participant, "" otherwise; it wires the device's KindDataBus ports to the
+// shared devs_bus_i/o arrays.
+func instStmt(label, entity, arch string, generics map[string]design.Value, ports []*elaborate.ResolvedPort, busLit string) *vhdl.InstantiationStmt {
 	inst := &vhdl.InstantiationStmt{Label: label, UnitKind: vhdl.ENTITY, Unit: "work." + lc(entity), Arch: arch}
 	for _, g := range sortedKeys(generics) {
 		inst.GenericMap = append(inst.GenericMap, &vhdl.AssocElement{Formal: lc(g), Actual: emitValue(generics[g])})
 	}
 	for _, p := range ports {
-		inst.PortMap = append(inst.PortMap, &vhdl.AssocElement{Formal: lc(p.Name), Actual: portActual(p)})
+		inst.PortMap = append(inst.PortMap, &vhdl.AssocElement{Formal: lc(p.Name), Actual: portActual(p, busLit)})
 	}
 	return inst
 }
 
-// portActual maps a resolved port to its actual expression. Special ports
-// (data-bus/irq/deferred) are placeholders wired in P5b/P5e.
-func portActual(p *elaborate.ResolvedPort) vhdl.Expr {
+// portActual maps a resolved port to its actual expression. busLit, when
+// non-empty, is the device's device_t literal: a KindDataBus port is wired to the
+// shared bus array element (db_o/"out" -> devs_bus_i(DEV_x), db_i/"in" ->
+// devs_bus_o(DEV_x); generate.clj:609-612). IRQ/deferred ports remain placeholders
+// wired in later sub-milestones (P5e IRQ).
+func portActual(p *elaborate.ResolvedPort, busLit string) vhdl.Expr {
 	switch p.Kind {
 	case elaborate.KindSignal:
 		if p.GlobalSignal == "" {
@@ -101,8 +120,17 @@ func portActual(p *elaborate.ResolvedPort) vhdl.Expr {
 			return &vhdl.Ident{Name: "open"}
 		}
 		return emitValue(*p.Value)
-	case elaborate.KindIRQ, elaborate.KindDataBus, elaborate.KindDeferred:
-		// Placeholders wired in later sub-milestones (P5b bus mux, P5e IRQ).
+	case elaborate.KindDataBus:
+		if busLit == "" {
+			return &vhdl.Ident{Name: "open"}
+		}
+		arr := "devs_bus_o"
+		if p.Dir == "out" {
+			arr = "devs_bus_i"
+		}
+		return &vhdl.CallExpr{Fun: &vhdl.Ident{Name: arr}, Args: []*vhdl.AssocElement{{Actual: &vhdl.Ident{Name: busLit}}}}
+	case elaborate.KindIRQ, elaborate.KindDeferred:
+		// Placeholders wired in later sub-milestones (P5e IRQ).
 		return &vhdl.Ident{Name: "open"}
 	default:
 		// Defensive: an unrecognized port kind degrades to open rather than
