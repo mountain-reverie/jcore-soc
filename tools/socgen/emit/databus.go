@@ -3,7 +3,9 @@ package emit
 import (
 	"sort"
 	"strconv"
+	"strings"
 
+	"github.com/j-core/jcore-soc/tools/socgen/elaborate"
 	"github.com/j-core/jcore-soc/tools/socgen/vhdl"
 )
 
@@ -242,4 +244,136 @@ func decodeFunction(devs []busDevice, lits map[string]string, simple bool) *vhdl
 
 	fn.Stmts = append(fn.Stmts, &vhdl.ReturnStmt{Value: &vhdl.Ident{Name: lits["none"]}})
 	return fn
+}
+
+// devLit returns the device_t enum literal for a data-bus device name
+// (generate.clj:561: "DEV_" + upper-case(name)).
+func devLit(name string) string { return "DEV_" + strings.ToUpper(name) }
+
+// busDevicesOf collects the data-bus devices (dev.DataBus == true), sorted by
+// name, projecting each onto the decode-relevant busDevice (generate.clj:551-558).
+func busDevicesOf(res *elaborate.Resolution) []busDevice {
+	devs := make([]busDevice, 0, len(res.Devices))
+	for _, dev := range res.Devices {
+		if !dev.DataBus || dev.BaseAddr == nil {
+			continue
+		}
+		var left int
+		if rc := res.Classes[lc(dev.Class)]; rc != nil {
+			left = rc.LeftAddrBit
+		}
+		devs = append(devs, busDevice{Name: dev.Name, BaseAddr: *dev.BaseAddr, LeftAddrBit: left})
+	}
+	sort.Slice(devs, func(i, j int) bool { return devs[i].Name < devs[j].Name })
+	return devs
+}
+
+// busLits maps each data-bus device name to its DEV literal, plus "none" -> "NONE"
+// (generate.clj:562, the device_t literal map).
+func busLits(res *elaborate.Resolution) map[string]string {
+	lits := map[string]string{"none": "NONE"}
+	for _, d := range busDevicesOf(res) {
+		lits[d.Name] = devLit(d.Name)
+	}
+	return lits
+}
+
+// concAssign builds a simple concurrent signal assignment `target <= value;`.
+func concAssign(target, value vhdl.Expr) *vhdl.ConcurrentSignalAssign {
+	return &vhdl.ConcurrentSignalAssign{Target: target, Waveform: []*vhdl.WaveformElem{{Value: value}}}
+}
+
+// databusDecls builds the data-bus declarative items in golden order
+// (generate.clj:559-585; devices.vhd:49-84): the device_t enum, active_dev signal,
+// the data_bus_i_t/data_bus_o_t array types, the devs_bus_i/o signals, any
+// intermediate mux-output bus signals, then the decode_address function.
+func databusDecls(res *elaborate.Resolution) []vhdl.Decl {
+	devs := busDevicesOf(res)
+	lits := busLits(res)
+
+	enumLits := []string{"NONE"}
+	for _, d := range devs {
+		enumLits = append(enumLits, devLit(d.Name))
+	}
+
+	decls := []vhdl.Decl{
+		&vhdl.TypeDecl{Name: "device_t", Def: &vhdl.EnumDef{Lits: enumLits}},
+		&vhdl.SignalDecl{Names: []string{"active_dev"}, SubtypeMark: "device_t"},
+		&vhdl.TypeDecl{Name: "data_bus_i_t", Def: &vhdl.ArrayDef{Text: "array (device_t'left to device_t'right) of cpu_data_i_t"}},
+		&vhdl.TypeDecl{Name: "data_bus_o_t", Def: &vhdl.ArrayDef{Text: "array (device_t'left to device_t'right) of cpu_data_o_t"}},
+		&vhdl.SignalDecl{Names: []string{"devs_bus_i"}, SubtypeMark: "data_bus_i_t"},
+		&vhdl.SignalDecl{Names: []string{"devs_bus_o"}, SubtypeMark: "data_bus_o_t"},
+	}
+
+	// Intermediate mux-output bus signals (none for single-master).
+	for _, st := range res.DataBus.MuxStages {
+		decls = append(decls,
+			&vhdl.SignalDecl{Names: []string{st.Out + "_periph_dbus_i"}, SubtypeMark: "cpu_data_i_t"},
+			&vhdl.SignalDecl{Names: []string{st.Out + "_periph_dbus_o"}, SubtypeMark: "cpu_data_o_t"},
+		)
+	}
+
+	decls = append(decls, decodeFunction(devs, lits, res.DataBus.DecodeMode == "simple"))
+	return decls
+}
+
+// muxChainStmts instantiates the multi-master arbitration mux chain (Task 7).
+// For single-master designs there is no chain; returns nil.
+func muxChainStmts(_ *elaborate.Resolution) []vhdl.Stmt { return nil }
+
+// databusStmts builds the data-bus concurrent statements in golden order
+// (generate.clj:654-685; devices.vhd:88-95): the (Task 7) mux chain, the
+// active_dev decode, the master read-back, the per-device bus_split for-generate,
+// the NONE loopback, and the disconnected-bus loopbacks.
+func databusStmts(res *elaborate.Resolution) []vhdl.Stmt {
+	master := res.DataBus.MasterBus
+	stmts := make([]vhdl.Stmt, 0, 4+len(res.DataBus.Disconnected))
+
+	// active_dev <= decode_address(<master>_periph_dbus_o.a);
+	stmts = append(stmts, concAssign(
+		&vhdl.Ident{Name: "active_dev"},
+		&vhdl.CallExpr{
+			Fun:  &vhdl.Ident{Name: "decode_address"},
+			Args: []*vhdl.AssocElement{{Actual: &vhdl.Ident{Name: master + "_periph_dbus_o.a"}}},
+		}))
+
+	// <master>_periph_dbus_i <= devs_bus_i(active_dev);
+	stmts = append(stmts, concAssign(
+		&vhdl.Ident{Name: master + "_periph_dbus_i"},
+		&vhdl.CallExpr{
+			Fun:  &vhdl.Ident{Name: "devs_bus_i"},
+			Args: []*vhdl.AssocElement{{Actual: &vhdl.Ident{Name: "active_dev"}}},
+		}))
+
+	// bus_split : for dev in device_t'left to device_t'right generate
+	//   devs_bus_o(dev) <= mask_data_o(<master>_periph_dbus_o, to_bit(dev = active_dev));
+	stmts = append(stmts, &vhdl.GenerateStmt{
+		Label: "bus_split", Kind: vhdl.FOR, Param: "dev",
+		Range: &vhdl.Ident{Name: "device_t'left to device_t'right"},
+		Stmts: []vhdl.Stmt{concAssign(
+			&vhdl.CallExpr{Fun: &vhdl.Ident{Name: "devs_bus_o"}, Args: []*vhdl.AssocElement{{Actual: &vhdl.Ident{Name: "dev"}}}},
+			&vhdl.CallExpr{Fun: &vhdl.Ident{Name: "mask_data_o"}, Args: []*vhdl.AssocElement{
+				{Actual: &vhdl.Ident{Name: master + "_periph_dbus_o"}},
+				{Actual: &vhdl.CallExpr{Fun: &vhdl.Ident{Name: "to_bit"}, Args: []*vhdl.AssocElement{{Actual: &vhdl.BinaryExpr{X: &vhdl.Ident{Name: "dev"}, Op: vhdl.EQ, Y: &vhdl.Ident{Name: "active_dev"}}}}}},
+			}}),
+		},
+	})
+
+	// devs_bus_i(NONE) <= loopback_bus(devs_bus_o(NONE));
+	stmts = append(stmts, concAssign(
+		&vhdl.CallExpr{Fun: &vhdl.Ident{Name: "devs_bus_i"}, Args: []*vhdl.AssocElement{{Actual: &vhdl.Ident{Name: "NONE"}}}},
+		&vhdl.CallExpr{Fun: &vhdl.Ident{Name: "loopback_bus"}, Args: []*vhdl.AssocElement{
+			{Actual: &vhdl.CallExpr{Fun: &vhdl.Ident{Name: "devs_bus_o"}, Args: []*vhdl.AssocElement{{Actual: &vhdl.Ident{Name: "NONE"}}}}},
+		}}))
+
+	// Disconnected peripheral buses: <bus>_periph_dbus_i <= loopback_bus(<bus>_periph_dbus_o);
+	disc := append([]string(nil), res.DataBus.Disconnected...)
+	sort.Strings(disc)
+	for _, bus := range disc {
+		stmts = append(stmts, concAssign(
+			&vhdl.Ident{Name: bus + "_periph_dbus_i"},
+			&vhdl.CallExpr{Fun: &vhdl.Ident{Name: "loopback_bus"}, Args: []*vhdl.AssocElement{{Actual: &vhdl.Ident{Name: bus + "_periph_dbus_o"}}}}))
+	}
+
+	return append(muxChainStmts(res), stmts...)
 }
