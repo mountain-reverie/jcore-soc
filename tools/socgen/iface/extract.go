@@ -41,10 +41,12 @@ func (l *Library) addEntity(n *vhdl.EntityDecl) error {
 	if _, dup := l.Entities[key]; dup {
 		err = &DuplicateError{Kind: ErrDuplicateDecl, Decl: "entity", Symbol: n.Name}
 	}
+	ports := toPorts(n.Ports)
+	applySocPortNames(ports, n.Decls)
 	l.Entities[key] = &Entity{
 		Name:            n.Name,
 		Generics:        toGenerics(n.Generics),
-		Ports:           toPorts(n.Ports),
+		Ports:           ports,
 		PeripheralBuses: toPeripheralBuses(n.Decls),
 	}
 	return err
@@ -140,6 +142,72 @@ func toPeripheralBuses(decls []vhdl.Decl) []*PeripheralBus {
 		}
 	}
 	return out
+}
+
+// applySocPortNames fills Port.GlobalName/LocalName from global_ports/local_ports
+// group memberships (bare own id) and soc_port_global_name/soc_port_local_name
+// attribute specs (lowercased string value). Attributes override groups.
+func applySocPortNames(ports []*Port, decls []vhdl.Decl) {
+	byName := map[string]*Port{}
+	for _, p := range ports {
+		byName[lower(p.Name)] = p
+	}
+	// groups first: a member's name = its own bare lowercased id
+	for _, d := range decls {
+		g, ok := d.(*vhdl.GroupDecl)
+		if !ok {
+			continue
+		}
+		for _, c := range g.Constituents {
+			p := byName[lower(c)]
+			if p == nil {
+				continue
+			}
+			switch lower(g.TemplateMark) {
+			case "global_ports":
+				p.GlobalName = lower(c)
+			case "local_ports":
+				p.LocalName = lower(c)
+			}
+		}
+	}
+	// attributes override groups
+	for _, d := range decls {
+		a, ok := d.(*vhdl.AttributeSpec)
+		if !ok || a.EntityClass != vhdl.SIGNAL {
+			continue
+		}
+		val, ok := socPortString(a.Value)
+		if !ok {
+			continue
+		}
+		for _, e := range a.Entities {
+			p := byName[lower(e)]
+			if p == nil {
+				continue
+			}
+			switch lower(a.Name) {
+			case "soc_port_global_name":
+				p.GlobalName = val
+			case "soc_port_local_name":
+				p.LocalName = val
+			}
+		}
+	}
+}
+
+// socPortString extracts a lowercased string-literal value (quotes stripped) from
+// an attribute-spec value expression.
+func socPortString(e vhdl.Expr) (string, bool) {
+	lit, ok := e.(*vhdl.BasicLit)
+	if !ok || lit.Kind != vhdl.STRINGLIT {
+		return "", false
+	}
+	s := lit.Value
+	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		s = s[1 : len(s)-1]
+	}
+	return lower(s), true
 }
 
 func toGenerics(ids []*vhdl.InterfaceDecl) []*Generic {

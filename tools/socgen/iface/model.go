@@ -38,9 +38,11 @@ type PeripheralBus struct {
 }
 
 type Port struct {
-	Name string
-	Dir  string // "in"|"out"|"inout"|"buffer"|"linkage"|"" (default in)
-	Type TypeRef
+	Name       string
+	Dir        string // "in"|"out"|"inout"|"buffer"|"linkage"|"" (default in)
+	Type       TypeRef
+	GlobalName string // soc_port_global_name attr OR global_ports group membership (bare id); "" if none
+	LocalName  string // soc_port_local_name attr OR local_ports group membership; "" if none
 }
 
 type Generic struct {
