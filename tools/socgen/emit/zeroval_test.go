@@ -54,8 +54,17 @@ end package;`
 		t.Errorf("subtype zero = %q", g)
 	}
 
-	if g := renderExpr(t, zeroVal("std_logic", lib)); !strings.Contains(g, "'0'") {
-		t.Errorf("std_logic zero = %q", g)
+	for _, m := range []string{"std_logic", "std_ulogic", "bit"} {
+		if g := renderExpr(t, zeroVal(m, lib)); !strings.Contains(g, "'0'") {
+			t.Errorf("%s zero = %q", m, g)
+		}
+	}
+	// nil library: falls to the by-name switch / (others => '0') fallback, no panic.
+	if g := renderExpr(t, zeroVal("std_logic", nil)); !strings.Contains(g, "'0'") {
+		t.Errorf("nil-lib std_logic zero = %q", g)
+	}
+	if g := renderExpr(t, zeroVal("unknown_t", nil)); !strings.Contains(g, "(others => '0')") {
+		t.Errorf("nil-lib unknown zero = %q", g)
 	}
 	if g := renderExpr(t, zeroVal("std_logic_vector", lib)); !strings.Contains(g, "(others => '0')") {
 		t.Errorf("vector zero = %q", g)
