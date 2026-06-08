@@ -147,6 +147,12 @@ func TestBuildPortsSocPortNames(t *testing.T) {
 		t.Errorf("spi_clk LocalName apply = %q, want flash_clk", g)
 	}
 
+	// LocalName under bareDefault (top/padring): the suffix is used bare (no prefix).
+	plb := buildPorts("flash", el, noSpec, nil, noMerge, true)
+	if g := gsOf(plb, "spi_clk"); g != "clk" {
+		t.Errorf("spi_clk LocalName bare = %q, want clk", g)
+	}
+
 	// explicit design mapping still wins over GlobalName.
 	ee := &iface.Entity{Name: "pio", Ports: []*iface.Port{
 		{Name: "p_o", Dir: "out", Type: iface.TypeRef{Mark: "std_logic"}, GlobalName: "po"},
