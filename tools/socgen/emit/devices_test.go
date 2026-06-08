@@ -130,3 +130,37 @@ func TestDevicesNil(t *testing.T) {
 		t.Errorf("Devices(nil) = %q, %v", out, err)
 	}
 }
+
+func TestDevicesEntityPorts(t *testing.T) {
+	res := &elaborate.Resolution{
+		Signals: map[string]*elaborate.Signal{
+			"clk_sys":      {Name: "clk_sys", Type: &elaborate.ResolvedType{Mark: "std_logic"}},
+			"flash_cs":     {Name: "flash_cs", Type: &elaborate.ResolvedType{Mark: "std_logic_vector", Left: iptr(1), Right: iptr(0), Dir: "downto"}},
+			"cpu0_event_o": {Name: "cpu0_event_o", Type: &elaborate.ResolvedType{Mark: "cpu_event_o_t"}},
+		},
+		SignalLocations: &elaborate.SignalLocations{
+			TopDevices: []elaborate.PortLoc{
+				{Name: "clk_sys", Dir: "in"},
+				{Name: "cpu0_event_o", Dir: "in"},
+				{Name: "flash_cs", Dir: "out"},
+			},
+		},
+	}
+	ports := devicesEntityPorts(res)
+	if len(ports) != 3 {
+		t.Fatalf("want 3 ports, got %d", len(ports))
+	}
+	got := map[string]string{} // name -> "mode subtype"
+	for _, p := range ports {
+		got[p.Names[0]] = p.Mode + " " + p.SubtypeMark
+	}
+	if got["clk_sys"] != "in std_logic" {
+		t.Errorf("clk_sys = %q", got["clk_sys"])
+	}
+	if got["cpu0_event_o"] != "in cpu_event_o_t" {
+		t.Errorf("cpu0_event_o = %q", got["cpu0_event_o"])
+	}
+	if got["flash_cs"] != "out std_logic_vector" { // the (1 downto 0) constraint is carried separately in Constraint
+		t.Errorf("flash_cs = %q", got["flash_cs"])
+	}
+}
