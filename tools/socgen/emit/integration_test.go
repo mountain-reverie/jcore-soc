@@ -78,14 +78,14 @@ func TestEmitDevicesMimasV2(t *testing.T) {
 	}
 	for name := range res.TopEntities {
 		tops++
-		if !labels[lc(name)] {
-			t.Errorf("top-entity %q not instantiated", name)
+		if labels[lc(name)] {
+			t.Errorf("top-entity %q must NOT be instantiated in devices.vhd (P5c-ii moved it to soc.vhd)", name)
 		}
 	}
 	for name := range res.PadringEntities {
 		pads++
-		if !labels[lc(name)] {
-			t.Errorf("padring-entity %q not instantiated", name)
+		if labels[lc(name)] {
+			t.Errorf("padring-entity %q must NOT be instantiated in devices.vhd", name)
 		}
 	}
 	t.Logf("mimas_v2 instances: %d bound devices (%d skipped unbound), %d top, %d padring; %d labels in AST",
