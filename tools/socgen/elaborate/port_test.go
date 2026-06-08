@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/j-core/jcore-soc/tools/socgen/design"
+	"github.com/j-core/jcore-soc/tools/socgen/iface"
 )
 
 func TestBuildPorts(t *testing.T) {
@@ -24,7 +25,7 @@ func TestBuildPorts(t *testing.T) {
 		"open_port": {Kind: design.KindMap, Map: map[string]any{"open?": true}}, // KindDeferred
 		// clk unspecified -> autogen dev0_clk -> merged_clk
 	}
-	ports := buildPorts("dev0", e, spec, env, merge)
+	ports := buildPorts("dev0", e, spec, env, merge, false)
 	byName := map[string]*ResolvedPort{}
 	for _, p := range ports {
 		byName[p.Name] = p
@@ -50,6 +51,39 @@ func TestBuildPorts(t *testing.T) {
 	}
 	if byName["open_port"].GlobalSignal != "" {
 		t.Errorf("open_port GlobalSignal = %q, want empty (deferred)", byName["open_port"].GlobalSignal)
+	}
+}
+
+func ent(ports ...*iface.Port) *iface.Entity { return &iface.Entity{Name: "e", Ports: ports} }
+func iport(name, dir string) *iface.Port {
+	return &iface.Port{Name: name, Dir: dir, Type: iface.TypeRef{Mark: "std_logic"}}
+}
+func gsOf(ports []*ResolvedPort, name string) string {
+	for _, p := range ports {
+		if p.Name == name {
+			return p.GlobalSignal
+		}
+	}
+	return "<absent>"
+}
+
+func TestBuildPortsBareVsPrefixed(t *testing.T) {
+	e := ent(iport("cpu0_event_o", "out"))
+	noSpec := map[string]design.Value{}
+	noMerge := map[string]string{}
+
+	dev := buildPorts("aic0", e, noSpec, nil, noMerge, false) // device default: prefixed
+	if g := gsOf(dev, "cpu0_event_o"); g != "aic0_cpu0_event_o" {
+		t.Errorf("device default = %q, want aic0_cpu0_event_o", g)
+	}
+	top := buildPorts("cpus", e, noSpec, nil, noMerge, true) // top/padring default: bare
+	if g := gsOf(top, "cpu0_event_o"); g != "cpu0_event_o" {
+		t.Errorf("top default = %q, want bare cpu0_event_o", g)
+	}
+	spec := map[string]design.Value{"cpu0_event_o": {Kind: design.KindExpr, Text: "wired_sig"}}
+	tw := buildPorts("cpus", e, spec, nil, noMerge, true) // explicit mapping still wins
+	if g := gsOf(tw, "cpu0_event_o"); g != "wired_sig" {
+		t.Errorf("explicit mapping = %q, want wired_sig", g)
 	}
 }
 
