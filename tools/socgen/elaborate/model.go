@@ -11,7 +11,7 @@ const (
 	KindSignal  PortKind = iota // connects to GlobalSignal
 	KindValue                   // tied to a constant Value
 	KindIRQ                     // {irq?: ...} — recorded; routing is a later sub-milestone
-	KindDataBus                 // {data-bus: ...} — recorded; bus mux is P5
+	KindDataBus                 // cpu data-bus port (set by classifyDataBus); wired to devs_bus_i/o by P5b
 	KindDeferred                // an unsupported map kind (bist/ring/open) — recorded only
 )
 
