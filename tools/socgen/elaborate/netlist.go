@@ -78,6 +78,7 @@ func Elaborate(b *board.Board) (*Resolution, error) {
 	res.SignalLocations = sl
 	errs = append(errs, cerr)
 	errs = append(errs, validateAddresses(res))
+	res.Library = b.Library
 	return res, errors.Join(errs...)
 }
 

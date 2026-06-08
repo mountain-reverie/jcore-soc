@@ -48,6 +48,7 @@ type Resolution struct {
 	Pins            []*ResolvedPin             // resolved pins (P4d-ii)
 	DataBus         *PeripheralBusModel        // P5b; nil if no data-bus devices
 	SignalLocations *SignalLocations           // P5c-i
+	Library         *iface.Library             // the bound interface library (for emit type introspection, P5c-ii-b)
 }
 
 // PortLoc is a boundary signal that becomes an entity port (P5c).
