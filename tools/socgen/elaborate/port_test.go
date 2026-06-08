@@ -9,13 +9,13 @@ import (
 
 func TestBuildPorts(t *testing.T) {
 	ent := buildLib(t,
-		`entity e is generic (num_cs : integer); port (clk : in std_logic; cs : out std_logic_vector(num_cs-1 downto 0); irq : out std_logic; lit : in std_logic; open_port : in std_logic); end entity;`,
+		`entity e is generic (num_cs : integer); port (en : in std_logic; cs : out std_logic_vector(num_cs-1 downto 0); irq : out std_logic; lit : in std_logic; open_port : in std_logic); end entity;`,
 	)
 	e, _ := ent.Entity("e")
 	env := map[string]int64{"num_cs": 2}
 	// merge renames the explicit signal "flash_cs" to "flash_cs_merged"
 	merge := reverseMerge(map[string][]string{
-		"merged_clk":      {"dev0_clk"},
+		"merged_en":       {"dev0_en"},
 		"flash_cs_merged": {"flash_cs"},
 	})
 	spec := map[string]design.Value{
@@ -23,15 +23,15 @@ func TestBuildPorts(t *testing.T) {
 		"irq":       {Kind: design.KindMap, Map: map[string]any{"irq?": true}},
 		"lit":       {Kind: design.KindInt, Int: 0}, // constant value
 		"open_port": {Kind: design.KindMap, Map: map[string]any{"open?": true}}, // KindDeferred
-		// clk unspecified -> autogen dev0_clk -> merged_clk
+		// en unspecified -> autogen dev0_en -> merged_en
 	}
 	ports := buildPorts("dev0", e, spec, env, merge, false)
 	byName := map[string]*ResolvedPort{}
 	for _, p := range ports {
 		byName[p.Name] = p
 	}
-	if byName["clk"].GlobalSignal != "merged_clk" { // autogen + merge
-		t.Errorf("clk signal = %q", byName["clk"].GlobalSignal)
+	if byName["en"].GlobalSignal != "merged_en" { // autogen + merge
+		t.Errorf("en signal = %q", byName["en"].GlobalSignal)
 	}
 	if byName["cs"].GlobalSignal != "flash_cs_merged" { // explicit signal renamed by merge
 		t.Errorf("cs GlobalSignal = %q, want flash_cs_merged", byName["cs"].GlobalSignal)
@@ -84,6 +84,44 @@ func TestBuildPortsBareVsPrefixed(t *testing.T) {
 	tw := buildPorts("cpus", e, spec, nil, noMerge, true) // explicit mapping still wins
 	if g := gsOf(tw, "cpu0_event_o"); g != "wired_sig" {
 		t.Errorf("explicit mapping = %q, want wired_sig", g)
+	}
+}
+
+func TestClkRstHeuristic(t *testing.T) {
+	noMerge := map[string]string{}
+	e := ent(iport("clk", "in"), iport("rst", "in"), iport("data", "out"))
+	ps := buildPorts("aic0", e, map[string]design.Value{}, nil, noMerge, false)
+	if g := gsOf(ps, "clk"); g != "clk_sys" {
+		t.Errorf("clk -> %q, want clk_sys", g)
+	}
+	if g := gsOf(ps, "rst"); g != "reset" {
+		t.Errorf("rst -> %q, want reset", g)
+	}
+	if g := gsOf(ps, "data"); g != "aic0_data" {
+		t.Errorf("data -> %q, want aic0_data (unchanged)", g)
+	}
+}
+
+func TestClkRstHeuristicSkips(t *testing.T) {
+	noMerge := map[string]string{}
+	// ambiguous: two clk-ish ports -> skip both
+	e := ent(iport("clk", "in"), iport("clk_bus", "in"))
+	ps := buildPorts("d", e, map[string]design.Value{}, nil, noMerge, false)
+	if gsOf(ps, "clk") == "clk_sys" || gsOf(ps, "clk_bus") == "clk_sys" {
+		t.Errorf("ambiguous clk ports must not map to clk_sys: %q / %q", gsOf(ps, "clk"), gsOf(ps, "clk_bus"))
+	}
+	// explicit mapping wins over heuristic
+	spec := map[string]design.Value{"clk": {Kind: design.KindExpr, Text: "myclk"}}
+	ps2 := buildPorts("d", ent(iport("clk", "in")), spec, nil, noMerge, false)
+	if g := gsOf(ps2, "clk"); g != "myclk" {
+		t.Errorf("explicit clk mapping = %q, want myclk", g)
+	}
+	// skip when target already used by another port's global-signal
+	e3 := ent(iport("clk", "in"), iport("x", "in"))
+	spec3 := map[string]design.Value{"x": {Kind: design.KindExpr, Text: "clk_sys"}}
+	ps3 := buildPorts("d", e3, spec3, nil, noMerge, false)
+	if g := gsOf(ps3, "clk"); g == "clk_sys" {
+		t.Errorf("clk must not map to clk_sys when already used by another port")
 	}
 }
 
