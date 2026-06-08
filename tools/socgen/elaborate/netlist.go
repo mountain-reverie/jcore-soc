@@ -73,6 +73,10 @@ func Elaborate(b *board.Board) (*Resolution, error) {
 	res.Pins = resolvePins(b.Design, res.Signals)
 	applyZeroSignals(res.Signals, b.Design.ZeroSignals)
 	errs = append(errs, validateSignals(res.Signals))
+	injectInternalBusPorts(res)
+	sl, cerr := categorize(res)
+	res.SignalLocations = sl
+	errs = append(errs, cerr)
 	errs = append(errs, validateAddresses(res))
 	return res, errors.Join(errs...)
 }
