@@ -1,6 +1,7 @@
 package elaborate
 
 import (
+	"errors"
 	"sort"
 	"strings"
 )
@@ -117,4 +118,103 @@ func inOutSignals(sigs []*Signal, ctx string) []*Signal {
 		}
 	}
 	return out
+}
+
+// Position sets for the categories (generate.clj:1240-1306). P = pin/padring/expose.
+var (
+	catP  = []string{"pin", "padring", "expose"}
+	catPT = []string{"pin", "padring", "expose", "top"}
+	catTD = []string{"top", "device"}
+)
+
+// Boundary direction maps from a signal's source context (generate.clj:1262-1276).
+var padringTopDir = map[string]string{"pin": dirIn, "padring": dirIn, "expose": dirIn, "device": dirOut, "top": dirOut}
+var topDevicesDir = map[string]string{"pin": dirIn, "padring": dirIn, "expose": dirIn, "device": dirOut, "top": dirIn}
+
+// categorize partitions the (already injected) net-list into SignalLocations
+// (generate.clj categorize-signals).
+func categorize(res *Resolution) (*SignalLocations, error) {
+	cs := contextSets(res.Signals)
+	var errs []error
+
+	ports := func(sigs []*Signal, dirOf map[string]string) []PortLoc {
+		out := make([]PortLoc, 0, len(sigs))
+		for _, s := range sigs {
+			src, err := srcContext(s)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			out = append(out, PortLoc{Name: s.Name, Dir: dirOf[src]})
+		}
+		sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+		return out
+	}
+	nameList := func(sigs []*Signal) []string {
+		out := make([]string, 0, len(sigs))
+		for _, s := range sigs {
+			out = append(out, s.Name)
+		}
+		sort.Strings(out)
+		return out
+	}
+	aliasMap := func(sigs []*Signal) map[string]string {
+		m := map[string]string{}
+		for _, s := range sigs {
+			m[s.Name] = "sig_" + s.Name
+		}
+		return m
+	}
+
+	padringTop := filterByContext(cs, catP, catP, catP, catTD, catTD)
+	topDevices := filterByContext(cs, catPT, catPT, catPT, catPT, []string{"device"})
+
+	sl := &SignalLocations{
+		PadringTop:   ports(padringTop, padringTopDir),
+		TopDevices:   ports(topDevices, topDevicesDir),
+		Padring:      nameList(filterByContext(cs, catP, catP, catP, []string{"top", "device", ""}, []string{"top", "device", ""})),
+		Top:          nameList(filterByContext(cs, []string{"top"}, []string{"device", ""})),
+		Devices:      nameList(filterByContext(cs, []string{"device"})),
+		TopExtra:     aliasMap(inOutSignals(padringTop, "top")),
+		DevicesExtra: aliasMap(inOutSignals(topDevices, "device")),
+	}
+	return sl, errors.Join(errs...)
+}
+
+// injectInternalBusPorts adds synthetic device/_internal ports for each peripheral
+// bus + the pi hack, so categorization classifies them as devices/soc boundary
+// ports (devices.clj:885-912). Called before categorize when DataBus != nil.
+func injectInternalBusPorts(res *Resolution) {
+	if res.DataBus == nil {
+		return
+	}
+	buses := append(append([]string{}, res.DataBus.Connected...), res.DataBus.Disconnected...)
+	sort.Strings(buses)
+	addPort := func(name, mark, dir string, ctx Context) {
+		s := res.Signals[name]
+		if s == nil {
+			s = &Signal{Name: name, Type: &ResolvedType{Mark: mark}}
+			res.Signals[name] = s
+		}
+		s.Ports = append(s.Ports, &SignalPortRef{Context: ctx, PortName: name, Dir: dir, Type: s.Type})
+	}
+	devInternal := Context{Kind: "device", ID: "_internal"}
+	for _, bus := range buses {
+		addPort(bus+"_periph_dbus_i", "cpu_data_i_t", dirOut, devInternal) // devices outputs read data
+		addPort(bus+"_periph_dbus_o", "cpu_data_o_t", dirIn, devInternal)  // devices inputs write data
+	}
+	// pi hack (faithful to devices.clj:903-912; TODO in the reference): if a device
+	// reads a global signal "pi", push it across the boundary via a padring port.
+	if s := res.Signals["pi"]; s != nil {
+		hasDevIn := false
+		for _, p := range s.Ports {
+			if p.Context.Kind == "device" && p.Dir == dirIn {
+				hasDevIn = true
+				break
+			}
+		}
+		if hasDevIn {
+			s.Ports = append(s.Ports, &SignalPortRef{Context: Context{Kind: "padring", ID: "pi"}, PortName: "pi", Dir: dirIn, Type: s.Type})
+		}
+	}
 }
