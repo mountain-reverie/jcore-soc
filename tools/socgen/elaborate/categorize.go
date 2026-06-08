@@ -203,8 +203,11 @@ func injectInternalBusPorts(res *Resolution) {
 		addPort(bus+"_periph_dbus_i", "cpu_data_i_t", dirOut, devInternal) // devices outputs read data
 		addPort(bus+"_periph_dbus_o", "cpu_data_o_t", dirIn, devInternal)  // devices inputs write data
 	}
-	// pi hack (faithful to devices.clj:903-912; TODO in the reference): if a device
-	// reads a global signal "pi", push it across the boundary via a padring port.
+	// pi hack (devices.clj:903-912 adds a padring port for "pi"; the reference's
+	// :in works only because its net-list has a pin driving pi). In the Go model
+	// mimas_v2 has no pi input pins, so pi is a pure primary input: the padring
+	// port must be the DRIVER (out) — padring drives pi into the devices — so that
+	// it has a source context and categorizes as a devices/soc input port.
 	if s := res.Signals["pi"]; s != nil {
 		hasDevIn := false
 		for _, p := range s.Ports {
@@ -214,7 +217,7 @@ func injectInternalBusPorts(res *Resolution) {
 			}
 		}
 		if hasDevIn {
-			s.Ports = append(s.Ports, &SignalPortRef{Context: Context{Kind: "padring", ID: "pi"}, PortName: "pi", Dir: dirIn, Type: s.Type})
+			s.Ports = append(s.Ports, &SignalPortRef{Context: Context{Kind: "padring", ID: "pi"}, PortName: "pi", Dir: dirOut, Type: s.Type})
 		}
 	}
 }
