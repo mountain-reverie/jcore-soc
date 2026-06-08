@@ -38,10 +38,13 @@ func reverseMerge(m map[string][]string) map[string]string {
 	return out
 }
 
-// buildPorts resolves a device's ports: entity ports (name/dir/type) overlaid
-// with the device's port spec (global-signal / value / special-kind), types
-// resolved via the generics, normal ports auto-named and merge-renamed.
-func buildPorts(devName string, ent *iface.Entity, spec map[string]design.Value, env map[string]int64, merge map[string]string) []*ResolvedPort {
+// buildPorts resolves a device's or entity's ports: entity ports (name/dir/type)
+// overlaid with the port spec (global-signal / value / special-kind), types
+// resolved via the generics, normal ports auto-named and merge-renamed. When
+// bareDefault is true (top/padring-entities), an unmapped port's default
+// global-signal is the bare port id so it unifies with shared/device signals;
+// otherwise (devices) it is devName_portName.
+func buildPorts(devName string, ent *iface.Entity, spec map[string]design.Value, env map[string]int64, merge map[string]string, bareDefault bool) []*ResolvedPort {
 	if ent == nil {
 		return nil
 	}
@@ -56,8 +59,13 @@ func buildPorts(devName string, ent *iface.Entity, spec map[string]design.Value,
 		v, has := spec[p.Name]
 		switch {
 		case !has:
-			// normal port, auto-name
-			rp.GlobalSignal = mergeName(devName+"_"+p.Name, merge)
+			// normal port, auto-name: bare port id for top/padring entities (so they
+			// unify with shared/device signals); device-name-prefixed for devices.
+			def := devName + "_" + p.Name
+			if bareDefault {
+				def = p.Name
+			}
+			rp.GlobalSignal = mergeName(def, merge)
 		case v.Kind == design.KindMap:
 			switch {
 			case hasKey(v.Map, "irq?"):
