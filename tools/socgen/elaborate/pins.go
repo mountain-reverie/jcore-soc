@@ -204,9 +204,31 @@ func resolvePins(d *design.Design, sigs map[string]*Signal) []*ResolvedPin {
 			addPinPort(sigs, pin.Net, "out-en", base, elem, dirIn, "")
 		}
 		rp.BufferKind = bufferKind(f, bareDir)
+		rp.PadDir = padDir(rp.BufferKind, bareDir)
 		out = append(out, rp)
 	}
 	return out
+}
+
+// padDir is the pad's physical direction. Buffered pins follow their buffer kind;
+// a BufDirect (direct-wire) pad takes the opposite of the bare-signal direction
+// (the pin drives the net => input pad; consumes it => output pad).
+// A BufDirect pin with an empty bareDir (explicit in/out/out-en legs + buff:false)
+// falls through to dirOut here and is refined in P5d-b.
+func padDir(bk BufferKind, bareDir string) string {
+	switch bk {
+	case BufIBUF, BufIBUFDS:
+		return dirIn
+	case BufOBUF, BufOBUFT, BufOBUFDS:
+		return dirOut
+	case BufIOBUF:
+		return dirInout
+	default: // BufDirect
+		if bareDir == dirOut {
+			return dirIn
+		}
+		return dirOut
+	}
 }
 
 // addPinPort joins one pin leg to the net-list under its base signal name.
