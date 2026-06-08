@@ -49,6 +49,7 @@ func buildPorts(devName string, ent *iface.Entity, spec map[string]design.Value,
 		return nil
 	}
 	out := make([]*ResolvedPort, 0, len(ent.Ports))
+	explicit := map[string]bool{}
 	for _, p := range ent.Ports {
 		rp := &ResolvedPort{
 			Name: p.Name,
@@ -77,13 +78,49 @@ func buildPorts(devName string, ent *iface.Entity, spec map[string]design.Value,
 			}
 		case v.Kind == design.KindExpr:
 			rp.GlobalSignal = mergeName(v.Text, merge) // explicit signal name
+			explicit[p.Name] = true
 		default: // KindInt/KindStr/KindFloat/KindBool -> constant value
 			vv := v
 			rp.Kind, rp.Value = KindValue, &vv
 		}
 		out = append(out, rp)
 	}
+	applyClkRstHeuristic(out, explicit, merge)
 	return out
+}
+
+// applyClkRstHeuristic maps a unique clk/clk_bus port to clk_sys and a unique
+// rst/reset port to reset (faithful to parse.clj find-sig-ports). It only rewrites
+// a normal KindSignal port that was NOT explicitly mapped, and only when the
+// target signal is not already another port's GlobalSignal.
+func applyClkRstHeuristic(ports []*ResolvedPort, explicit map[string]bool, merge map[string]string) {
+	apply := func(target string, cands ...string) {
+		var cand *ResolvedPort
+		n := 0
+		for _, p := range ports {
+			if p.Kind != KindSignal || explicit[p.Name] {
+				continue
+			}
+			for _, c := range cands {
+				if p.Name == c {
+					n++
+					cand = p
+				}
+			}
+		}
+		if n != 1 {
+			return
+		}
+		tgt := mergeName(target, merge)
+		for _, p := range ports {
+			if p.Kind == KindSignal && p.GlobalSignal == tgt {
+				return // target already used by another port
+			}
+		}
+		cand.GlobalSignal = tgt
+	}
+	apply("clk_sys", "clk", "clk_bus")
+	apply("reset", "rst", "reset")
 }
 
 func mergeName(s string, merge map[string]string) string {
