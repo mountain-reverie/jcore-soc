@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/j-core/jcore-soc/tools/socgen/elaborate"
 	"github.com/j-core/jcore-soc/tools/socgen/vhdl"
 )
 
@@ -122,4 +123,89 @@ func renderFn(t *testing.T, fn *vhdl.SubprogramBody) string {
 		&vhdl.ArchitectureBody{Name: "impl", Entity: "e", Decls: []vhdl.Decl{fn}},
 	}}
 	return vhdl.Print(df)
+}
+
+func TestMuxChainDualMaster(t *testing.T) {
+	res := &elaborate.Resolution{
+		DataBus: &elaborate.PeripheralBusModel{
+			MasterBus: "cpu01", DecodeMode: "simple",
+			MuxStages: []*elaborate.MuxStage{
+				{Label: "cpus_mux", Entity: "multi_master_bus_mux", In1: "cpu0", In2: "cpu1", Out: "cpu01"},
+			},
+		},
+	}
+	stmts := muxChainStmts(res)
+	if len(stmts) != 1 {
+		t.Fatalf("want 1 mux instantiation, got %d", len(stmts))
+	}
+	inst, ok := stmts[0].(*vhdl.InstantiationStmt)
+	if !ok || inst.Label != "cpus_mux" || inst.Unit != "work.multi_master_bus_mux" {
+		t.Fatalf("mux inst = %+v", stmts[0])
+	}
+	if inst.UnitKind != vhdl.ENTITY || inst.Arch != "" {
+		t.Errorf("want ENTITY with no arch qualifier, got kind=%v arch=%q", inst.UnitKind, inst.Arch)
+	}
+	pm := map[string]string{}
+	for _, a := range inst.PortMap {
+		pm[a.Formal] = exprText(a.Actual)
+	}
+	for f, want := range map[string]string{
+		"m1_i": "cpu0_periph_dbus_i", "m1_o": "cpu0_periph_dbus_o",
+		"m2_i": "cpu1_periph_dbus_i", "m2_o": "cpu1_periph_dbus_o",
+		"slave_i": "cpu01_periph_dbus_i", "slave_o": "cpu01_periph_dbus_o",
+		"clk": "clk_sys", "rst": "reset",
+	} {
+		if pm[f] != want {
+			t.Errorf("port %s = %q, want %q", f, pm[f], want)
+		}
+	}
+}
+
+func TestMuxChainThreeMasters(t *testing.T) {
+	res := &elaborate.Resolution{
+		DataBus: &elaborate.PeripheralBusModel{
+			MasterBus: "cpudm", DecodeMode: "simple",
+			MuxStages: []*elaborate.MuxStage{
+				{Label: "cpus_mux", Entity: "multi_master_bus_mux", In1: "cpu0", In2: "cpu1", Out: "cpu01"},
+				{Label: "dmac_mux", Entity: "multi_master_bus_muxff", In1: "cpu01", In2: "dmac", Out: "cpudm"},
+			},
+		},
+	}
+	stmts := muxChainStmts(res)
+	if len(stmts) != 2 {
+		t.Fatalf("want 2 mux instantiations, got %d", len(stmts))
+	}
+	want := []struct{ label, unit, slaveI string }{
+		{"cpus_mux", "work.multi_master_bus_mux", "cpu01_periph_dbus_i"},
+		{"dmac_mux", "work.multi_master_bus_muxff", "cpudm_periph_dbus_i"},
+	}
+	for i, w := range want {
+		inst, ok := stmts[i].(*vhdl.InstantiationStmt)
+		if !ok || inst.Label != w.label || inst.Unit != w.unit {
+			t.Fatalf("stage %d = %+v", i, stmts[i])
+		}
+		pm := map[string]string{}
+		for _, a := range inst.PortMap {
+			pm[a.Formal] = exprText(a.Actual)
+		}
+		if pm["slave_i"] != w.slaveI {
+			t.Errorf("stage %d slave_i = %q, want %q", i, pm["slave_i"], w.slaveI)
+		}
+	}
+	// chaining invariant: stage 1's m1 input is stage 0's output bus.
+	s1 := stmts[1].(*vhdl.InstantiationStmt)
+	pm1 := map[string]string{}
+	for _, a := range s1.PortMap {
+		pm1[a.Formal] = exprText(a.Actual)
+	}
+	if pm1["m1_i"] != "cpu01_periph_dbus_i" {
+		t.Errorf("stage1 m1_i = %q, want cpu01_periph_dbus_i (chaining)", pm1["m1_i"])
+	}
+}
+
+func TestMuxChainSingleMasterEmpty(t *testing.T) {
+	res := &elaborate.Resolution{DataBus: &elaborate.PeripheralBusModel{MasterBus: "cpu0"}}
+	if s := muxChainStmts(res); len(s) != 0 {
+		t.Errorf("single master must emit no mux instantiations, got %d", len(s))
+	}
 }

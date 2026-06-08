@@ -317,9 +317,36 @@ func databusDecls(res *elaborate.Resolution) []vhdl.Decl {
 	return decls
 }
 
-// muxChainStmts instantiates the multi-master arbitration mux chain (Task 7).
-// For single-master designs there is no chain; returns nil.
-func muxChainStmts(_ *elaborate.Resolution) []vhdl.Stmt { return nil }
+// muxChainStmts emits the multi-master arbitration mux instantiations
+// (generate.clj:403-453). Each MuxStage wires two input peripheral buses to an
+// output bus via a multi_master_bus_mux/muxff entity. Single-master designs have
+// no stages and emit nothing. The intermediate <Out>_periph_dbus_i/o signals are
+// declared by databusDecls.
+func muxChainStmts(res *elaborate.Resolution) []vhdl.Stmt {
+	if res.DataBus == nil {
+		return nil
+	}
+	out := make([]vhdl.Stmt, 0, len(res.DataBus.MuxStages))
+	for _, s := range res.DataBus.MuxStages {
+		inst := &vhdl.InstantiationStmt{
+			Label:    s.Label,
+			UnitKind: vhdl.ENTITY,
+			Unit:     "work." + s.Entity,
+			PortMap: []*vhdl.AssocElement{
+				{Formal: "clk", Actual: &vhdl.Ident{Name: "clk_sys"}},
+				{Formal: "rst", Actual: &vhdl.Ident{Name: "reset"}},
+				{Formal: "m1_i", Actual: &vhdl.Ident{Name: s.In1 + "_periph_dbus_i"}},
+				{Formal: "m1_o", Actual: &vhdl.Ident{Name: s.In1 + "_periph_dbus_o"}},
+				{Formal: "m2_i", Actual: &vhdl.Ident{Name: s.In2 + "_periph_dbus_i"}},
+				{Formal: "m2_o", Actual: &vhdl.Ident{Name: s.In2 + "_periph_dbus_o"}},
+				{Formal: "slave_i", Actual: &vhdl.Ident{Name: s.Out + "_periph_dbus_i"}},
+				{Formal: "slave_o", Actual: &vhdl.Ident{Name: s.Out + "_periph_dbus_o"}},
+			},
+		}
+		out = append(out, inst)
+	}
+	return out
+}
 
 // databusStmts builds the data-bus concurrent statements in golden order
 // (generate.clj:654-685; devices.vhd:88-95): the (Task 7) mux chain, the
