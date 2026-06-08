@@ -1,9 +1,118 @@
 package emit
 
 import (
+	"errors"
+	"sort"
+
 	"github.com/j-core/jcore-soc/tools/socgen/elaborate"
 	"github.com/j-core/jcore-soc/tools/socgen/vhdl"
 )
+
+// SoC renders soc.vhd: a `soc` entity (PadringTop ports) and an architecture that
+// declares the Top/TopExtra/zero-out signals and instantiates the top entities +
+// the devices architecture, zeroing unused signals. Best-effort; never panics.
+func SoC(res *elaborate.Resolution) (string, error) {
+	if res == nil {
+		return "", nil
+	}
+	var errs []error
+	sl := res.SignalLocations
+
+	// declarations: Top internal + TopExtra aliases + zero-out signals
+	var declNames []string
+	subst := map[string]string{}
+	if sl != nil {
+		declNames = append(declNames, sl.Top...)
+		for name, alias := range sl.TopExtra {
+			declNames = append(declNames, alias)
+			subst[name] = alias
+		}
+	}
+	zeroNames := zeroOutSignals(res)
+	declNames = append(declNames, zeroNames...)
+	sort.Strings(declNames)
+	decls := make([]vhdl.Decl, 0, len(declNames))
+	for _, n := range declNames {
+		mark, con := typeToSubtype(typeForDecl(res, n, subst)) // shared with devices.go
+		decls = append(decls, &vhdl.SignalDecl{Names: []string{n}, SubtypeMark: mark, Constraint: con})
+	}
+
+	// statements: TopExtra assigns, top instantiations, devices instance, zero-out
+	stmts := make([]vhdl.Stmt, 0, len(subst)+len(res.TopEntities)+1+len(zeroNames))
+	for _, name := range sortedKeysStr(subst) {
+		stmts = append(stmts, concAssign(&vhdl.Ident{Name: name}, &vhdl.Ident{Name: subst[name]}))
+	}
+	for _, name := range sortedTopNames(res.TopEntities) {
+		re := res.TopEntities[name]
+		if re.Entity == nil && re.Config == nil {
+			errs = append(errs, &EmitError{Kind: ErrUnboundEntity, Inst: re.Name})
+			continue
+		}
+		stmts = append(stmts, topInstStmt(re))
+	}
+	stmts = append(stmts, devicesInstStmt(res))
+	for _, n := range zeroNames {
+		var mark string
+		if s := res.Signals[n]; s != nil && s.Type != nil {
+			mark = s.Type.Mark
+		}
+		stmts = append(stmts, concAssign(&vhdl.Ident{Name: n}, zeroVal(mark, res.Library)))
+	}
+
+	df := &vhdl.DesignFile{
+		Context: socContext(),
+		Units: []vhdl.DesignUnit{
+			&vhdl.EntityDecl{Name: "soc", Ports: socEntityPorts(res)},
+			&vhdl.ArchitectureBody{Name: "impl", Entity: "soc", Decls: decls, Stmts: stmts},
+		},
+	}
+	return vhdl.Print(df), errors.Join(errs...)
+}
+
+// zeroOutSignals returns the sorted names of signals carrying a synthetic
+// "zero"-context driver (set by applyZeroSignals) — driven to their type's zero.
+func zeroOutSignals(res *elaborate.Resolution) []string {
+	var out []string
+	for name, s := range res.Signals {
+		for _, p := range s.Ports {
+			if p.Context.Kind == "zero" {
+				out = append(out, name)
+				break
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+func sortedKeysStr(m map[string]string) []string {
+	ks := make([]string, 0, len(m))
+	for k := range m {
+		ks = append(ks, k)
+	}
+	sort.Strings(ks)
+	return ks
+}
+
+func sortedTopNames(m map[string]*elaborate.ResolvedEntity) []string {
+	ks := make([]string, 0, len(m))
+	for k := range m {
+		ks = append(ks, k)
+	}
+	sort.Strings(ks)
+	return ks
+}
+
+// socContext returns the context clauses. Precise package discovery is P6; this
+// minimal set parses and covers the common cpu/data-bus record types.
+func socContext() []vhdl.Node {
+	return []vhdl.Node{
+		&vhdl.LibraryClause{Names: []string{"ieee"}},
+		&vhdl.UseClause{Names: []string{"ieee.std_logic_1164.all"}},
+		&vhdl.UseClause{Names: []string{"work.cpu2j0_pack.all"}},
+		&vhdl.UseClause{Names: []string{"work.data_bus_pack.all"}},
+	}
+}
 
 // socEntityPorts builds the soc entity's ports from the PadringTop boundary signals.
 func socEntityPorts(res *elaborate.Resolution) []*vhdl.InterfaceDecl {
