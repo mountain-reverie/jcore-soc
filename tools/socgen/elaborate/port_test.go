@@ -125,6 +125,39 @@ func TestClkRstHeuristicSkips(t *testing.T) {
 	}
 }
 
+func TestBuildPortsSocPortNames(t *testing.T) {
+	noSpec := map[string]design.Value{}
+	noMerge := map[string]string{}
+
+	// soc_port_global_name -> bare global signal (no device prefix), even for a device.
+	eg := &iface.Entity{Name: "pio", Ports: []*iface.Port{
+		{Name: "p_o", Dir: "out", Type: iface.TypeRef{Mark: "std_logic"}, GlobalName: "po"},
+	}}
+	pg := buildPorts("gpio0", eg, noSpec, nil, noMerge, false)
+	if g := gsOf(pg, "p_o"); g != "po" {
+		t.Errorf("p_o GlobalName apply = %q, want bare po", g)
+	}
+
+	// soc_port_local_name -> prefix suffix (devName_<local>) for a device.
+	el := &iface.Entity{Name: "spi", Ports: []*iface.Port{
+		{Name: "spi_clk", Dir: "out", Type: iface.TypeRef{Mark: "std_logic"}, LocalName: "clk"},
+	}}
+	pl := buildPorts("flash", el, noSpec, nil, noMerge, false)
+	if g := gsOf(pl, "spi_clk"); g != "flash_clk" {
+		t.Errorf("spi_clk LocalName apply = %q, want flash_clk", g)
+	}
+
+	// explicit design mapping still wins over GlobalName.
+	ee := &iface.Entity{Name: "pio", Ports: []*iface.Port{
+		{Name: "p_o", Dir: "out", Type: iface.TypeRef{Mark: "std_logic"}, GlobalName: "po"},
+	}}
+	spec := map[string]design.Value{"p_o": {Kind: design.KindExpr, Text: "explicit_sig"}}
+	pe := buildPorts("gpio0", ee, spec, nil, noMerge, false)
+	if g := gsOf(pe, "p_o"); g != "explicit_sig" {
+		t.Errorf("explicit mapping = %q, want explicit_sig (wins over GlobalName)", g)
+	}
+}
+
 func TestGenericEnv(t *testing.T) {
 	lib := buildLib(t, `entity e is generic (w : integer := 8; n : integer); end entity;`)
 	e, _ := lib.Entity("e")

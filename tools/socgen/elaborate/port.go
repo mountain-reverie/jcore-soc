@@ -60,13 +60,24 @@ func buildPorts(devName string, ent *iface.Entity, spec map[string]design.Value,
 		v, has := spec[p.Name]
 		switch {
 		case !has:
-			// normal port, auto-name: bare port id for top/padring entities (so they
-			// unify with shared/device signals); device-name-prefixed for devices.
-			def := devName + "_" + p.Name
-			if bareDefault {
-				def = p.Name
+			switch {
+			case p.GlobalName != "":
+				// soc_port_global_name / global_ports group: a bare SoC-wide signal.
+				rp.GlobalSignal = mergeName(p.GlobalName, merge)
+				explicit[p.Name] = true // not subject to the clk/rst heuristic / further default
+			default:
+				// auto-name: localName (soc_port_local_name / local_ports) overrides the
+				// port id in the prefix; bare id for top/padring, devName-prefixed for devices.
+				local := p.Name
+				if p.LocalName != "" {
+					local = p.LocalName
+				}
+				def := devName + "_" + local
+				if bareDefault {
+					def = local
+				}
+				rp.GlobalSignal = mergeName(def, merge)
 			}
-			rp.GlobalSignal = mergeName(def, merge)
 		case v.Kind == design.KindMap:
 			switch {
 			case hasKey(v.Map, "irq?"):
