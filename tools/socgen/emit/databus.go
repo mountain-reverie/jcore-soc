@@ -288,6 +288,9 @@ func concAssign(target, value vhdl.Expr) *vhdl.ConcurrentSignalAssign {
 // the data_bus_i_t/data_bus_o_t array types, the devs_bus_i/o signals, any
 // intermediate mux-output bus signals, then the decode_address function.
 func databusDecls(res *elaborate.Resolution) []vhdl.Decl {
+	if res.DataBus == nil {
+		return nil
+	}
 	devs := busDevicesOf(res)
 	lits := busLits(res)
 
@@ -353,6 +356,9 @@ func muxChainStmts(res *elaborate.Resolution) []vhdl.Stmt {
 // active_dev decode, the master read-back, the per-device bus_split for-generate,
 // the NONE loopback, and the disconnected-bus loopbacks.
 func databusStmts(res *elaborate.Resolution) []vhdl.Stmt {
+	if res.DataBus == nil {
+		return nil
+	}
 	master := res.DataBus.MasterBus
 	stmts := make([]vhdl.Stmt, 0, 4+len(res.DataBus.Disconnected))
 
@@ -394,9 +400,8 @@ func databusStmts(res *elaborate.Resolution) []vhdl.Stmt {
 		}}))
 
 	// Disconnected peripheral buses: <bus>_periph_dbus_i <= loopback_bus(<bus>_periph_dbus_o);
-	disc := append([]string(nil), res.DataBus.Disconnected...)
-	sort.Strings(disc)
-	for _, bus := range disc {
+	// (Disconnected is already sorted by elaborate's resolvePeripheralBuses.)
+	for _, bus := range res.DataBus.Disconnected {
 		stmts = append(stmts, concAssign(
 			&vhdl.Ident{Name: bus + "_periph_dbus_i"},
 			&vhdl.CallExpr{Fun: &vhdl.Ident{Name: "loopback_bus"}, Args: []*vhdl.AssocElement{{Actual: &vhdl.Ident{Name: bus + "_periph_dbus_o"}}}}))
