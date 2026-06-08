@@ -139,6 +139,24 @@ func portActual(p *elaborate.ResolvedPort, busLit string) vhdl.Expr {
 	}
 }
 
+// devicesEntityPorts builds the devices entity's port list from the TopDevices
+// boundary signals (P5c-i categorization); each port's type comes from its signal.
+func devicesEntityPorts(res *elaborate.Resolution) []*vhdl.InterfaceDecl {
+	if res.SignalLocations == nil {
+		return nil
+	}
+	out := make([]*vhdl.InterfaceDecl, 0, len(res.SignalLocations.TopDevices))
+	for _, pl := range res.SignalLocations.TopDevices {
+		var typ *elaborate.ResolvedType
+		if s := res.Signals[pl.Name]; s != nil {
+			typ = s.Type
+		}
+		mark, con := typeToSubtype(typ)
+		out = append(out, &vhdl.InterfaceDecl{Names: []string{pl.Name}, Mode: pl.Dir, SubtypeMark: mark, Constraint: con})
+	}
+	return out
+}
+
 // typeToSubtype renders a resolved signal type to a (mark, constraint) pair.
 // Concrete vector bounds (Left/Right) are emitted as an index constraint; a
 // symbolic type keeps its as-written constraint; a nil type defaults to std_logic.
