@@ -164,3 +164,104 @@ func TestDevicesEntityPorts(t *testing.T) {
 		t.Errorf("flash_cs = %q", got["flash_cs"])
 	}
 }
+
+func TestDevicesReworkStructure(t *testing.T) {
+	res := &elaborate.Resolution{
+		Classes: map[string]*elaborate.ResolvedClass{
+			"gpioc": {Entity: &iface.Entity{Name: "pio"}, ArchName: "beh"},
+		},
+		Devices: []*elaborate.ResolvedDevice{
+			{Name: "gpio", Class: "gpioc", Ports: []*elaborate.ResolvedPort{
+				{Name: "clk", Kind: elaborate.KindSignal, GlobalSignal: "clk_sys"},
+				{Name: "d", Kind: elaborate.KindSignal, GlobalSignal: "gpio_internal"},
+			}},
+		},
+		TopEntities: map[string]*elaborate.ResolvedEntity{ // must NOT be instantiated in devices.vhd
+			"cpus": {Name: "cpus", Entity: &iface.Entity{Name: "cpus"}, ArchName: "rtl"},
+		},
+		Signals: map[string]*elaborate.Signal{
+			"clk_sys":       {Name: "clk_sys", Type: &elaborate.ResolvedType{Mark: "std_logic"}},
+			"gpio_internal": {Name: "gpio_internal", Type: &elaborate.ResolvedType{Mark: "std_logic"}},
+		},
+		SignalLocations: &elaborate.SignalLocations{
+			TopDevices: []elaborate.PortLoc{{Name: "clk_sys", Dir: "in"}},
+			Devices:    []string{"gpio_internal"},
+		},
+	}
+	out, err := Devices(res)
+	if err != nil {
+		t.Fatalf("Devices: %v", err)
+	}
+	df, perr := vhdl.ParseFile(vhdl.NewFileSet(), "devices.vhd", []byte(out))
+	if perr != nil {
+		t.Fatalf("re-parse: %v\n%s", perr, out)
+	}
+	var ent *vhdl.EntityDecl
+	var arch *vhdl.ArchitectureBody
+	for _, u := range df.Units {
+		switch n := u.(type) {
+		case *vhdl.EntityDecl:
+			ent = n
+		case *vhdl.ArchitectureBody:
+			arch = n
+		}
+	}
+	if ent == nil || len(ent.Ports) != 1 || ent.Ports[0].Names[0] != "clk_sys" {
+		t.Fatalf("entity ports = %+v", ent)
+	}
+	declNames := map[string]bool{}
+	for _, d := range arch.Decls {
+		if sd, ok := d.(*vhdl.SignalDecl); ok {
+			declNames[sd.Names[0]] = true
+		}
+	}
+	if !declNames["gpio_internal"] {
+		t.Errorf("expected gpio_internal declared; decls=%v", declNames)
+	}
+	if declNames["clk_sys"] {
+		t.Errorf("clk_sys is an entity port and must NOT be declared as a signal")
+	}
+	labels := map[string]bool{}
+	for _, s := range arch.Stmts {
+		if i, ok := s.(*vhdl.InstantiationStmt); ok {
+			labels[i.Label] = true
+		}
+	}
+	if !labels["gpio"] {
+		t.Errorf("gpio device must be instantiated; labels=%v", labels)
+	}
+	if labels["cpus"] {
+		t.Errorf("top-entity cpus must NOT be instantiated in devices.vhd")
+	}
+}
+
+func TestDevicesExtraAlias(t *testing.T) {
+	res := &elaborate.Resolution{
+		Classes: map[string]*elaborate.ResolvedClass{"c": {Entity: &iface.Entity{Name: "e"}, ArchName: "a"}},
+		Devices: []*elaborate.ResolvedDevice{
+			{Name: "d0", Class: "c", Ports: []*elaborate.ResolvedPort{{Name: "o", Kind: elaborate.KindSignal, GlobalSignal: "bidir"}}},
+			{Name: "d1", Class: "c", Ports: []*elaborate.ResolvedPort{{Name: "i", Kind: elaborate.KindSignal, GlobalSignal: "bidir"}}},
+		},
+		Signals: map[string]*elaborate.Signal{"bidir": {Name: "bidir", Type: &elaborate.ResolvedType{Mark: "std_logic"}}},
+		SignalLocations: &elaborate.SignalLocations{
+			TopDevices:   []elaborate.PortLoc{{Name: "bidir", Dir: "out"}},
+			DevicesExtra: map[string]string{"bidir": "sig_bidir"},
+		},
+	}
+	out, err := Devices(res)
+	if err != nil {
+		t.Fatalf("Devices: %v", err)
+	}
+	if _, perr := vhdl.ParseFile(vhdl.NewFileSet(), "devices.vhd", []byte(out)); perr != nil {
+		t.Fatalf("re-parse: %v\n%s", perr, out)
+	}
+	for _, want := range []string{"signal sig_bidir", "bidir <= sig_bidir", "=> sig_bidir"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("DevicesExtra output missing %q:\n%s", want, out)
+		}
+	}
+	// BOTH the writer (d0.o) and reader (d1.i) port maps must use the alias.
+	if n := strings.Count(out, "=> sig_bidir"); n != 2 {
+		t.Errorf("expected 2 port maps wired to sig_bidir (writer + reader), got %d:\n%s", n, out)
+	}
+}
