@@ -12,9 +12,10 @@ import (
 
 // TestEmitDevicesMimasV2 runs the full pipeline (board.Load -> Elaborate ->
 // emit.Devices) on the real mimas_v2 board and proves the emitted devices.vhd
-// round-trips through our own parser with every bound device, top-entity and
-// padring-entity instantiated. It runs under `make test` (which sets
-// JCORE_SOC_ROOT) and skips for a bare `go test`.
+// round-trips through our own parser with every bound device instantiated and
+// top/padring entities NOT instantiated (they belong in soc.vhd / pad_ring.vhd
+// since P5c-ii). It runs under `make test` (which sets JCORE_SOC_ROOT) and skips
+// for a bare `go test`.
 func TestEmitDevicesMimasV2(t *testing.T) {
 	root := os.Getenv("JCORE_SOC_ROOT")
 	if root == "" {

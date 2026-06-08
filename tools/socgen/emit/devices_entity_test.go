@@ -95,6 +95,9 @@ func TestDevicesEntityParityMimasV2(t *testing.T) {
 	}
 	got := emittedEntityPortsTyped(ent)
 	want := goldenEntityPortsTyped(t, filepath.Join(root, "targets/boards/mimas_v2/devices.vhd"))
+	if len(want) == 0 {
+		t.Fatal("golden devices.vhd has no entity ports — parse/path problem")
+	}
 	if !equalStringsDE(got, want) {
 		t.Errorf("devices entity ports mismatch (%d vs golden %d):\n got=%v\n want=%v", len(got), len(want), got, want)
 	}

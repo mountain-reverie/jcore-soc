@@ -5,9 +5,9 @@ import (
 	"fmt"
 )
 
-// ErrUnboundEntity is returned when a device/top/padring instance has no entity
-// bound during elaborate (an upstream resolution error already exists); emit
-// skips the instantiation.
+// ErrUnboundEntity is returned when a device instance has no entity bound during
+// elaborate (an upstream resolution error already exists); emit skips the
+// instantiation.
 var ErrUnboundEntity = errors.New("entity not bound")
 
 // EmitError reports a problem encountered while emitting VHDL for an instance.
