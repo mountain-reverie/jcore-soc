@@ -48,9 +48,10 @@ func (e *ResolveError) Error() string {
 func (e *ResolveError) Unwrap() error { return e.Kind }
 
 var (
-	ErrTypeMismatch   = errors.New("type mismatch")
-	ErrMultiDriver    = errors.New("signal driven by multiple ports")
-	ErrUndrivenSignal = errors.New("nothing drives signal")
+	ErrTypeMismatch       = errors.New("type mismatch")
+	ErrMultiDriver        = errors.New("signal driven by multiple ports")
+	ErrUndrivenSignal     = errors.New("nothing drives signal")
+	ErrMultiContextDriver = errors.New("signal driven from multiple contexts")
 )
 
 // SignalError reports a net-list validation failure for a global signal.
@@ -68,6 +69,8 @@ func (e *SignalError) Error() string {
 		return fmt.Sprintf("signal %q is driven by multiple ports: %s", e.Signal, e.Detail)
 	case errors.Is(e.Kind, ErrUndrivenSignal):
 		return fmt.Sprintf("nothing drives signal %q used by %s", e.Signal, e.Detail)
+	case errors.Is(e.Kind, ErrMultiContextDriver):
+		return fmt.Sprintf("signal %q driven from multiple contexts: %s", e.Signal, e.Detail)
 	default:
 		return fmt.Sprintf("signal %q: %v", e.Signal, e.Kind)
 	}
