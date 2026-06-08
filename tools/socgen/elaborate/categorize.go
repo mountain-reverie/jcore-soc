@@ -209,14 +209,18 @@ func injectInternalBusPorts(res *Resolution) {
 	// port must be the DRIVER (out) — padring drives pi into the devices — so that
 	// it has a source context and categorizes as a devices/soc input port.
 	if s := res.Signals["pi"]; s != nil {
-		hasDevIn := false
+		hasDevIn, alreadyDriven := false, false
 		for _, p := range s.Ports {
 			if p.Context.Kind == "device" && p.Dir == dirIn {
 				hasDevIn = true
-				break
+			}
+			if p.Dir == dirOut { // a real driver (e.g. a pi input pin) exists
+				alreadyDriven = true
 			}
 		}
-		if hasDevIn {
+		// Only synthesize the padring driver when pi is consumed by a device and not
+		// already driven — avoids a two-driver pi on boards that DO have pi input pins.
+		if hasDevIn && !alreadyDriven {
 			s.Ports = append(s.Ports, &SignalPortRef{Context: Context{Kind: "padring", ID: "pi"}, PortName: "pi", Dir: dirOut, Type: s.Type})
 		}
 	}
