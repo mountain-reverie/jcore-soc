@@ -154,8 +154,10 @@ func TestResolvePinsDifferentialConsistentDirection(t *testing.T) {
 	mk := func() *design.Design {
 		return &design.Design{Pins: &design.PinsSpec{Rules: rules, Pins: []*design.Pin{{Net: "ck_n", Pad: "A"}, {Net: "ck_p", Pad: "B"}}}}
 	}
-	// undriven net -> BOTH pins drive (input pads) -> both IBUFDS, same direction.
-	sigs := map[string]*Signal{}
+	// real net consumed by a device (in port) but not driven -> BOTH pins drive
+	// (input pads) -> both IBUFDS, same direction. The net must be real (a device
+	// declares it) or the bare-signal pins would be dropped as :missing.
+	sigs := map[string]*Signal{"ddr_clk": {Name: "ddr_clk", Ports: []*SignalPortRef{{Context: Context{Kind: "device", ID: "ddrc"}, Dir: "in"}}}}
 	pins := resolvePins(mk(), sigs)
 	bufs := map[string]BufferKind{}
 	for _, p := range pins {
@@ -193,17 +195,27 @@ func TestResolvePinsJoinAndBuffer(t *testing.T) {
 			Pins: []*design.Pin{{Net: "clk", Pad: "V10"}, {Net: "led", Pad: "P4"}, {Net: "ddr_ck", Pad: "E3"}},
 		},
 	}
-	// pre-seed sigs so 'ddr_clk' is already driven by a device (so the pin consumes it -> output pad -> OBUFDS)
+	// pre-seed sigs: 'ddr_clk' driven by a device (pin consumes it -> output pad
+	// -> OBUFDS); 'clk' a real net consumed by a device (in port) but not driven,
+	// so the pin drives it (-> input pad, IBUF). Both targets must be real nets or
+	// the bare-signal pins would be dropped as :missing.
 	sigs := map[string]*Signal{
 		"ddr_clk": {Name: "ddr_clk", Ports: []*SignalPortRef{{Context: Context{Kind: "device", ID: "ddrc"}, Dir: "out"}}},
+		"clk":     {Name: "clk", Ports: []*SignalPortRef{{Context: Context{Kind: "device", ID: "clkgen"}, Dir: "in"}}},
 	}
 	pins := resolvePins(d, sigs)
-	// clk undriven -> pin drives it (out), pin-context, IBUF
-	if sigs["clk"] == nil || len(sigs["clk"].Ports) != 1 || sigs["clk"].Ports[0].Dir != "out" || sigs["clk"].Ports[0].Context.Kind != "pin" {
+	// clk consumed by a device -> pin drives it (out), pin-context, IBUF
+	var clkPin *SignalPortRef
+	for _, p := range sigs["clk"].Ports {
+		if p.Context.Kind == "pin" {
+			clkPin = p
+		}
+	}
+	if clkPin == nil || clkPin.Dir != "out" {
 		t.Fatalf("clk join: %+v", sigs["clk"])
 	}
-	if sigs["clk"].Ports[0].PortName != "pin.clk.signal" {
-		t.Errorf("clk PortName = %q want pin.clk.signal", sigs["clk"].Ports[0].PortName)
+	if clkPin.PortName != "pin.clk.signal" {
+		t.Errorf("clk PortName = %q want pin.clk.signal", clkPin.PortName)
 	}
 	// led -> po(0): consumer of base 'po', element recorded
 	po := sigs["po"]
@@ -241,6 +253,37 @@ func TestBufferKindDirect(t *testing.T) {
 	bf := false
 	if k := bufferKind(folded{buff: &bf, signalRef: "x"}, "out"); k != BufDirect {
 		t.Errorf("buff:false -> %v want Direct", k)
+	}
+}
+
+func TestSignalIsReal(t *testing.T) {
+	sigs := map[string]*Signal{
+		"real": {Name: "real", Ports: []*SignalPortRef{
+			{Context: Context{Kind: "device", ID: "u_dev"}, Dir: dirOut},
+		}},
+		"pinonly": {Name: "pinonly", Ports: []*SignalPortRef{
+			{Context: Context{Kind: ctxKindPin, ID: "somepin"}, Dir: dirIn},
+		}},
+		"zpin": {Name: "zpin", Ports: []*SignalPortRef{ // pin-only AND a zero-signal
+			{Context: Context{Kind: ctxKindPin, ID: "somepin"}, Dir: dirIn},
+		}},
+	}
+	d := &design.Design{ZeroSignals: []string{"zsig", "zpin"}}
+
+	if !signalIsReal(sigs, d, "real") {
+		t.Errorf("a signal with a device port should be real")
+	}
+	if signalIsReal(sigs, d, "pinonly") {
+		t.Errorf("a signal with only pin ports should NOT be real")
+	}
+	if signalIsReal(sigs, d, "absent") {
+		t.Errorf("a signal not in the net-list should NOT be real")
+	}
+	if !signalIsReal(sigs, d, "zsig") {
+		t.Errorf("a declared zero-signal should be real")
+	}
+	if !signalIsReal(sigs, d, "zpin") {
+		t.Errorf("a zero-signal with only pin ports should still be real (zero-signal wins)")
 	}
 }
 

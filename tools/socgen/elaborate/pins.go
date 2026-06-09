@@ -3,6 +3,7 @@ package elaborate
 import (
 	"maps"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -162,6 +163,21 @@ func bareSignalDir(sigs map[string]*Signal, base string) string {
 	return dirOut
 }
 
+// signalIsReal reports whether base names a real net at pin-resolution time: a
+// signal with at least one non-pin port (device/top/padring/synthetic driver),
+// or a declared zero-signal. A signal that exists only via pin legs is not real
+// — faithful to the Clojure global-signals membership test (devices.clj).
+func signalIsReal(sigs map[string]*Signal, d *design.Design, base string) bool {
+	if s := sigs[base]; s != nil {
+		for _, p := range s.Ports {
+			if p.Context.Kind != ctxKindPin {
+				return true
+			}
+		}
+	}
+	return slices.Contains(d.ZeroSignals, base)
+}
+
 // resolvePins folds the rules over each pin, joins the resulting legs into the
 // net-list (sigs), and returns the resolved pins (with buffer kind + attrs). It
 // must run AFTER device/top/padring gather so a bare-`signal:` pin's direction can
@@ -178,6 +194,18 @@ func resolvePins(d *design.Design, sigs map[string]*Signal) []*ResolvedPin {
 		// const-only target, e.g. out: 0, also produces no leg and is deferred.)
 		if f.signalRef == "" && f.inRef == "" && f.outRef == "" && f.outEnRef == "" {
 			continue
+		}
+		// Drop a bare-signal pin whose target signal is not a real net (no
+		// device/top/padring port and not a zero-signal) — faithful to Clojure
+		// :missing (devices.clj). mimas io_p* pads map to io_p<n> signals no
+		// device declares, so they would otherwise emit a spurious pad port +
+		// buffer. Only the bare-signal case occurs in practice; an explicit
+		// in/out/out-en pin always targets a real device signal.
+		if f.signalRef != "" && f.inRef == "" && f.outRef == "" && f.outEnRef == "" {
+			base, _ := splitSignal(f.signalRef)
+			if !signalIsReal(sigs, d, base) {
+				continue
+			}
 		}
 		rp := &ResolvedPin{Net: pin.Net, Pad: pin.Pad, Attrs: f.attrs, Diff: f.signalDiff}
 		bareDir := ""
