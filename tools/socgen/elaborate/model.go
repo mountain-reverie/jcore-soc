@@ -48,7 +48,15 @@ type Resolution struct {
 	Pins            []*ResolvedPin             // resolved pins (P4d-ii)
 	DataBus         *PeripheralBusModel        // P5b; nil if no data-bus devices
 	SignalLocations *SignalLocations           // P5c-i
+	Pio             []PioBit                   // P5d-c: resolved system.pio loopback bits (sorted by Idx)
 	Library         *iface.Library             // the bound interface library (for emit type introspection, P5c-ii-b)
+}
+
+// PioBit is one resolved system.pio bit: a loopback (pi(Idx) <= po(Idx)) when
+// Const is nil, else a constant tie (pi(Idx) <= Const).
+type PioBit struct {
+	Idx   int
+	Const *int
 }
 
 // PortLoc is a boundary signal that becomes an entity port (P5c).

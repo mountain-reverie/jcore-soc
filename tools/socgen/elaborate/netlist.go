@@ -79,6 +79,7 @@ func Elaborate(b *board.Board) (*Resolution, error) {
 	errs = append(errs, cerr)
 	errs = append(errs, validateAddresses(res))
 	res.Library = b.Library
+	res.Pio = resolvePio(b.Design)
 	return res, errors.Join(errs...)
 }
 
