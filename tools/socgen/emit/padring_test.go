@@ -43,32 +43,32 @@ func TestPinAttrs(t *testing.T) {
 			}},
 		},
 	}
-	out := renderDecls2(t, pinAttrs(res))
+	out := renderDeclsForTest(t, pinAttrs(res))
 	for _, want := range []string{
 		"attribute loc : string;",
 		`attribute loc of pin_led0 : signal is "t18";`,
 		`attribute tig of pin_led0 : signal is "yes";`,
 	} {
-		if !contains3(out, want) {
+		if !containsStr(out, want) {
 			t.Errorf("pinAttrs missing %q:\n%s", want, out)
 		}
 	}
 	for _, no := range []string{"iostandard", "drive"} {
-		if contains3(out, no) {
+		if containsStr(out, no) {
 			t.Errorf("buffer-generic %q must NOT be a pad attribute:\n%s", no, out)
 		}
 	}
 }
 
-// renderDecls2 prints decls inside a throwaway architecture.
-func renderDecls2(t *testing.T, decls []vhdl.Decl) string {
+// renderDeclsForTest prints decls inside a throwaway architecture.
+func renderDeclsForTest(t *testing.T, decls []vhdl.Decl) string {
 	t.Helper()
 	df := &vhdl.DesignFile{Units: []vhdl.DesignUnit{
 		&vhdl.ArchitectureBody{Name: "impl", Entity: "pad_ring", Decls: decls},
 	}}
 	return vhdl.Print(df)
 }
-func contains3(s, sub string) bool { return strings.Contains(s, sub) }
+func containsStr(s, sub string) bool { return strings.Contains(s, sub) }
 
 func TestPadRingAssembly(t *testing.T) {
 	res := &elaborate.Resolution{

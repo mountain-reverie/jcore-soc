@@ -39,15 +39,19 @@ func padRingPorts(res *elaborate.Resolution) []*vhdl.InterfaceDecl {
 // (iostandard/drive/slew/diff_term) belong to the I/O buffers (P5d-b).
 func pinAttrs(res *elaborate.Resolution) []vhdl.Decl {
 	pins := sortedPins(res)
-	// collect distinct attribute names (in deterministic order) for the decls.
-	declOrder := []string{"loc"}
-	seen := map[string]bool{"loc": true}
+	// collect distinct attribute names for the decls. `loc` is declared first
+	// (only when at least one pin carries a pad), then the other attribute
+	// names in first-seen/sorted order.
+	var otherDecls []string
+	hasLoc := false
+	seen := map[string]bool{}
 	type spec struct{ name, ent, val string }
 	var specs []spec
 	for _, p := range pins {
 		port := "pin_" + p.Net
 		if p.Pad != "" {
-			specs = append(specs, spec{"loc", port, p.Pad})
+			hasLoc = true
+			specs = append(specs, spec{"loc", port, vhdlEscape(p.Pad)})
 		}
 		// other attrs (sorted) excluding buffer generics and loc.
 		var keys []string
@@ -63,10 +67,14 @@ func pinAttrs(res *elaborate.Resolution) []vhdl.Decl {
 			lk := lc(k)
 			if !seen[lk] {
 				seen[lk] = true
-				declOrder = append(declOrder, lk)
+				otherDecls = append(otherDecls, lk)
 			}
-			specs = append(specs, spec{lk, port, p.Attrs[k].Text})
+			specs = append(specs, spec{lk, port, vhdlEscape(p.Attrs[k].Text)})
 		}
+	}
+	declOrder := otherDecls
+	if hasLoc {
+		declOrder = append([]string{"loc"}, otherDecls...)
 	}
 	out := make([]vhdl.Decl, 0, len(declOrder)+len(specs))
 	for _, name := range declOrder {

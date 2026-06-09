@@ -14,6 +14,10 @@ import (
 // lc lower-cases and trims, matching the elaborate package's key/label convention.
 func lc(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
 
+// vhdlEscape escapes a string for use inside a VHDL string literal: an embedded
+// double-quote is doubled per VHDL-93 lexical rules.
+func vhdlEscape(s string) string { return strings.ReplaceAll(s, `"`, `""`) }
+
 // intLit builds an integer literal expression.
 func intLit(i int) vhdl.Expr { return &vhdl.BasicLit{Kind: vhdl.INT, Value: strconv.Itoa(i)} }
 
@@ -32,8 +36,7 @@ func emitValue(v design.Value) vhdl.Expr {
 		}
 		return &vhdl.Ident{Name: "false"}
 	case design.KindStr:
-		escaped := strings.ReplaceAll(v.Text, `"`, `""`)
-		return &vhdl.BasicLit{Kind: vhdl.STRINGLIT, Value: `"` + escaped + `"`}
+		return &vhdl.BasicLit{Kind: vhdl.STRINGLIT, Value: `"` + vhdlEscape(v.Text) + `"`}
 	case design.KindMap:
 		return &vhdl.Ident{Name: "open"}
 	default: // KindExpr — verbatim VHDL text
