@@ -62,6 +62,60 @@ func TestInstBuf(t *testing.T) {
 	}
 }
 
+func TestPinStmtSingleEnded(t *testing.T) {
+	cases := []struct {
+		name string
+		rp   *elaborate.ResolvedPin
+		want []string
+	}{
+		{"obuf", &elaborate.ResolvedPin{Net: "led0", BufferKind: elaborate.BufOBUF, Out: "po(0)",
+			Attrs: map[string]design.Value{"drive": {Kind: design.KindInt, Int: 24}, "iostandard": {Kind: design.KindExpr, Text: "LVCMOS33"}}},
+			[]string{"obuf_led0 : OBUF", "I => po(0)", "O => pin_led0", "DRIVE => 24", `IOSTANDARD => "LVCMOS33"`}},
+		{"ibuf", &elaborate.ResolvedPin{Net: "sd_miso", BufferKind: elaborate.BufIBUF, Signal: "sd_miso",
+			Attrs: map[string]design.Value{"iostandard": {Kind: design.KindExpr, Text: "LVCMOS33"}}},
+			[]string{"ibuf_sd_miso : IBUF", "I => pin_sd_miso", "O => sd_miso", `IOSTANDARD => "LVCMOS33"`}},
+		{"obuft", &elaborate.ResolvedPin{Net: "mcb3_dram_ldm", BufferKind: elaborate.BufOBUFT, Out: "dr_data_o.dmo(0)", OutEn: "dr_data_o.dq_outen(16)",
+			Attrs: map[string]design.Value{"iostandard": {Kind: design.KindExpr, Text: "MOBILE_DDR"}}},
+			[]string{"obuft_mcb3_dram_ldm : OBUFT", "I => dr_data_o.dmo(0)", "T => dr_data_o.dq_outen(16)", "O => pin_mcb3_dram_ldm"}},
+		{"iobuf", &elaborate.ResolvedPin{Net: "mcb3_dram_dq0", BufferKind: elaborate.BufIOBUF, In: "dr_data_i.dqi(0)", Out: "dr_data_o.dqo(0)", OutEn: "dr_data_o.dq_outen(0)",
+			Attrs: map[string]design.Value{"iostandard": {Kind: design.KindExpr, Text: "MOBILE_DDR"}}},
+			[]string{"iobuf_mcb3_dram_dq0 : IOBUF", "I => dr_data_o.dqo(0)", "T => dr_data_o.dq_outen(0)", "O => dr_data_i.dqi(0)", "IO => pin_mcb3_dram_dq0"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			st, err := pinStmt(c.rp)
+			if err != nil || st == nil {
+				t.Fatalf("pinStmt(%s) = %v, %v", c.name, st, err)
+			}
+			out := renderStmt(t, st)
+			for _, w := range c.want {
+				if !strings.Contains(out, w) {
+					t.Errorf("%s missing %q:\n%s", c.name, w, out)
+				}
+			}
+		})
+	}
+}
+
+func TestPinStmtDirectWire(t *testing.T) {
+	in := &elaborate.ResolvedPin{Net: "clk_100mhz", BufferKind: elaborate.BufDirect, Signal: "clk_100mhz", PadDir: "in"}
+	st, err := pinStmt(in)
+	if err != nil {
+		t.Fatalf("pinStmt(in): %v", err)
+	}
+	if got := renderStmt(t, st); !strings.Contains(got, "clk_100mhz <= pin_clk_100mhz") {
+		t.Errorf("direct-wire input = %q", got)
+	}
+	outp := &elaborate.ResolvedPin{Net: "foo", BufferKind: elaborate.BufDirect, Out: "bar", PadDir: "out"}
+	st2, err := pinStmt(outp)
+	if err != nil {
+		t.Fatalf("pinStmt(out): %v", err)
+	}
+	if got := renderStmt(t, st2); !strings.Contains(got, "pin_foo <= bar") {
+		t.Errorf("direct-wire output = %q", got)
+	}
+}
+
 // --- test helpers ---
 
 func assocPairs(gens []*vhdl.AssocElement) [][2]string {
