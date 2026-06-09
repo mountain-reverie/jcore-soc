@@ -1,6 +1,7 @@
 package emit
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -113,6 +114,78 @@ func TestPinStmtDirectWire(t *testing.T) {
 	}
 	if got := renderStmt(t, st2); !strings.Contains(got, "pin_foo <= bar") {
 		t.Errorf("direct-wire output = %q", got)
+	}
+}
+
+func TestDiffPairsOBUFDS(t *testing.T) {
+	pos := &elaborate.ResolvedPin{Net: "mcb3_dram_ck", BufferKind: elaborate.BufOBUFDS, Signal: "ddr_clk", Diff: "pos",
+		Attrs: map[string]design.Value{"iostandard": {Kind: design.KindExpr, Text: "DIFF_MOBILE_DDR"}}}
+	neg := &elaborate.ResolvedPin{Net: "mcb3_dram_ck_n", BufferKind: elaborate.BufOBUFDS, Signal: "ddr_clk", Diff: "neg",
+		Attrs: map[string]design.Value{"iostandard": {Kind: design.KindExpr, Text: "DIFF_MOBILE_DDR"}}}
+	stmts, err := diffPairs([]*elaborate.ResolvedPin{neg, pos}) // unsorted on purpose
+	if err != nil {
+		t.Fatalf("diffPairs: %v", err)
+	}
+	if len(stmts) != 1 {
+		t.Fatalf("want 1 OBUFDS, got %d", len(stmts))
+	}
+	out := renderStmt(t, stmts[0])
+	for _, w := range []string{"obufds_mcb3_dram_ck_mcb3_dram_ck_n : OBUFDS", "I => ddr_clk", "O => pin_mcb3_dram_ck", "OB => pin_mcb3_dram_ck_n", `IOSTANDARD => "DIFF_MOBILE_DDR"`} {
+		if !strings.Contains(out, w) {
+			t.Errorf("OBUFDS missing %q:\n%s", w, out)
+		}
+	}
+}
+
+func TestDiffPairsMissingLeg(t *testing.T) {
+	lone := &elaborate.ResolvedPin{Net: "x", BufferKind: elaborate.BufOBUFDS, Signal: "s", Diff: "pos"}
+	stmts, err := diffPairs([]*elaborate.ResolvedPin{lone})
+	if !errors.Is(err, ErrDiffPair) {
+		t.Errorf("want ErrDiffPair for a lone leg, got %v", err)
+	}
+	if len(stmts) != 0 {
+		t.Errorf("want 0 stmts for incomplete pair, got %d", len(stmts))
+	}
+}
+
+func TestPinStatementsRoundTrip(t *testing.T) {
+	res := &elaborate.Resolution{
+		Pins: []*elaborate.ResolvedPin{
+			{Net: "led0", BufferKind: elaborate.BufOBUF, Out: "po(0)", PadDir: "out",
+				Attrs: map[string]design.Value{"drive": {Kind: design.KindInt, Int: 24}, "iostandard": {Kind: design.KindExpr, Text: "LVCMOS33"}}},
+			{Net: "clk_100mhz", BufferKind: elaborate.BufDirect, Signal: "clk_100mhz", PadDir: "in"},
+			{Net: "mcb3_dram_ck", BufferKind: elaborate.BufOBUFDS, Signal: "ddr_clk", Diff: "pos", Attrs: map[string]design.Value{"iostandard": {Kind: design.KindExpr, Text: "DIFF_MOBILE_DDR"}}},
+			{Net: "mcb3_dram_ck_n", BufferKind: elaborate.BufOBUFDS, Signal: "ddr_clk", Diff: "neg", Attrs: map[string]design.Value{"iostandard": {Kind: design.KindExpr, Text: "DIFF_MOBILE_DDR"}}},
+		},
+	}
+	stmts, err := pinStatements(res)
+	if err != nil {
+		t.Fatalf("pinStatements: %v", err)
+	}
+	if len(stmts) != 3 { // 1 obuf + 1 direct-wire + 1 obufds
+		t.Errorf("want 3 statements, got %d", len(stmts))
+	}
+}
+
+func TestPadRingHasBuffers(t *testing.T) {
+	res := &elaborate.Resolution{
+		Pins: []*elaborate.ResolvedPin{
+			{Net: "led0", Pad: "t18", PadDir: "out", BufferKind: elaborate.BufOBUF, Out: "po(0)",
+				Attrs: map[string]design.Value{"drive": {Kind: design.KindInt, Int: 24}, "iostandard": {Kind: design.KindExpr, Text: "LVCMOS33"}}},
+		},
+		SignalLocations: &elaborate.SignalLocations{},
+	}
+	out, err := PadRing(res)
+	if err != nil {
+		t.Fatalf("PadRing: %v", err)
+	}
+	if _, perr := vhdl.ParseFile(vhdl.NewFileSet(), "pad_ring.vhd", []byte(out)); perr != nil {
+		t.Fatalf("re-parse: %v\n%s", perr, out)
+	}
+	for _, w := range []string{"library unisim;", "use unisim.vcomponents.all;", "obuf_led0 : OBUF", "I => po(0)", "O => pin_led0"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("PadRing missing %q:\n%s", w, out)
+		}
 	}
 }
 

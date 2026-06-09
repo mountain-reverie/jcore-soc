@@ -10,6 +10,9 @@ import (
 // instantiation.
 var ErrUnboundEntity = errors.New("entity not bound")
 
+// ErrDiffPair is a differential pin pair missing one of its pos/neg legs.
+var ErrDiffPair = errors.New("emit: incomplete differential pin pair")
+
 // EmitError reports a problem encountered while emitting VHDL for an instance.
 type EmitError struct {
 	Kind   error  // ErrUnboundEntity (the category sentinel)

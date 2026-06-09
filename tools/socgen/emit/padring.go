@@ -137,8 +137,20 @@ func PadRing(res *elaborate.Resolution) (string, error) {
 		stmts = append(stmts, topInstStmt(re))
 	}
 
+	pinStmts, perr := pinStatements(res)
+	if perr != nil {
+		errs = append(errs, perr)
+	}
+	stmts = append(stmts, pinStmts...)
+
+	ctx := socContext()
+	ctx = append(ctx,
+		&vhdl.LibraryClause{Names: []string{"unisim"}},
+		&vhdl.UseClause{Names: []string{"unisim.vcomponents.all"}},
+	)
+
 	df := &vhdl.DesignFile{
-		Context: socContext(),
+		Context: ctx,
 		Units: []vhdl.DesignUnit{
 			&vhdl.EntityDecl{Name: "pad_ring", Ports: padRingPorts(res)},
 			&vhdl.ArchitectureBody{Name: "impl", Entity: "pad_ring", Decls: decls, Stmts: stmts},
