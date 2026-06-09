@@ -137,6 +137,8 @@ func PadRing(res *elaborate.Resolution) (string, error) {
 		stmts = append(stmts, topInstStmt(re))
 	}
 
+	stmts = append(stmts, pioStatements(res)...)
+
 	pinStmts, perr := pinStatements(res)
 	if perr != nil {
 		errs = append(errs, perr)
