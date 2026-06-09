@@ -90,6 +90,7 @@ func pinStmt(rp *elaborate.ResolvedPin) (vhdl.Stmt, error) {
 			}
 			return concAssign(inExpr(rp), pin), nil
 		}
+		// PadDir "out" (and "") drives the pad; BufDirect is never "inout".
 		if rp.Out == "" && rp.Signal == "" { // nothing drives the pad; skip
 			return nil, nil
 		}

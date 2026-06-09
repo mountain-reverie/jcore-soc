@@ -15,7 +15,7 @@ var ErrDiffPair = errors.New("emit: incomplete differential pin pair")
 
 // EmitError reports a problem encountered while emitting VHDL for an instance.
 type EmitError struct {
-	Kind   error  // ErrUnboundEntity (the category sentinel)
+	Kind   error  // the category sentinel (ErrUnboundEntity or ErrDiffPair)
 	Inst   string // the instance label/name
 	Detail string
 }
