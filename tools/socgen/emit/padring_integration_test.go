@@ -119,25 +119,11 @@ func TestPadRingParityMimasV2(t *testing.T) {
 		t.Errorf("pad_ring is MISSING golden pin ports (or wrong direction): %v\n got=%v", missing, got)
 	}
 
-	// DEFERRED-SCOPE GUARD: the only ports we emit beyond the golden's set are
-	// the PIO io_p<n>_<m> pads (mimas_v2 has 32: io_p6..io_p9 x 8). The golden
-	// drops them because PIO resolution (P5d-c) leaves them undriven (the
-	// design's `pio:` block names only bits 0..18; gpio.p_i / the pi/po arrays
-	// are not yet wired here). Until P5d-c lands, assert that the *only* extras
-	// are pin_io_p* — so no OTHER spurious pad can sneak in unnoticed.
-	wantSet := map[string]bool{}
-	for _, w := range want {
-		wantSet[w] = true
-	}
-	var unexpectedExtra []string
-	for _, g := range got {
-		name := strings.SplitN(g, ":", 2)[0]
-		if !wantSet[g] && !strings.HasPrefix(name, "pin_io_p") {
-			unexpectedExtra = append(unexpectedExtra, g)
-		}
-	}
-	if len(unexpectedExtra) != 0 {
-		t.Errorf("pad_ring emits unexpected non-PIO pin ports (not in golden, not deferred io_p): %v", unexpectedExtra)
+	// EXACT PARITY: with the missing-pin drop (io_p* pads, whose io_p<n> signals
+	// no device declares, are dropped — faithful to Clojure :missing), the
+	// emitted pin_* port set must EXACTLY equal the golden's. No extras.
+	if !equalStringsDE(got, want) {
+		t.Errorf("pad_ring pin ports != golden:\n got=%v\n want=%v", got, want)
 	}
 
 	// a couple of known LOC attributes present (normalized).
@@ -160,6 +146,6 @@ func TestPadRingParityMimasV2(t *testing.T) {
 	if di := insts["ddr_iocells"]; di != nil && di.UnitKind != vhdl.CONFIGURATION {
 		t.Errorf("ddr_iocells should be a configuration instance: %+v", di)
 	}
-	t.Logf("mimas_v2 pad_ring: %d pin ports (golden %d, all present; %d deferred PIO io_p extras); insts=%d",
-		len(got), len(want), len(got)-len(want), len(insts))
+	t.Logf("mimas_v2 pad_ring: %d pin ports (golden %d, exact parity, no io_p); insts=%d",
+		len(got), len(want), len(insts))
 }

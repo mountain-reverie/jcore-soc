@@ -61,21 +61,15 @@ func TestPadRingBuffersMimasV2(t *testing.T) {
 			}
 		}
 	}
-	count := strings.Count(n, " : OBUF ") + strings.Count(n, " : IBUF ") + strings.Count(n, " : IOBUF ") + strings.Count(n, " : OBUFT ") + strings.Count(n, " : OBUFDS ")
-	t.Logf("mimas_v2 pad_ring: %d buffer instances emitted", count)
-
-	// DEFERRED-SCOPE NOTE: the 32 io_p<n>_<m> PIO pads (io_p6_0..io_p9_7) feed
-	// the gpio pi/po arrays in the golden and appear as neither buffers nor in
-	// the soc; their buffer resolution is deferred to P5d-c. Count any io_p-
-	// derived buffer/direct-wire statements we emit so the divergence is
-	// documented (not asserted).
-	ioP := 0
-	for _, line := range strings.Split(out, "\n") {
-		if strings.Contains(line, "io_p") && (strings.Contains(line, ": OBUF") ||
-			strings.Contains(line, ": IBUF") || strings.Contains(line, ": IOBUF") ||
-			strings.Contains(line, ": OBUFT") || strings.Contains(line, "<=")) {
-			ioP++
-		}
+	// EXACT PARITY: io_p* pads are dropped (missing-pin drop), so no io_p-derived
+	// buffer or direct-wire is emitted, and the buffer-instance count equals the
+	// golden's 69 (45 OBUF + 18 IOBUF + 3 IBUF + 2 OBUFT + 1 OBUFDS).
+	if strings.Contains(n, "io_p") {
+		t.Errorf("pad_ring must emit no io_p-derived statements after the drop:\n%s", n)
 	}
-	t.Logf("mimas_v2 pad_ring: %d io_p-derived statements (deferred to P5d-c)", ioP)
+	count := strings.Count(n, " : OBUF ") + strings.Count(n, " : IBUF ") + strings.Count(n, " : IOBUF ") + strings.Count(n, " : OBUFT ") + strings.Count(n, " : OBUFDS ")
+	if count != 69 {
+		t.Errorf("buffer instance count = %d, want 69 (golden)", count)
+	}
+	t.Logf("mimas_v2 pad_ring: %d buffer instances (golden parity, no io_p)", count)
 }
