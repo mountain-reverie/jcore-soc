@@ -60,6 +60,9 @@ func (p *PioMap) UnmarshalYAML(n *yaml.Node) error {
 			if err != nil {
 				return &SpecError{Line: vn.Line, Msg: fmt.Sprintf("pio[%s]: expected int constant, got %q", kn.Value, vn.Value), Err: err}
 			}
+			if c != 0 && c != 1 {
+				return &SpecError{Line: vn.Line, Msg: fmt.Sprintf("pio[%s]: constant must be 0 or 1 (a std_logic bit), got %d", kn.Value, c)}
+			}
 			e.Const = &c
 		case yaml.MappingNode:
 			var m struct {
@@ -95,6 +98,9 @@ func parsePioKey(kn *yaml.Node) (lo, hi int, err error) {
 		}
 		if hi, err = strconv.Atoi(f[1]); err != nil {
 			return 0, 0, &SpecError{Line: kn.Line, Msg: fmt.Sprintf("pio key %q", s), Err: err}
+		}
+		if lo > hi {
+			return 0, 0, &SpecError{Line: kn.Line, Msg: fmt.Sprintf("pio key %q: lo > hi", s)}
 		}
 		return lo, hi, nil
 	}

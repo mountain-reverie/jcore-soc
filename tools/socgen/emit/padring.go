@@ -103,10 +103,11 @@ func socInstStmt(res *elaborate.Resolution) *vhdl.InstantiationStmt {
 	return inst
 }
 
-// PadRing renders the pad_ring.vhd frame: the FPGA top entity (pin_<net> ports +
-// LOC/TIG attributes) and an architecture instantiating soc + the padring entities
-// and declaring the Padring internal signals. I/O buffers (P5d-b) and PIO (P5d-c)
-// are added later. Best-effort; never panics.
+// PadRing renders pad_ring.vhd: the FPGA top entity (pin_<net> ports + LOC/TIG
+// attributes) and an architecture instantiating soc + the padring entities,
+// declaring the Padring internal signals, and wiring the pads — the soc instance,
+// padring entities, the system.pio pi/po loopback (P5d-c), then the I/O buffers +
+// direct-wires (P5d-b). Best-effort; never panics.
 func PadRing(res *elaborate.Resolution) (string, error) {
 	if res == nil {
 		return "", nil
