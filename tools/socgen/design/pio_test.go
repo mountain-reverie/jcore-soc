@@ -44,6 +44,8 @@ func TestPioParseErrors(t *testing.T) {
 		"pio:\n  \"[a b]\": { name: x }\n",   // non-int range
 		"pio:\n  \"foo\": 0\n",               // non-int single key
 		"pio:\n  \"5\": [1, 2]\n",            // value neither int nor map
+		"pio:\n  \"[5 3]\": 0\n",             // inverted range lo > hi
+		"pio:\n  \"5\": 2\n",                 // constant not a std_logic bit (0/1)
 	} {
 		var s System
 		if err := yaml.Unmarshal([]byte(bad), &s); err == nil {
