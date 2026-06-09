@@ -73,6 +73,38 @@ func inExpr(rp *elaborate.ResolvedPin) vhdl.Expr {
 	return &vhdl.Ident{Name: rp.Signal}
 }
 
+// pinStmt builds the statement wiring one single-ended pin to its pad: a direct
+// concurrent assign (buff:false) or one I/O-buffer instance. Differential pins
+// (BufIBUFDS/BufOBUFDS) are handled by diffPairs and return (nil, nil) here.
+func pinStmt(rp *elaborate.ResolvedPin) (vhdl.Stmt, error) {
+	pin := &vhdl.Ident{Name: "pin_" + rp.Net}
+	switch rp.BufferKind {
+	case elaborate.BufDirect:
+		if rp.PadDir == "in" { // pad drives the net: internal <= pin
+			return concAssign(inExpr(rp), pin), nil
+		}
+		return concAssign(pin, outExpr(rp)), nil
+	case elaborate.BufIBUF:
+		return instBuf("ibuf_"+rp.Net, "IBUF",
+			[]*vhdl.AssocElement{{Formal: "I", Actual: pin}, {Formal: "O", Actual: inExpr(rp)}},
+			bufferGenerics(rp.Attrs, rp.BufferKind)), nil
+	case elaborate.BufOBUF:
+		return instBuf("obuf_"+rp.Net, "OBUF",
+			[]*vhdl.AssocElement{{Formal: "I", Actual: outExpr(rp)}, {Formal: "O", Actual: pin}},
+			bufferGenerics(rp.Attrs, rp.BufferKind)), nil
+	case elaborate.BufOBUFT:
+		return instBuf("obuft_"+rp.Net, "OBUFT",
+			[]*vhdl.AssocElement{{Formal: "I", Actual: outExpr(rp)}, {Formal: "T", Actual: &vhdl.Ident{Name: rp.OutEn}}, {Formal: "O", Actual: pin}},
+			bufferGenerics(rp.Attrs, rp.BufferKind)), nil
+	case elaborate.BufIOBUF:
+		return instBuf("iobuf_"+rp.Net, "IOBUF",
+			[]*vhdl.AssocElement{{Formal: "I", Actual: outExpr(rp)}, {Formal: "T", Actual: &vhdl.Ident{Name: rp.OutEn}}, {Formal: "O", Actual: inExpr(rp)}, {Formal: "IO", Actual: pin}},
+			bufferGenerics(rp.Attrs, rp.BufferKind)), nil
+	default: // BufIBUFDS/BufOBUFDS handled elsewhere; unknown -> skip
+		return nil, nil
+	}
+}
+
 // instBuf builds a BARE component instantiation `<label> : <comp> generic map(..) port map(..)`
 // (UnitKind 0 -> no entity/component keyword; prints `obuf_led0 : OBUF`).
 func instBuf(label, comp string, ports, generics []*vhdl.AssocElement) *vhdl.InstantiationStmt {
