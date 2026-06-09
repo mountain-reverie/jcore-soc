@@ -10,6 +10,8 @@ import (
 
 // bufferGenericAttrs are the attributes that belong to the I/O buffer instances
 // (P5d-b), not the pad port; they are excluded from pad-port attributes.
+// Must stay in sync with bufferGenericOrder (iobufs.go), which emits this same
+// set as the buffer generic map.
 var bufferGenericAttrs = map[string]bool{"iostandard": true, "drive": true, "slew": true, "diff_term": true}
 
 // sortedPins returns res.Pins sorted by net for deterministic emission.
