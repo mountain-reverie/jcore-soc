@@ -3,6 +3,7 @@ package design
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -22,9 +23,86 @@ type Design struct {
 }
 
 // System holds the design `system:` block. Only the fields soc_gen consumes are
-// modeled; other keys (dram, pio, …) are ignored by the non-strict loader.
+// modeled; other keys (dram, …) are ignored by the non-strict loader.
 type System struct {
 	DataBusDecode string `yaml:"data-bus-decode"` // "simple" (default) | "exact"
+	Pio           PioMap `yaml:"pio"`             // PIO pi/po loopback spec (P5d-c)
+}
+
+// PioEntry is one system.pio entry: a bit index or inclusive [Lo,Hi] range mapped
+// to either an integer constant (Const) or a named loopback (Name). The general
+// in/out/pin sub-cases are not yet modeled (mimas-unused); see P5d-c spec.
+type PioEntry struct {
+	Lo, Hi int
+	Const  *int   // non-nil: drive pi(idx) with this constant value
+	Name   string // map value's name (cosmetic; "" if a constant entry)
+}
+
+// PioMap parses the system.pio mapping, whose keys are an int index or a bracketed
+// "[lo hi]" range and whose values are an int constant or a {name,...} map.
+type PioMap []PioEntry
+
+func (p *PioMap) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind != yaml.MappingNode {
+		return &SpecError{Line: n.Line, Msg: fmt.Sprintf("pio: expected mapping, got node kind %d", n.Kind)}
+	}
+	out := make([]PioEntry, 0, len(n.Content)/2)
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		kn, vn := n.Content[i], n.Content[i+1]
+		lo, hi, err := parsePioKey(kn)
+		if err != nil {
+			return err
+		}
+		e := PioEntry{Lo: lo, Hi: hi}
+		switch vn.Kind {
+		case yaml.ScalarNode:
+			c, err := strconv.Atoi(strings.TrimSpace(vn.Value))
+			if err != nil {
+				return &SpecError{Line: vn.Line, Msg: fmt.Sprintf("pio[%s]: expected int constant, got %q", kn.Value, vn.Value), Err: err}
+			}
+			e.Const = &c
+		case yaml.MappingNode:
+			var m struct {
+				Name string `yaml:"name"`
+			}
+			if err := vn.Decode(&m); err != nil {
+				return &SpecError{Line: vn.Line, Msg: fmt.Sprintf("pio[%s]: invalid value map", kn.Value), Err: err}
+			}
+			e.Name = m.Name
+		default:
+			return &SpecError{Line: vn.Line, Msg: fmt.Sprintf("pio[%s]: unexpected value node kind %d", kn.Value, vn.Kind)}
+		}
+		out = append(out, e)
+	}
+	*p = out
+	return nil
+}
+
+// parsePioKey parses a pio key node: "[lo hi]" -> (lo,hi); a bare int "n" -> (n,n).
+func parsePioKey(kn *yaml.Node) (lo, hi int, err error) {
+	s := strings.TrimSpace(kn.Value)
+	if strings.HasPrefix(s, "[") {
+		if !strings.HasSuffix(s, "]") {
+			return 0, 0, &SpecError{Line: kn.Line, Msg: fmt.Sprintf("pio key %q: want \"[lo hi]\"", s)}
+		}
+		inner := s[1 : len(s)-1]
+		f := strings.Fields(inner)
+		if len(f) != 2 {
+			return 0, 0, &SpecError{Line: kn.Line, Msg: fmt.Sprintf("pio key %q: want \"[lo hi]\"", s)}
+		}
+		if lo, err = strconv.Atoi(f[0]); err != nil {
+			return 0, 0, &SpecError{Line: kn.Line, Msg: fmt.Sprintf("pio key %q", s), Err: err}
+		}
+		if hi, err = strconv.Atoi(f[1]); err != nil {
+			return 0, 0, &SpecError{Line: kn.Line, Msg: fmt.Sprintf("pio key %q", s), Err: err}
+		}
+		return lo, hi, nil
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, 0, &SpecError{Line: kn.Line, Msg: fmt.Sprintf("pio key %q", s), Err: err}
+	}
+	return n, n, nil
 }
 
 type DeviceClass struct {
