@@ -23,6 +23,16 @@ func stdContext() []vhdl.Node {
 // packagesOf resolves each type mark to its declaring work package, returning
 // the distinct package names sorted. Marks not in a work package (std types,
 // unsigned/signed) are skipped, as is a nil library.
+//
+// KNOWN LIMITATION (deferred): resolution is whole-library via iface.TypePackage,
+// not entity-scoped. When a type name is declared in TWO work packages, the
+// last-indexed one wins. The Clojure reference instead restricts each port's
+// type->package map to that entity's own `use` clauses. This bites the
+// ddr_pack/ddrc_cnt_pack pair, which both declare sd_data_i_t/sd_data_o_t/
+// sd_ctrl_t: mimas_v2 happens to want ddrc_cnt_pack (indexed last, correct here),
+// but microboard wants ddr_pack and would get ddrc_cnt_pack (wrong). P6a-1 is
+// scoped to mimas_v2; entity-scoped resolution (a per-port elaborate change) is
+// a tracked follow-up for boards beyond mimas_v2.
 func packagesOf(lib *iface.Library, marks []string) []string {
 	if lib == nil {
 		return nil
