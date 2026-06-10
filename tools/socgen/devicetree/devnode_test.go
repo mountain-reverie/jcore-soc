@@ -23,10 +23,10 @@ func printNode(n *dts.Node) string {
 func TestDevToDTGpio(t *testing.T) {
 	dev := &design.Device{Class: "gpio", Name: "gpio", BaseAddr: hexp(0xabcd0000)}
 	cls := &design.DeviceClass{
-		DtProps: map[string]any{
-			"compatible":      "jcore,gpio1",
-			"gpio-controller": false,
-			"#gpio-cells":     []any{2},
+		DtProps: design.DtProps{
+			{Key: "compatible", Val: "jcore,gpio1"},
+			{Key: "gpio-controller", Val: false},
+			{Key: "#gpio-cells", Val: []any{2}},
 		},
 		LeftAddrBit: 3,
 	}
@@ -43,8 +43,8 @@ func TestDevToDTGpio(t *testing.T) {
 			t.Errorf("devToDT gpio missing %q:\n%s", w, out)
 		}
 	}
-	// dt-props are sorted: compatible before gpio-controller before #gpio-cells?
-	// Sorted ASCII: "#gpio-cells" < "compatible" < "gpio-controller".
+	// dt-props are sorted alphabetically (Clojure `sort`):
+	// "#gpio-cells" < "compatible" < "gpio-controller".
 	iHash := strings.Index(out, "#gpio-cells")
 	iCompat := strings.Index(out, "compatible")
 	iGpio := strings.Index(out, "gpio-controller")
@@ -56,8 +56,8 @@ func TestDevToDTGpio(t *testing.T) {
 func TestDevToDTMultiStringCompatible(t *testing.T) {
 	dev := &design.Device{Class: "serial", Name: "serial", BaseAddr: hexp(0xabcd0100)}
 	cls := &design.DeviceClass{
-		DtProps: map[string]any{
-			"compatible": []any{"jcore,uartlite", "xlnx,xps-uartlite-1.00.a"},
+		DtProps: design.DtProps{
+			{Key: "compatible", Val: []any{"jcore,uartlite", "xlnx,xps-uartlite-1.00.a"}},
 		},
 		LeftAddrBit: 3,
 	}
@@ -81,12 +81,12 @@ func TestDevToDTMultiStringCompatible(t *testing.T) {
 func TestDevToDTCellsAndPhandle(t *testing.T) {
 	dev := &design.Device{Class: "spi", Name: "spi", BaseAddr: hexp(0xabcd0040)}
 	cls := &design.DeviceClass{
-		DtProps: map[string]any{
-			"voltage-ranges":    []any{3200, 3400},
-			"spi-max-frequency": []any{25000000},
-			"clocks":            []any{"&bus_clock"},
-			"clock-names":       "ref_clk",
-			"status":            "ok",
+		DtProps: design.DtProps{
+			{Key: "voltage-ranges", Val: []any{3200, 3400}},
+			{Key: "spi-max-frequency", Val: []any{25000000}},
+			{Key: "clocks", Val: []any{"&bus_clock"}},
+			{Key: "clock-names", Val: "ref_clk"},
+			{Key: "status", Val: "ok"},
 		},
 		LeftAddrBit: 2,
 	}
@@ -112,9 +112,9 @@ func TestDevToDTCellsAndPhandle(t *testing.T) {
 func TestDevToDTCacheNoInterrupts(t *testing.T) {
 	dev := &design.Device{Class: "cache", Name: "cache-controller", BaseAddr: hexp(0xabcd00c0)}
 	cls := &design.DeviceClass{
-		DtProps: map[string]any{
-			"compatible": "jcore,cache",
-			"cpu-offset": []any{4},
+		DtProps: design.DtProps{
+			{Key: "compatible", Val: "jcore,cache"},
+			{Key: "cpu-offset", Val: []any{4}},
 		},
 		LeftAddrBit: 5,
 	}
@@ -132,10 +132,10 @@ func TestDevToDTCacheNoInterrupts(t *testing.T) {
 func TestDevToDTDeviceOverridesClass(t *testing.T) {
 	dev := &design.Device{
 		Class: "gpio", Name: "gpio", BaseAddr: hexp(0xabcd0000),
-		DtProps: map[string]any{"compatible": "jcore,gpio-override"},
+		DtProps: design.DtProps{{Key: "compatible", Val: "jcore,gpio-override"}},
 	}
 	cls := &design.DeviceClass{
-		DtProps:     map[string]any{"compatible": "jcore,gpio1"},
+		DtProps:     design.DtProps{{Key: "compatible", Val: "jcore,gpio1"}},
 		LeftAddrBit: 3,
 	}
 	n := devToDT(dev, cls, "gpio", 0xabcd0000, 0, false)
@@ -150,7 +150,7 @@ func TestDevToDTExplicitRegRelativized(t *testing.T) {
 	// is NOT added.
 	dev := &design.Device{Class: "x", Name: "x", BaseAddr: hexp(0xabcd0200)}
 	cls := &design.DeviceClass{
-		DtProps:     map[string]any{"reg": []any{0xabcd0200, 0x40}},
+		DtProps:     design.DtProps{{Key: "reg", Val: []any{0xabcd0200, 0x40}}},
 		LeftAddrBit: 5,
 	}
 	n := devToDT(dev, cls, "x", 0xabcd0000, 0, false)
@@ -179,38 +179,54 @@ func TestToUint64(t *testing.T) {
 	}
 }
 
+func TestMergeDtPropsOrder(t *testing.T) {
+	cls := &design.DeviceClass{DtProps: design.DtProps{
+		{Key: "a", Val: "1"}, {Key: "b", Val: "2"}, {Key: "c", Val: "3"},
+	}}
+	dev := &design.Device{DtProps: design.DtProps{
+		{Key: "b", Val: "override"}, {Key: "d", Val: "4"},
+	}}
+	got := mergeDtProps(cls, dev)
+	wantKeys := []string{"a", "b", "c", "d"}
+	if len(got) != len(wantKeys) {
+		t.Fatalf("len = %d, want %d (%v)", len(got), len(wantKeys), got)
+	}
+	for i, k := range wantKeys {
+		if got[i].Key != k {
+			t.Errorf("got[%d].Key = %q, want %q", i, got[i].Key, k)
+		}
+	}
+	if v, _ := got.Get("b"); v != "override" {
+		t.Errorf("b = %v, want override", v)
+	}
+}
+
 func TestDevToDTChildren(t *testing.T) {
 	dev := &design.Device{Class: "spi", Name: "spi", BaseAddr: hexp(0xabcd0040)}
 	cls := &design.DeviceClass{
-		DtProps:     map[string]any{"compatible": "jcore,spi2"},
+		DtProps:     design.DtProps{{Key: "compatible", Val: "jcore,spi2"}},
 		LeftAddrBit: 2,
-		DtChildren: []any{
-			[]any{
-				"sdcard@0",
-				map[string]any{
-					"properties": map[string]any{
-						"compatible":     "mmc-spi-slot",
-						"reg":            []any{0},
-						"voltage-ranges": []any{3200, 3400},
-						"m25p,fast-read": false,
-					},
+		DtChildren: []design.DtChild{
+			{
+				Name: "sdcard@0",
+				Props: design.DtProps{
+					{Key: "compatible", Val: "mmc-spi-slot"},
+					{Key: "reg", Val: []any{0}},
+					{Key: "voltage-ranges", Val: []any{3200, 3400}},
+					{Key: "m25p,fast-read", Val: false},
 				},
 			},
-			[]any{
-				"m25p80@1",
-				map[string]any{
-					"properties": map[string]any{
-						"compatible": []any{"s25fl164k", "jedec,spi-nor"},
-					},
-					"children": []any{
-						[]any{
-							"partition@0",
-							map[string]any{
-								"properties": map[string]any{
-									"label": "spi_flash",
-									"reg":   []any{0, 0},
-								},
-							},
+			{
+				Name: "m25p80@1",
+				Props: design.DtProps{
+					{Key: "compatible", Val: []any{"s25fl164k", "jedec,spi-nor"}},
+				},
+				Children: []design.DtChild{
+					{
+						Name: "partition@0",
+						Props: design.DtProps{
+							{Key: "label", Val: "spi_flash"},
+							{Key: "reg", Val: []any{0, 0}},
 						},
 					},
 				},
@@ -234,5 +250,23 @@ func TestDevToDTChildren(t *testing.T) {
 		if !strings.Contains(out, w) {
 			t.Errorf("dt-children missing %q:\n%s", w, out)
 		}
+	}
+	// Child props must keep YAML SOURCE order (not alphabetical): sdcard@0 is
+	// defined compatible, reg, voltage-ranges, m25p,fast-read. Alphabetical
+	// would put compatible, m25p,fast-read, reg, voltage-ranges — assert the
+	// source order so a regression to sorting is caught at the unit level.
+	order := []string{
+		`compatible = "mmc-spi-slot";`,
+		"reg = <0>;",
+		"voltage-ranges = <3200 3400>;",
+		"m25p,fast-read;",
+	}
+	prev := -1
+	for _, w := range order {
+		idx := strings.Index(out, w)
+		if idx <= prev {
+			t.Errorf("sdcard@0 child props out of source order at %q (idx %d <= prev %d):\n%s", w, idx, prev, out)
+		}
+		prev = idx
 	}
 }

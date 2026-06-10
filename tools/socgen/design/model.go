@@ -220,13 +220,13 @@ type DeviceClass struct {
 	Architecture  string           `yaml:"architecture"`
 	Desc          string           `yaml:"desc"`
 	DtName        string           `yaml:"dt-name"`
-	DtProps       map[string]any   `yaml:"dt-props"`
+	DtProps       DtProps          `yaml:"dt-props"`
 	LeftAddrBit   int              `yaml:"left-addr-bit"`
 	Regs          []*Reg           `yaml:"regs"`
 	Generics      map[string]Value `yaml:"generics"`
 	Ports         map[string]Value `yaml:"ports"`
 	Requires      []string         `yaml:"requires"`
-	DtChildren    []any            `yaml:"dt-children"`
+	DtChildren    []DtChild        `yaml:"dt-children"`
 }
 
 type Device struct {
@@ -237,7 +237,7 @@ type Device struct {
 	IRQ      *IRQRef          `yaml:"irq"`
 	Generics map[string]Value `yaml:"generics"`
 	Ports    map[string]Value `yaml:"ports"`
-	DtProps  map[string]any   `yaml:"dt-props"`
+	DtProps  DtProps          `yaml:"dt-props"`
 	DtStdout bool             `yaml:"dt-stdout"`
 	DtLabel  string           `yaml:"dt-label"`
 	DtNode   *bool            `yaml:"dt-node"`
