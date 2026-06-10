@@ -2,11 +2,17 @@ package generate
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
+	"sort"
 	"testing"
 
 	"github.com/j-core/jcore-soc/tools/socgen/board"
+	"github.com/j-core/jcore-soc/tools/socgen/cheader"
 	"github.com/j-core/jcore-soc/tools/socgen/design"
+	"github.com/j-core/jcore-soc/tools/socgen/devicetree"
 	"github.com/j-core/jcore-soc/tools/socgen/elaborate"
+	"github.com/j-core/jcore-soc/tools/socgen/emit"
 	"github.com/j-core/jcore-soc/tools/socgen/iface"
 	"github.com/j-core/jcore-soc/tools/socgen/vhdl"
 )
@@ -122,5 +128,75 @@ func TestBuildMKListsOnlyVHDL(t *testing.T) {
 	}
 	if last := files[len(files)-1].Name; last != "build.mk" {
 		t.Errorf("build.mk should be appended last, got last file %q", last)
+	}
+}
+
+func TestBuildMimasV2(t *testing.T) {
+	root := os.Getenv("JCORE_SOC_ROOT")
+	if root == "" {
+		t.Skip("JCORE_SOC_ROOT not set")
+	}
+	b, lerr := board.Load(root, "mimas_v2")
+	if b == nil || b.Design == nil {
+		t.Fatalf("board.Load: %v", lerr)
+	}
+	res, rerr := elaborate.Elaborate(b)
+	if rerr != nil {
+		t.Logf("elaborate notes: %v", rerr)
+	}
+	files, err := Build(b, res)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	// 1. file set matches the golden set exactly.
+	var got []string
+	byName := map[string]string{}
+	for _, f := range files {
+		got = append(got, f.Name)
+		byName[f.Name] = f.Content
+	}
+	sort.Strings(got)
+	want := []string{"board.dts", "board.h", "build.mk", "devices.vhd", "pad_ring.vhd", "soc.vhd"}
+	if len(got) != len(want) {
+		t.Fatalf("file set = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("file set[%d] = %q, want %q (full: %v)", i, got[i], want[i], got)
+		}
+	}
+
+	// 2. build.mk byte-exact vs golden.
+	golden, gerr := os.ReadFile(filepath.Join(root, "targets/boards/mimas_v2/build.mk"))
+	if gerr != nil {
+		t.Fatalf("read golden build.mk: %v", gerr)
+	}
+	if byName["build.mk"] != string(golden) {
+		t.Errorf("build.mk not byte-exact:\n got %q\nwant %q", byName["build.mk"], string(golden))
+	}
+
+	// 3. each file equals its direct emitter call (Build = selection + assembly).
+	devVHD, _ := emit.Devices(res)
+	socVHD, _ := emit.SoC(res)
+	padVHD, _ := emit.PadRing(res)
+	dts, _ := devicetree.BoardDTS(b, res)
+	boardH, _ := cheader.BoardH(res)
+	for _, c := range []struct{ name, want string }{
+		{"devices.vhd", devVHD}, {"soc.vhd", socVHD}, {"pad_ring.vhd", padVHD},
+		{"board.dts", dts}, {"board.h", boardH},
+	} {
+		if byName[c.name] != c.want {
+			t.Errorf("%s content differs from its direct emitter call", c.name)
+		}
+	}
+
+	// 4. board.h byte-exact vs golden (cheap extra assurance).
+	bh, bherr := os.ReadFile(filepath.Join(root, "targets/boards/mimas_v2/board.h"))
+	if bherr != nil {
+		t.Fatalf("read golden board.h: %v", bherr)
+	}
+	if byName["board.h"] != string(bh) {
+		t.Errorf("board.h not byte-exact vs golden")
 	}
 }
