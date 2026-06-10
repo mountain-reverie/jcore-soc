@@ -33,29 +33,29 @@ func synthBoard() (*board.Board, *elaborate.Resolution) {
 		Entity:      "gpio",
 		DtName:      "gpio",
 		LeftAddrBit: 3,
-		DtProps: map[string]any{
-			"compatible":      "jcore,gpio1",
-			"gpio-controller": false,
-			"#gpio-cells":     []any{2},
+		DtProps: design.DtProps{
+			{Key: "compatible", Val: "jcore,gpio1"},
+			{Key: "gpio-controller", Val: false},
+			{Key: "#gpio-cells", Val: []any{2}},
 		},
 	}
 	aicCls := &design.DeviceClass{
 		Entity:      "aic",
 		DtName:      "interrupt-controller",
 		LeftAddrBit: 5,
-		DtProps: map[string]any{
-			"compatible":           "jcore,aic1",
-			"interrupt-controller": false,
-			"#interrupt-cells":     []any{1},
+		DtProps: design.DtProps{
+			{Key: "compatible", Val: "jcore,aic1"},
+			{Key: "interrupt-controller", Val: false},
+			{Key: "#interrupt-cells", Val: []any{1}},
 		},
 	}
 	uartCls := &design.DeviceClass{
 		Entity:      "uartlite",
 		DtName:      "serial",
 		LeftAddrBit: 3,
-		DtProps: map[string]any{
-			"compatible":  []any{"jcore,uartlite", "xlnx,xps-uartlite-1.00.a"},
-			"device_type": "serial",
+		DtProps: design.DtProps{
+			{Key: "compatible", Val: []any{"jcore,uartlite", "xlnx,xps-uartlite-1.00.a"}},
+			{Key: "device_type", Val: "serial"},
 		},
 	}
 
@@ -68,7 +68,7 @@ func synthBoard() (*board.Board, *elaborate.Resolution) {
 			{Class: "gpio", BaseAddr: hexp(0xabcd0000), IRQ: &design.IRQRef{Int: intp(4)}},
 			{Class: "aic", Name: "aic0", CPU: intp(0), DtLabel: "aic", BaseAddr: hexp(0xabcd0200)},
 			{Class: "uartlite", Name: "uart0", BaseAddr: hexp(0xabcd0100), IRQ: &design.IRQRef{Int: intp(1)},
-				DtStdout: true, DtProps: map[string]any{"current-speed": []any{19200}, "port-number": []any{0}}},
+				DtStdout: true, DtProps: design.DtProps{{Key: "current-speed", Val: []any{19200}}, {Key: "port-number", Val: []any{0}}}},
 		},
 	}
 

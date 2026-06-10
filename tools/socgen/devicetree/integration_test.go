@@ -39,10 +39,8 @@ func TestBoardDTSMimasV2(t *testing.T) {
 		return
 	}
 
-	// If not exact, assert the key fragments (normalized whitespace) AND log the diff
-	// for investigation. Do NOT silently weaken — a delta is a printer/builder bug to
-	// fix, OR a documented semantic-parity delta (e.g. child-node prop ORDER, which is
-	// semantically irrelevant in DTS).
+	// If not exact, assert the key fragments (normalized whitespace) AND fail with
+	// a diff for investigation.
 	n := strings.Join(strings.Fields(out), " ")
 	for _, w := range []string{
 		`model = "mimas_v2";`,
@@ -87,18 +85,7 @@ func TestBoardDTSMimasV2(t *testing.T) {
 			t.Errorf("cache-controller must not have interrupts:\n%s", seg[:j])
 		}
 	}
-	// Produce a unified-ish diff for the report.
-	//
-	// DOCUMENTED SEMANTIC-PARITY DELTA (the sole remaining non-byte-exact diff):
-	// the spi dt-children (sdcard@0, m25p80@1) emit their properties in
-	// alphabetical order (dtChildren -> sortedKeys, because the YAML "properties"
-	// decode into an unordered map[string]any), whereas the golden preserves the
-	// EDN definition order. Property order WITHIN a node is semantically
-	// irrelevant to dtc, so this is accepted rather than fixed: preserving order
-	// would require an order-preserving YAML decode (an ordered-map refactor of
-	// the P3 spec loader), which is out of scope here. Every node name, value,
-	// reg, comment, and the blank-line structure match byte-for-byte.
-	t.Logf("board.dts NOT exact; first diff around:\n%s", firstDiff(out, string(golden)))
+	t.Errorf("board.dts is not byte-exact:\n%s", firstDiff(out, string(golden)))
 }
 
 // firstDiff returns a short window around the first differing line.

@@ -148,16 +148,6 @@ func dtProp(k string, v any) *dts.Prop {
 	return &dts.Prop{Name: k, Values: dtValue(v)}
 }
 
-// sortedKeys returns the map keys in ascending order (Clojure `sort`).
-func sortedKeys(m map[string]any) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
-}
-
 // relativizeReg subtracts base from the even-indexed (address) cells of a reg
 // value, mirroring device_tree.clj relative-reg. The value is the loosely-typed
 // dt-prop value (typically a []any of numbers).
@@ -181,66 +171,67 @@ func relativizeReg(v any, base uint64) any {
 	return out
 }
 
-// dtProps renders the merged dt-props map (already device-over-class merged) as
-// sorted dts properties. A "reg" key is relativized against busBase; all other
-// keys pass through dtProp unchanged. (The default reg / interrupts are added by
-// devToDT, not here.)
-func dtProps(props map[string]any, busBase uint64) []*dts.Prop {
-	out := make([]*dts.Prop, 0, len(props))
-	for _, k := range sortedKeys(props) {
-		v := props[k]
-		if k == "reg" {
+// dtProps renders the merged dt-props (already device-over-class merged) as dts
+// properties sorted alphabetically by key, faithful to the Clojure `sort` call
+// in device_tree.clj. A "reg" key is relativized against busBase; all other
+// keys pass through dtProp unchanged.
+func dtProps(props design.DtProps, busBase uint64) []*dts.Prop {
+	// Sort by key to match Clojure's (sort dt-props) behavior.
+	sorted := make(design.DtProps, len(props))
+	copy(sorted, props)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Key < sorted[j].Key })
+	out := make([]*dts.Prop, 0, len(sorted))
+	for _, kv := range sorted {
+		v := kv.Val
+		if kv.Key == "reg" {
 			v = relativizeReg(v, busBase)
 		}
-		out = append(out, dtProp(k, v))
+		out = append(out, dtProp(kv.Key, v))
 	}
 	return out
 }
 
-// dtChildren parses the loosely-typed dt-children list into dts child nodes.
-// Each child is a 2-element []any{name-string, map[string]any{"properties":
-// map[string]any, "children": []any}}. properties/children are converted
-// recursively via the same value rules.
-func dtChildren(children []any) []*dts.Node {
+// dtChildren converts the typed dt-children into dts child nodes, preserving the
+// source order of each child's properties and recursing into nested children.
+func dtChildren(children []design.DtChild) []*dts.Node {
 	out := make([]*dts.Node, 0, len(children))
 	for _, c := range children {
-		pair, ok := c.([]any)
-		if !ok || len(pair) != 2 {
-			continue
+		node := &dts.Node{Name: c.Name}
+		for _, kv := range c.Props {
+			node.Props = append(node.Props, dtProp(kv.Key, kv.Val))
 		}
-		name, ok := pair[0].(string)
-		if !ok {
-			continue
-		}
-		body, ok := pair[1].(map[string]any)
-		if !ok {
-			continue
-		}
-		node := &dts.Node{Name: name}
-		if p, ok := body["properties"].(map[string]any); ok {
-			for _, k := range sortedKeys(p) {
-				node.Props = append(node.Props, dtProp(k, p[k]))
-			}
-		}
-		if ch, ok := body["children"].([]any); ok {
-			node.Children = dtChildren(ch)
-		}
+		node.Children = dtChildren(c.Children)
 		out = append(out, node)
 	}
 	return out
 }
 
-// mergeDtProps merges class dt-props with device dt-props (device wins),
-// returning a fresh map (callers may mutate / inspect it).
-func mergeDtProps(cls *design.DeviceClass, dev *design.Device) map[string]any {
-	merged := make(map[string]any, len(cls.DtProps)+len(dev.DtProps))
-	for k, v := range cls.DtProps {
-		merged[k] = v
+// mergeDtProps merges class dt-props with device dt-props, faithful to the
+// Clojure (merge cls-props dev-props): class order is preserved, a device key
+// that already exists overrides its value in place, and device-only keys are
+// appended. Returns a fresh ordered DtProps.
+//
+// Note: dtProps re-sorts the merged result for device-node emission, so the
+// preserved order here is the data-model representation, not the DTS output
+// order. (dt-child props, by contrast, are emitted in their preserved order.)
+func mergeDtProps(cls *design.DeviceClass, dev *design.Device) design.DtProps {
+	out := make(design.DtProps, len(cls.DtProps))
+	copy(out, cls.DtProps)
+	for _, kv := range dev.DtProps {
+		idx := -1
+		for i := range out {
+			if out[i].Key == kv.Key {
+				idx = i
+				break
+			}
+		}
+		if idx >= 0 {
+			out[idx].Val = kv.Val
+		} else {
+			out = append(out, kv)
+		}
 	}
-	for k, v := range dev.DtProps {
-		merged[k] = v
-	}
-	return merged
+	return out
 }
 
 // devToDT builds the device-tree node for one memory-mapped device, faithful to
@@ -259,7 +250,7 @@ func devToDT(dev *design.Device, cls *design.DeviceClass, dtNodeName string, bus
 
 	props := dtProps(merged, busBase)
 
-	if _, hasReg := merged["reg"]; !hasReg && dev.BaseAddr != nil {
+	if _, hasReg := merged.Get("reg"); !hasReg && dev.BaseAddr != nil {
 		// (a data-bus device with no base-addr is an upstream/P4e validation error;
 		// guard the deref so emit degrades to a reg-less node rather than panicking.)
 		absBase := uint64(*dev.BaseAddr)
@@ -272,7 +263,8 @@ func devToDT(dev *design.Device, cls *design.DeviceClass, dtNodeName string, bus
 		})
 	}
 
-	clsCompat, _ := cls.DtProps["compatible"].(string)
+	clsCompatV, _ := cls.DtProps.Get("compatible")
+	clsCompat, _ := clsCompatV.(string)
 	if hasIRQ && clsCompat != cacheCompat {
 		props = append(props, &dts.Prop{
 			Name:   "interrupts",
