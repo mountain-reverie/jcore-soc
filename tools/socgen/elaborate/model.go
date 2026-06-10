@@ -8,11 +8,11 @@ import (
 type PortKind int
 
 const (
-	KindSignal  PortKind = iota // connects to GlobalSignal
-	KindValue                   // tied to a constant Value
-	KindIRQ                     // {irq?: ...} — recorded; routing is a later sub-milestone
-	KindDataBus                 // cpu data-bus port (set by classifyDataBus); wired to devs_bus_i/o by P5b
-	KindDeferred                // an unsupported map kind (bist/ring/open) — recorded only
+	KindSignal   PortKind = iota // connects to GlobalSignal
+	KindValue                    // tied to a constant Value
+	KindIRQ                      // {irq?: ...} — recorded; routing is a later sub-milestone
+	KindDataBus                  // cpu data-bus port (set by classifyDataBus); wired to devs_bus_i/o by P5b
+	KindDeferred                 // an unsupported map kind (bist/ring/open) — recorded only
 )
 
 // Port directions (entity port modes) and context kinds, factored out of the
@@ -30,7 +30,7 @@ const (
 
 type ResolvedPort struct {
 	Name         string
-	Dir          string        // from the entity port: "in"|"out"|"inout"|"buffer"|""
+	Dir          string // from the entity port: "in"|"out"|"inout"|"buffer"|""
 	Type         *ResolvedType
 	Kind         PortKind
 	GlobalSignal string        // Kind==KindSignal
@@ -50,6 +50,27 @@ type Resolution struct {
 	SignalLocations *SignalLocations           // P5c-i
 	Pio             []PioBit                   // P5d-c: resolved system.pio loopback bits (sorted by Idx)
 	Library         *iface.Library             // the bound interface library (for emit type introspection, P5c-ii-b)
+	IRQ             *IRQModel                  // P5e: AIC1 interrupt wiring (nil if no aic)
+}
+
+// IRQModel is the resolved AIC1 interrupt wiring (P5e), faithful to irq.clj.
+type IRQModel struct {
+	Signals       []IRQSignal                  // irqs<cpu> (Width 8) + OR-source signals (Width 0), in this order
+	OrAssigns     []IRQOrAssign                // irqs<cpu>(path) <= a or b or …
+	PortOverrides map[string]map[string]string // devName -> portName -> actual text ("irqs0(4)"|"open"|"irq_0_5_a"|"irqs0")
+	VectorNumbers map[string][8]int            // aicDevName -> vector value per path (0 unused)
+}
+
+// IRQSignal is one IRQ-related signal declaration.
+type IRQSignal struct {
+	Name  string
+	Width int // 8 => std_logic_vector(7 downto 0) := (others=>'0'); 0 => std_logic (OR source)
+}
+
+// IRQOrAssign is one OR-combine: Target <= Sources[0] or Sources[1] or …
+type IRQOrAssign struct {
+	Target  string
+	Sources []string
 }
 
 // PioBit is one resolved system.pio bit: a loopback (pi(Idx) <= po(Idx)) when
@@ -172,12 +193,12 @@ type Signal struct {
 // SignalPortRef is a reference from a signal to one of its participating ports
 // (device, top-entity, padring-entity, or synthetic driver).
 type SignalPortRef struct {
-	Context   Context
-	PortName  string
-	Dir       string
-	Type      *ResolvedType
-	Element   string // the full element ref (e.g. "dr_data_o.dqo(0)") iff a pin targets a bus/record element; "" if whole-signal
-	Diff      string // "pos"|"neg"|"" for differential pin pairs
+	Context  Context
+	PortName string
+	Dir      string
+	Type     *ResolvedType
+	Element  string // the full element ref (e.g. "dr_data_o.dqo(0)") iff a pin targets a bus/record element; "" if whole-signal
+	Diff     string // "pos"|"neg"|"" for differential pin pairs
 }
 
 // Context identifies the source of a SignalPortRef (device instance, top/padring
