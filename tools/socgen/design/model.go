@@ -20,6 +20,7 @@ type Design struct {
 	Pins            *PinsSpec               `yaml:"pins"`
 	PeripheralBuses map[string]bool         `yaml:"peripheral-buses"`
 	System          *System                 `yaml:"system"`
+	Plugins         []string                `yaml:"plugins"`
 }
 
 // System holds the design `system:` block. Only the fields soc_gen consumes are

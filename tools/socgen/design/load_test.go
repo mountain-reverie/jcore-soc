@@ -130,3 +130,29 @@ func TestLoadFuncCallValue(t *testing.T) {
 		t.Errorf("call value = %+v", v)
 	}
 }
+
+func TestLoadPlugins(t *testing.T) {
+	dir := t.TempDir()
+	// default_plugins.yaml is !include'd; write both files.
+	if err := os.WriteFile(filepath.Join(dir, "default_plugins.yaml"),
+		[]byte("- device_tree\n- board.h\n- aic1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "design.yaml"),
+		[]byte("plugins: !include default_plugins.yaml\ntarget: spartan6\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	d, err := Load(filepath.Join(dir, "design.yaml"))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	want := []string{"device_tree", "board.h", "aic1"}
+	if len(d.Plugins) != len(want) {
+		t.Fatalf("Plugins = %v, want %v", d.Plugins, want)
+	}
+	for i := range want {
+		if d.Plugins[i] != want[i] {
+			t.Errorf("Plugins[%d] = %q, want %q", i, d.Plugins[i], want[i])
+		}
+	}
+}
