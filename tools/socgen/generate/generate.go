@@ -36,7 +36,6 @@ func Build(b *board.Board, res *elaborate.Resolution) ([]File, error) {
 		return nil, err
 	}
 	var errs []error
-	var files []File
 
 	core := []struct {
 		name string
@@ -46,6 +45,8 @@ func Build(b *board.Board, res *elaborate.Resolution) ([]File, error) {
 		{"soc.vhd", func() (string, error) { return emit.SoC(res) }},
 		{"pad_ring.vhd", func() (string, error) { return emit.PadRing(res) }},
 	}
+	// core files + selected plugin files + build.mk.
+	files := make([]File, 0, len(core)+len(b.Design.Plugins)+1)
 	for _, c := range core {
 		content, err := c.emit()
 		if err != nil {
