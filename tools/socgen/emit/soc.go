@@ -147,7 +147,7 @@ func topInstStmt(re *elaborate.ResolvedEntity) *vhdl.InstantiationStmt {
 		inst.Arch = re.ArchName
 	}
 	for _, p := range re.Ports {
-		inst.PortMap = append(inst.PortMap, &vhdl.AssocElement{Formal: lc(p.Name), Actual: portActual(p, "", nil)})
+		inst.PortMap = append(inst.PortMap, &vhdl.AssocElement{Formal: lc(p.Name), Actual: portActual(p, "", nil, nil)})
 	}
 	return inst
 }
