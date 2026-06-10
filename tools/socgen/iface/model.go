@@ -123,6 +123,17 @@ func (l *Library) ResolveType(name string) (*TypeEntry, bool) {
 	return nil, false
 }
 
+// TypePackage returns the name of the package that declares the named type or
+// subtype, and whether it was found. Types not in any parsed (work) package
+// (e.g. std_logic, unsigned) return ("", false).
+func (l *Library) TypePackage(name string) (string, bool) {
+	s, ok := l.index[lower(name)]
+	if !ok || (s.Kind != "type" && s.Kind != "subtype") {
+		return "", false
+	}
+	return s.Package, true
+}
+
 func (l *Library) Configuration(name string) (*Configuration, bool) {
 	c, ok := l.Configurations[lower(name)]
 	return c, ok
