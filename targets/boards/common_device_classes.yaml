@@ -2,7 +2,7 @@ uartlite:
   entity: uartlitedb
   dt-name: serial
   dt-props:
-    compatible: [jcore,uartlite, xlnx,xps-uartlite-1.00.a]
+    compatible: ["jcore,uartlite", "xlnx,xps-uartlite-1.00.a"]
     device_type: serial
   left-addr-bit: 3
   regs:
@@ -81,7 +81,7 @@ spi:
           mode: [0]
     - - m25p80@1
       - properties:
-          compatible: [s25fl164k, jedec,spi-nor]
+          compatible: [s25fl164k, "jedec,spi-nor"]
           "#address-cells": [1]
           "#size-cells": [1]
           spi-max-frequency: [25000000]
@@ -107,7 +107,7 @@ spi3:
   entity: spi3
   dt-name: spi
   dt-props:
-    compatible: [jcore,spi3, jcore,spi2]
+    compatible: ["jcore,spi3", "jcore,spi2"]
     "#address-cells": [1]
     "#size-cells": [0]
     status: ok
@@ -127,7 +127,7 @@ spi3:
           mode: [0]
     - - m25p80@1
       - properties:
-          compatible: [s25fl164k, jedec,spi-nor]
+          compatible: [s25fl164k, "jedec,spi-nor"]
           "#address-cells": [1]
           "#size-cells": [1]
           spi-max-frequency: [25000000]

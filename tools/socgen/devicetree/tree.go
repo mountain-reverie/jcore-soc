@@ -272,6 +272,12 @@ func buildRoot(model string, freq int, dram [2]uint64, busBase, busWidth uint64,
 			&dts.Prop{Name: "cpu-release-addr", Values: []dts.Value{dts.Cells{Nums: []uint64{0xabcd0640, 0x8000}, Hex: true}}},
 		)
 		cpuChildren = append(cpuChildren, &dts.Node{Name: "cpu@1", Props: cpu1Props})
+	} else {
+		// Non-SMP: the Clojure cpus props vector carries a trailing nil
+		// (enable-method is nil), which the printer renders as an extra blank
+		// line between the cells props and the cpu@0 child. Reproduce it with a
+		// blank-separator Prop so the golden byte-matches.
+		cpusProps = append(cpusProps, &dts.Prop{Name: ""})
 	}
 	cpus := &dts.Node{Name: "cpus", Props: cpusProps, Children: cpuChildren}
 

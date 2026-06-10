@@ -259,7 +259,9 @@ func devToDT(dev *design.Device, cls *design.DeviceClass, dtNodeName string, bus
 
 	props := dtProps(merged, busBase)
 
-	if _, hasReg := merged["reg"]; !hasReg {
+	if _, hasReg := merged["reg"]; !hasReg && dev.BaseAddr != nil {
+		// (a data-bus device with no base-addr is an upstream/P4e validation error;
+		// guard the deref so emit degrades to a reg-less node rather than panicking.)
 		absBase := uint64(*dev.BaseAddr)
 		base := absBase - busBase
 		regWidth := uint64(1) << (cls.LeftAddrBit + 1)
