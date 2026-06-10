@@ -146,11 +146,7 @@ func PadRing(res *elaborate.Resolution) (string, error) {
 	}
 	stmts = append(stmts, pinStmts...)
 
-	ctx := socContext()
-	ctx = append(ctx,
-		&vhdl.LibraryClause{Names: []string{"unisim"}},
-		&vhdl.UseClause{Names: []string{"unisim.vcomponents.all"}},
-	)
+	ctx := padringContext(res)
 
 	df := &vhdl.DesignFile{
 		Context: ctx,
