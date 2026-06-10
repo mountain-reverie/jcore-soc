@@ -23,10 +23,38 @@ type Design struct {
 }
 
 // System holds the design `system:` block. Only the fields soc_gen consumes are
-// modeled; other keys (dram, …) are ignored by the non-strict loader.
+// modeled; other keys are ignored by the non-strict loader.
 type System struct {
-	DataBusDecode string `yaml:"data-bus-decode"` // "simple" (default) | "exact"
-	Pio           PioMap `yaml:"pio"`             // PIO pi/po loopback spec (P5d-c)
+	DataBusDecode string   `yaml:"data-bus-decode"` // "simple" (default) | "exact"
+	Pio           PioMap   `yaml:"pio"`             // PIO pi/po loopback spec (P5d-c)
+	Dram          DramSpec `yaml:"dram"`            // [base, size] memory region (device tree)
+}
+
+// DramSpec is the [base, size] memory region (0x-hex or decimal). The zero value
+// (both 0) means "unset" -> callers use DramOr's default.
+type DramSpec [2]uint64
+
+func (d *DramSpec) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind != yaml.SequenceNode || len(n.Content) != 2 {
+		return &SpecError{Line: n.Line, Msg: "dram: expected a [base, size] pair"}
+	}
+	for i, e := range n.Content {
+		v, err := strconv.ParseUint(e.Value, 0, 64) // base 0 -> auto 0x/decimal
+		if err != nil {
+			return &SpecError{Line: e.Line, Msg: fmt.Sprintf("dram[%d]: invalid uint %q", i, e.Value), Err: err}
+		}
+		d[i] = v
+	}
+	return nil
+}
+
+// DramOr returns the parsed [base, size] region, or the default
+// [0x10000000, 0x8000000] when the dram key was absent (zero value).
+func (s *System) DramOr() [2]uint64 {
+	if s.Dram == (DramSpec{}) {
+		return [2]uint64{0x10000000, 0x8000000}
+	}
+	return s.Dram
 }
 
 // PioEntry is one system.pio entry: a bit index or inclusive [Lo,Hi] range mapped
