@@ -43,6 +43,7 @@ type Port struct {
 	Type       TypeRef
 	GlobalName string // soc_port_global_name attr OR global_ports group membership (bare id); "" if none
 	LocalName  string // soc_port_local_name attr OR local_ports group membership; "" if none
+	IRQ        bool   // soc_port_irq attr (the device's interrupt output port)
 }
 
 type Generic struct {

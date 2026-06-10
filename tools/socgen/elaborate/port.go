@@ -94,6 +94,13 @@ func buildPorts(devName string, ent *iface.Entity, spec map[string]design.Value,
 			vv := v
 			rp.Kind, rp.Value = KindValue, &vv
 		}
+		// A soc_port_irq output (e.g. gpio.irq, uart.int) is an interrupt port:
+		// its actual is wired by the IRQ model (P5e). Only when the device didn't
+		// give it an explicit signal/value.
+		if p.IRQ && rp.Kind == KindSignal && !explicit[p.Name] {
+			rp.Kind = KindIRQ
+			rp.GlobalSignal = "" // IRQ ports are wired by the IRQ model, not via GlobalSignal
+		}
 		out = append(out, rp)
 	}
 	applyClkRstHeuristic(out, explicit, merge)
