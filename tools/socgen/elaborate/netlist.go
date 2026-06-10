@@ -80,6 +80,9 @@ func Elaborate(b *board.Board) (*Resolution, error) {
 	errs = append(errs, validateAddresses(res))
 	res.Library = b.Library
 	res.Pio = resolvePio(b.Design)
+	irqModel, irqErrs := buildIRQ(res, b.Design)
+	res.IRQ = irqModel
+	errs = append(errs, irqErrs...)
 	return res, errors.Join(errs...)
 }
 
