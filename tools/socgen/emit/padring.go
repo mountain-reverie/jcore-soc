@@ -31,7 +31,7 @@ func padRingPorts(res *elaborate.Resolution) []*vhdl.InterfaceDecl {
 		if dir == "" {
 			dir = "in"
 		}
-		out = append(out, &vhdl.InterfaceDecl{Names: []string{"pin_" + p.Net}, Mode: dir, SubtypeMark: "std_logic"})
+		out = append(out, &vhdl.InterfaceDecl{Names: []string{"pin_" + p.Net}, Mode: dir, SubtypeMark: stdLogicMark})
 	}
 	return out
 }

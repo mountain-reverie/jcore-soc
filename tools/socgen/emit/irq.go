@@ -21,7 +21,7 @@ func irqDecls(m *elaborate.IRQModel) []vhdl.Decl {
 				Default:     othersZero(),
 			})
 		} else {
-			out = append(out, &vhdl.SignalDecl{Names: []string{s.Name}, SubtypeMark: "std_logic"})
+			out = append(out, &vhdl.SignalDecl{Names: []string{s.Name}, SubtypeMark: stdLogicMark})
 		}
 	}
 	return out
