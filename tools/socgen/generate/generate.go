@@ -31,6 +31,9 @@ var knownPlugins = map[string]bool{"device_tree": true, "board.h": true, "aic1":
 // On a plugin-validation error Build returns (nil, err) and emits nothing. On an
 // emitter error Build is best-effort: it joins the error and continues, returning
 // the files it could produce alongside a non-nil error.
+//
+// Build panics if b or b.Design is nil; board.Load always returns a non-nil
+// Board with a non-nil Design, and the CLI guards both before calling Build.
 func Build(b *board.Board, res *elaborate.Resolution) ([]File, error) {
 	if err := validatePlugins(b.Design.Plugins); err != nil {
 		return nil, err
