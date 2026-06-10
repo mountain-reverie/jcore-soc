@@ -1,6 +1,7 @@
 package devicetree
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -174,6 +175,88 @@ func TestDeviceTreeSingleCPU(t *testing.T) {
 	aicNode := out[iAic:iGpio]
 	if strings.Contains(aicNode, "interrupts") {
 		t.Errorf("aic controller node must not have interrupts:\n%s", aicNode)
+	}
+
+	// single-cpu: no SMP additions.
+	for _, w := range []string{"enable-method", "cpu@1", "jcore,ipi-controller"} {
+		if strings.Contains(out, w) {
+			t.Errorf("single-cpu board must not emit %q:\n%s", w, out)
+		}
+	}
+}
+
+// smpBoard builds a synthetic 2-cpu board: cpu1 peripheral bus present, a second
+// aic (aic1 on cpu1), and a cache_ctrl device carrying the ipi base-addr + irq.
+func smpBoard() (*board.Board, *elaborate.Resolution) {
+	b, res := synthBoard()
+	b.Design.PeripheralBuses = map[string]bool{"cpu1": true}
+
+	cacheCls := &design.DeviceClass{Entity: "cache_ctrl", DtName: "cache", LeftAddrBit: 3}
+	b.Design.DeviceClasses["cache_ctrl"] = cacheCls
+
+	// second aic on cpu1.
+	b.Design.Devices = append(b.Design.Devices,
+		&design.Device{Class: "aic", Name: "aic1", CPU: intp(1), DtLabel: "aic1", BaseAddr: hexp(0xabcd0300)},
+		&design.Device{Class: "cache_ctrl", Name: "cache0", BaseAddr: hexp(0xabcd0400),
+			IRQ: &design.IRQRef{Named: map[string]*design.IRQEntry{"int0": {CPU: 0, IRQ: 3}}}},
+	)
+	res.Classes["cache_ctrl"] = &elaborate.ResolvedClass{Name: "cache_ctrl", LeftAddrBit: 3}
+	res.Devices = append(res.Devices,
+		&elaborate.ResolvedDevice{Name: "aic1", Class: "aic", BaseAddr: u64p(0xabcd0300), DataBus: true},
+		&elaborate.ResolvedDevice{Name: "cache0", Class: "cache_ctrl", BaseAddr: u64p(0xabcd0400), DataBus: true},
+	)
+	return b, res
+}
+
+func TestDeviceTreeSMP(t *testing.T) {
+	b, res := smpBoard()
+	root, err := DeviceTree(b, res)
+	if err != nil {
+		t.Fatalf("DeviceTree (SMP): %v", err)
+	}
+	out := dts.Print(root)
+
+	for _, w := range []string{
+		`enable-method = "jcore,spin-table";`,
+		"cpu@1 {",
+		"reg = <1>;",
+		"cpu-release-addr = <0xabcd0640 0x8000>;",
+		// ipi node
+		"ipi {",
+		`compatible = "jcore,ipi-controller";`,
+		"reg = <0xabcd0400 0x8>;",
+		"interrupts = <0x3>;",
+	} {
+		if !strings.Contains(out, w) {
+			t.Errorf("SMP DeviceTree output missing %q:\n%s", w, out)
+		}
+	}
+
+	// cpu@0 and cpu@1 both present, cpu@0 reg<0>, cpu@1 reg<1>.
+	if !strings.Contains(out, "cpu@0 {") {
+		t.Errorf("SMP must still emit cpu@0:\n%s", out)
+	}
+}
+
+// TestDeviceTreeSMPMultiIPIIRQ locks the >1 distinct ipi irq validation error.
+func TestDeviceTreeSMPMultiIPIIRQ(t *testing.T) {
+	b, res := smpBoard()
+	// give the cache two distinct irqs.
+	for _, d := range b.Design.Devices {
+		if d.Class == "cache_ctrl" {
+			d.IRQ = &design.IRQRef{Named: map[string]*design.IRQEntry{
+				"int0": {CPU: 0, IRQ: 3},
+				"int1": {CPU: 1, IRQ: 5},
+			}}
+		}
+	}
+	_, err := DeviceTree(b, res)
+	if err == nil {
+		t.Fatalf("expected DTError for multiple ipi irqs, got nil")
+	}
+	var de *DTError
+	if !errors.As(err, &de) || !errors.Is(err, ErrIPI) {
+		t.Errorf("want DTError{ErrIPI}, got %v", err)
 	}
 }
 
