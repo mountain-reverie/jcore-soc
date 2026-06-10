@@ -63,3 +63,24 @@ func TestRemoveWriteOnlySignals(t *testing.T) {
 		t.Errorf("pruned signal's port should have GlobalSignal cleared, got %q", woPort.GlobalSignal)
 	}
 }
+
+func TestRemoveWriteOnlySignalsClearsEntityPorts(t *testing.T) {
+	// A top/padring entity port referencing a pruned write-only signal must also
+	// have GlobalSignal cleared (Clojure's signal-map miss → open is global).
+	topPort := &ResolvedPort{Name: "dbg", Kind: KindSignal, GlobalSignal: "wo"}
+	padPort := &ResolvedPort{Name: "dbg", Kind: KindSignal, GlobalSignal: "wo"}
+	res := &Resolution{
+		TopEntities:     map[string]*ResolvedEntity{"t": {Name: "t", Ports: []*ResolvedPort{topPort}}},
+		PadringEntities: map[string]*ResolvedEntity{"p": {Name: "p", Ports: []*ResolvedPort{padPort}}},
+		Signals: map[string]*Signal{
+			"wo": {Name: "wo", Ports: []*SignalPortRef{
+				{Context: Context{Kind: "device", ID: "x"}, PortName: "o", Dir: dirOut},
+			}},
+		},
+	}
+	removeWriteOnlySignals(res, &design.Design{})
+	if topPort.GlobalSignal != "" || padPort.GlobalSignal != "" {
+		t.Errorf("top/padring entity ports referencing a pruned signal should be cleared: top=%q pad=%q",
+			topPort.GlobalSignal, padPort.GlobalSignal)
+	}
+}

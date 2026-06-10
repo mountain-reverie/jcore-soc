@@ -56,14 +56,29 @@ func removeWriteOnlySignals(res *Resolution, d *design.Design) {
 	if len(pruned) == 0 {
 		return
 	}
-	// Clear the cleared signal's references on device ports so emit renders them
-	// `open`. Scoped to devices (as in Clojure): top/padring entity ports carry
-	// their own GlobalSignal but a pruned write-only signal is device-context.
+	// Clear references to a pruned signal on every entity port so emit renders the
+	// port `open`. This mirrors Clojure's global signal-map lookup (instantiate-ports
+	// does `(get signals global-signal)` for device, top AND padring entities, so a
+	// pruned signal becomes nil → open everywhere). mimas_v2's write-only signals are
+	// all device-context, but covering top/padring too avoids a dangling reference in
+	// soc.vhd/pad_ring.vhd on a board where one originates there.
 	for _, dev := range res.Devices {
-		for _, p := range dev.Ports {
-			if p.Kind == KindSignal && pruned[p.GlobalSignal] {
-				p.GlobalSignal = ""
-			}
+		clearPrunedRefs(dev.Ports, pruned)
+	}
+	for _, e := range res.TopEntities {
+		clearPrunedRefs(e.Ports, pruned)
+	}
+	for _, e := range res.PadringEntities {
+		clearPrunedRefs(e.Ports, pruned)
+	}
+}
+
+// clearPrunedRefs clears GlobalSignal on each KindSignal port that references a
+// pruned signal, so emit renders the port actual as `open`.
+func clearPrunedRefs(ports []*ResolvedPort, pruned map[string]bool) {
+	for _, p := range ports {
+		if p.Kind == KindSignal && pruned[p.GlobalSignal] {
+			p.GlobalSignal = ""
 		}
 	}
 }
