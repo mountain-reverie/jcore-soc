@@ -2,9 +2,11 @@ package emit
 
 import (
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
+	"github.com/j-core/jcore-soc/tools/socgen/board"
 	"github.com/j-core/jcore-soc/tools/socgen/design"
 	"github.com/j-core/jcore-soc/tools/socgen/elaborate"
 	"github.com/j-core/jcore-soc/tools/socgen/iface"
@@ -293,6 +295,52 @@ func TestStdLogicLit(t *testing.T) {
 		lit, ok := got.(*vhdl.BasicLit)
 		if !ok || lit.Kind != vhdl.CHARLIT || lit.Value != c.want {
 			t.Errorf("%s: got %#v, want CHARLIT %q", c.name, got, c.want)
+		}
+	}
+}
+
+func TestDevicesPruneMimasV2(t *testing.T) {
+	root := os.Getenv("JCORE_SOC_ROOT")
+	if root == "" {
+		t.Skip("JCORE_SOC_ROOT not set")
+	}
+	b, lerr := board.Load(root, "mimas_v2")
+	if b == nil || b.Design == nil {
+		t.Fatalf("board.Load: %v", lerr)
+	}
+	res, rerr := elaborate.Elaborate(b)
+	if rerr != nil {
+		t.Logf("elaborate notes: %v", rerr)
+	}
+	out, err := Devices(res)
+	if err != nil {
+		t.Logf("emit notes: %v", err)
+	}
+	// Fix A + B: the 5 orphan/write-only signals must NOT be declared.
+	for _, sig := range []string{
+		"signal cache_ctrl_int0", "signal cache_ctrl_int1",
+		"signal flash_busy", "signal rtc_sec", "signal rtc_nsec",
+	} {
+		if strings.Contains(out, sig) {
+			t.Errorf("devices.vhd should not declare %q:\n%s", sig, out)
+		}
+	}
+	// Fix B: readerless outputs map to open.
+	for _, w := range []string{"rtc_sec => open", "rtc_nsec => open", "busy => open"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("devices.vhd missing %q", w)
+		}
+	}
+	// Fix A: IRQ wiring unchanged.
+	for _, w := range []string{"int0 => irqs0(3)", "int1 => open"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("devices.vhd missing IRQ wiring %q", w)
+		}
+	}
+	// Fix C: std_logic constants render as char literals.
+	for _, w := range []string{"cpha => '0'", "cpol => '0'"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("devices.vhd missing std_logic literal %q", w)
 		}
 	}
 }
