@@ -60,7 +60,7 @@ func SoC(res *elaborate.Resolution) (string, error) {
 	}
 
 	df := &vhdl.DesignFile{
-		Context: socContext(),
+		Context: topContext(res),
 		Units: []vhdl.DesignUnit{
 			&vhdl.EntityDecl{Name: "soc", Ports: socEntityPorts(res)},
 			&vhdl.ArchitectureBody{Name: "impl", Entity: "soc", Decls: decls, Stmts: stmts},
@@ -101,17 +101,6 @@ func sortedTopNames(m map[string]*elaborate.ResolvedEntity) []string {
 	}
 	sort.Strings(ks)
 	return ks
-}
-
-// socContext returns the context clauses. Precise package discovery is P6; this
-// minimal set parses and covers the common cpu/data-bus record types.
-func socContext() []vhdl.Node {
-	return []vhdl.Node{
-		&vhdl.LibraryClause{Names: []string{"ieee"}},
-		&vhdl.UseClause{Names: []string{"ieee.std_logic_1164.all"}},
-		&vhdl.UseClause{Names: []string{"work.cpu2j0_pack.all"}},
-		&vhdl.UseClause{Names: []string{"work.data_bus_pack.all"}},
-	}
 }
 
 // socEntityPorts builds the soc entity's ports from the PadringTop boundary signals.

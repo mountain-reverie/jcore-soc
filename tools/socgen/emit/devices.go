@@ -87,17 +87,13 @@ func Devices(res *elaborate.Resolution) (string, error) {
 	// IRQ OR-combine concurrent assignments (none for mimas_v2).
 	stmts = append(stmts, irqAssigns(res.IRQ)...)
 
-	context := []vhdl.Node{
-		&vhdl.LibraryClause{Names: []string{"ieee"}},
-		&vhdl.UseClause{Names: []string{"ieee.std_logic_1164.all"}},
-	}
 	if res.DataBus != nil {
 		// Data-bus mux/decode statements precede device instantiations (golden
 		// devices.vhd:88-95); the decls join the signal declarations.
 		decls = append(decls, databusDecls(res)...)
 		stmts = append(databusStmts(res), stmts...)
-		context = append(context, &vhdl.UseClause{Names: []string{"work.data_bus_pack.all"}})
 	}
+	context := deviceContext(res)
 
 	df := &vhdl.DesignFile{
 		Context: context,
