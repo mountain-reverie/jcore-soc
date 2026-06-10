@@ -17,6 +17,10 @@ var (
 	// ErrEmptyContent is a core file whose emitter returned empty content
 	// without an error (faithful to the Clojure "Failed to generate" warning).
 	ErrEmptyContent = errors.New("empty content")
+	// ErrWrite is a filesystem failure while writing the file set (a bad output
+	// directory or a failed file write) — distinct from ErrEmit (a rendering
+	// failure), so a caller can triage I/O vs emit by Kind.
+	ErrWrite = errors.New("write failed")
 )
 
 // GenerateError reports a problem encountered while orchestrating generation.
