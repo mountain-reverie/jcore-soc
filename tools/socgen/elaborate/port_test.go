@@ -164,6 +164,36 @@ func TestBuildPortsSocPortNames(t *testing.T) {
 	}
 }
 
+func TestBuildPortsSocPortIRQ(t *testing.T) {
+	noSpec := map[string]design.Value{}
+	noMerge := map[string]string{}
+
+	// A soc_port_irq output with no device spec entry becomes KindIRQ
+	// (wired by the IRQ model later), while a normal port stays KindSignal.
+	e := &iface.Entity{Name: "gpio", Ports: []*iface.Port{
+		{Name: "irq", Dir: "out", Type: iface.TypeRef{Mark: "std_logic"}, IRQ: true},
+		{Name: "p_o", Dir: "out", Type: iface.TypeRef{Mark: "std_logic"}},
+	}}
+	ports := buildPorts("gpio0", e, noSpec, nil, noMerge, false)
+	byName := map[string]*ResolvedPort{}
+	for _, p := range ports {
+		byName[p.Name] = p
+	}
+	if byName["irq"].Kind != KindIRQ {
+		t.Errorf("irq kind = %v, want KindIRQ", byName["irq"].Kind)
+	}
+	if byName["p_o"].Kind != KindSignal {
+		t.Errorf("p_o kind = %v, want KindSignal", byName["p_o"].Kind)
+	}
+
+	// An explicit design mapping on the irq port wins (stays its explicit signal).
+	spec := map[string]design.Value{"irq": {Kind: design.KindExpr, Text: "wired_irq"}}
+	pe := buildPorts("gpio0", e, spec, nil, noMerge, false)
+	if g := gsOf(pe, "irq"); g != "wired_irq" {
+		t.Errorf("explicit irq mapping = %q, want wired_irq", g)
+	}
+}
+
 func TestGenericEnv(t *testing.T) {
 	lib := buildLib(t, `entity e is generic (w : integer := 8; n : integer); end entity;`)
 	e, _ := lib.Entity("e")

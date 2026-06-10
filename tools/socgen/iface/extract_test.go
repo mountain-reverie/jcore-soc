@@ -231,6 +231,32 @@ func TestExtractCorpusSmoke(t *testing.T) {
 	}
 }
 
+func TestExtractSocPortIRQ(t *testing.T) {
+	df := parse(t, `entity dev is
+  port ( irq : out std_logic; foo : out std_logic );
+  attribute soc_port_irq : boolean;
+  attribute soc_port_irq of irq : signal is true;
+end entity;`)
+	lib, err := Extract([]*vhdl.DesignFile{df})
+	if err != nil {
+		t.Fatalf("extract errors: %v", err)
+	}
+	e, ok := lib.Entity("dev")
+	if !ok {
+		t.Fatal("entity dev not found")
+	}
+	byName := map[string]*Port{}
+	for _, p := range e.Ports {
+		byName[p.Name] = p
+	}
+	if byName["irq"] == nil || !byName["irq"].IRQ {
+		t.Errorf("irq port IRQ = %v, want true", byName["irq"])
+	}
+	if byName["foo"] == nil || byName["foo"].IRQ {
+		t.Errorf("foo port IRQ = %v, want false", byName["foo"])
+	}
+}
+
 func TestExtractDuplicatePackage(t *testing.T) {
 	a := parse(t, `package dup is end package;`)
 	b := parse(t, `package dup is end package;`)

@@ -177,6 +177,16 @@ func applySocPortNames(ports []*Port, decls []vhdl.Decl) {
 		if !ok || a.EntityClass != vhdl.SIGNAL {
 			continue
 		}
+		if lower(a.Name) == "soc_port_irq" {
+			if socPortBool(a.Value) {
+				for _, e := range a.Entities {
+					if p := byName[lower(e)]; p != nil {
+						p.IRQ = true
+					}
+				}
+			}
+			continue
+		}
 		val, ok := socPortString(a.Value)
 		if !ok {
 			continue
@@ -208,6 +218,18 @@ func socPortString(e vhdl.Expr) (string, bool) {
 		s = s[1 : len(s)-1]
 	}
 	return lower(s), true
+}
+
+// socPortBool reports whether an attribute-spec value is the boolean literal
+// `true` (case-insensitive) — used for soc_port_irq (`is true`).
+func socPortBool(e vhdl.Expr) bool {
+	switch v := e.(type) {
+	case *vhdl.Ident:
+		return lower(v.Name) == "true" // VHDL boolean literals are enumeration identifiers
+	case *vhdl.BasicLit:
+		return lower(v.Value) == "true" // defensive: a parser variant; not reached for plain `is true`
+	}
+	return false
 }
 
 func toGenerics(ids []*vhdl.InterfaceDecl) []*Generic {
