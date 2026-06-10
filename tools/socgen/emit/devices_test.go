@@ -265,3 +265,34 @@ func TestDevicesExtraAlias(t *testing.T) {
 		t.Errorf("expected 2 port maps wired to sig_bidir (writer + reader), got %d:\n%s", n, out)
 	}
 }
+
+func TestStdLogicLit(t *testing.T) {
+	sl := &elaborate.ResolvedType{Mark: "std_logic"}
+	slv := &elaborate.ResolvedType{Mark: "std_logic_vector"}
+	cases := []struct {
+		name string
+		typ  *elaborate.ResolvedType
+		val  design.Value
+		want string // "" means expect nil (fallback)
+	}{
+		{"sl0", sl, design.Value{Kind: design.KindInt, Int: 0}, "'0'"},
+		{"sl1", sl, design.Value{Kind: design.KindInt, Int: 1}, "'1'"},
+		{"sl2", sl, design.Value{Kind: design.KindInt, Int: 2}, ""},
+		{"slv0", slv, design.Value{Kind: design.KindInt, Int: 0}, ""},
+		{"nonint", sl, design.Value{Kind: design.KindStr, Text: "x"}, ""},
+		{"niltype", nil, design.Value{Kind: design.KindInt, Int: 0}, ""},
+	}
+	for _, c := range cases {
+		got := stdLogicLit(c.typ, c.val)
+		if c.want == "" {
+			if got != nil {
+				t.Errorf("%s: got %v, want nil", c.name, got)
+			}
+			continue
+		}
+		lit, ok := got.(*vhdl.BasicLit)
+		if !ok || lit.Kind != vhdl.CHARLIT || lit.Value != c.want {
+			t.Errorf("%s: got %#v, want CHARLIT %q", c.name, got, c.want)
+		}
+	}
+}

@@ -169,6 +169,9 @@ func portActual(p *elaborate.ResolvedPort, busLit string, subst map[string]strin
 		if p.Value == nil {
 			return &vhdl.Ident{Name: "open"}
 		}
+		if lit := stdLogicLit(p.Type, *p.Value); lit != nil {
+			return lit
+		}
 		return emitValue(*p.Value)
 	case elaborate.KindDataBus:
 		if busLit == "" {
@@ -187,6 +190,20 @@ func portActual(p *elaborate.ResolvedPort, busLit string, subst map[string]strin
 		// emitting an invalid port map.
 		return &vhdl.Ident{Name: "open"}
 	}
+}
+
+// stdLogicLit renders an integer 0/1 on a std_logic port as the VHDL character
+// literal '0'/'1' (faithful to vmagic num-val on a std_logic Subtype). Returns nil
+// for any other type/value so the caller falls back to emitValue.
+func stdLogicLit(t *elaborate.ResolvedType, v design.Value) vhdl.Expr {
+	if t == nil || t.Mark != "std_logic" || v.Kind != design.KindInt || (v.Int != 0 && v.Int != 1) {
+		return nil
+	}
+	val := "'0'"
+	if v.Int == 1 {
+		val = "'1'"
+	}
+	return &vhdl.BasicLit{Kind: vhdl.CHARLIT, Value: val}
 }
 
 // devicesEntityPorts builds the devices entity's port list from the TopDevices
