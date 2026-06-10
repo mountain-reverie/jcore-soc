@@ -88,19 +88,31 @@ func buildIRQ(res *Resolution, d *design.Design) (*IRQModel, []error) {
 	for _, rd := range res.Devices {
 		rdByName[rd.Name] = rd
 	}
+	// A design device's Name is the as-written value, which is empty when the
+	// instance relied on name-defaulting (class-derived, e.g. gpio/cache_ctrl).
+	// The resolved devices (res.Devices) carry the effective name and are built
+	// 1:1 in design order, so the resolved name at the matching index is the
+	// device's true instance name; fall back to the as-written name otherwise.
+	effName := func(i int, dev *design.Device) string {
+		if i < len(res.Devices) {
+			return res.Devices[i].Name
+		}
+		return dev.Name
+	}
 
 	// aicByCPU: cpu -> aic device name.
 	aicByCPU := map[int]string{}
-	for _, dev := range d.Devices {
+	for i, dev := range d.Devices {
 		if lc(dev.Class) != "aic" {
 			continue
 		}
+		name := effName(i, dev)
 		cpu := cpuOf(dev)
 		if cpu < 0 {
-			errs = append(errs, &IRQError{Kind: ErrIRQBadCPU, Device: dev.Name, Detail: fmt.Sprintf("cpu %d", cpu)})
+			errs = append(errs, &IRQError{Kind: ErrIRQBadCPU, Device: name, Detail: fmt.Sprintf("cpu %d", cpu)})
 			continue
 		}
-		aicByCPU[cpu] = dev.Name
+		aicByCPU[cpu] = name
 	}
 	if len(aicByCPU) == 0 {
 		return nil, errs
@@ -117,28 +129,29 @@ func buildIRQ(res *Resolution, d *design.Design) (*IRQModel, []error) {
 
 	// gather one tuple per device interrupt line.
 	var tuples []irqTuple
-	for _, dev := range d.Devices {
+	for i, dev := range d.Devices {
 		if dev.IRQ == nil {
 			continue
 		}
-		rd := rdByName[dev.Name]
+		name := effName(i, dev)
+		rd := rdByName[name]
 		switch {
 		case dev.IRQ.Int != nil:
 			irq := *dev.IRQ.Int
 			port := irqPortName(rd)
 			if port == "" {
-				errs = append(errs, &IRQError{Kind: ErrIRQNoPort, Device: dev.Name})
+				errs = append(errs, &IRQError{Kind: ErrIRQNoPort, Device: name})
 				continue
 			}
-			tuples = append(tuples, irqTuple{dev: dev.Name, port: port, cpu: cpuOf(dev), path: irq, vector: 0x11 + irq})
+			tuples = append(tuples, irqTuple{dev: name, port: port, cpu: cpuOf(dev), path: irq, vector: 0x11 + irq})
 		case dev.IRQ.Named != nil:
 			for _, port := range sortedStrKeys(dev.IRQ.Named) {
 				e := dev.IRQ.Named[port]
 				if !entityHasPort(res, dev, port) {
-					errs = append(errs, &IRQError{Kind: ErrIRQNamedPort, Device: dev.Name, Port: port})
+					errs = append(errs, &IRQError{Kind: ErrIRQNamedPort, Device: name, Port: port})
 					continue
 				}
-				tuples = append(tuples, irqTuple{dev: dev.Name, port: port, cpu: e.CPU, path: e.IRQ, vector: 0x11 + e.IRQ})
+				tuples = append(tuples, irqTuple{dev: name, port: port, cpu: e.CPU, path: e.IRQ, vector: 0x11 + e.IRQ})
 			}
 		}
 	}

@@ -40,6 +40,9 @@ func Devices(res *elaborate.Resolution) (string, error) {
 		sort.Strings(declNames)
 	}
 	decls := make([]vhdl.Decl, 0, len(declNames))
+	// IRQ signal declarations (irqs<cpu> + OR-source scalars) precede the
+	// Devices-category internal signals (golden devices.vhd).
+	decls = append(decls, irqDecls(res.IRQ)...)
 	for _, n := range declNames {
 		mark, con := typeToSubtype(typeForDecl(res, n, subst))
 		decls = append(decls, &vhdl.SignalDecl{Names: []string{n}, SubtypeMark: mark, Constraint: con})
@@ -62,7 +65,15 @@ func Devices(res *elaborate.Resolution) (string, error) {
 		if dev.DataBus {
 			busLit = devLit(dev.Name)
 		}
-		stmts = append(stmts, instStmt(lc(dev.Name), ent, arch, dev.Generics, dev.Ports, busLit, subst))
+		var portOv map[string]string
+		var vecAgg vhdl.Expr
+		if res.IRQ != nil {
+			portOv = res.IRQ.PortOverrides[dev.Name]
+			if vn, ok := res.IRQ.VectorNumbers[dev.Name]; ok {
+				vecAgg = vectorNumbersAgg(vn)
+			}
+		}
+		stmts = append(stmts, instStmt(lc(dev.Name), ent, arch, dev.Generics, dev.Ports, busLit, subst, portOv, vecAgg))
 	}
 	// DevicesExtra: drive each output port from its readable alias (name <= sig_name).
 	substKeys := make([]string, 0, len(subst))
@@ -73,6 +84,8 @@ func Devices(res *elaborate.Resolution) (string, error) {
 	for _, name := range substKeys {
 		stmts = append(stmts, concAssign(&vhdl.Ident{Name: name}, &vhdl.Ident{Name: subst[name]}))
 	}
+	// IRQ OR-combine concurrent assignments (none for mimas_v2).
+	stmts = append(stmts, irqAssigns(res.IRQ)...)
 
 	context := []vhdl.Node{
 		&vhdl.LibraryClause{Names: []string{"ieee"}},
@@ -101,13 +114,28 @@ func Devices(res *elaborate.Resolution) (string, error) {
 // participant, "" otherwise; it wires the device's KindDataBus ports to the
 // shared devs_bus_i/o arrays. subst remaps a port's global signal to its
 // DevicesExtra alias (sig_<name>) when present.
-func instStmt(label, entity, arch string, generics map[string]design.Value, ports []*elaborate.ResolvedPort, busLit string, subst map[string]string) *vhdl.InstantiationStmt {
+func instStmt(label, entity, arch string, generics map[string]design.Value, ports []*elaborate.ResolvedPort, busLit string, subst map[string]string, portOv map[string]string, vecAgg vhdl.Expr) *vhdl.InstantiationStmt {
 	inst := &vhdl.InstantiationStmt{Label: label, UnitKind: vhdl.ENTITY, Unit: "work." + lc(entity), Arch: arch}
+	// Build the generic map as (formal, actual) pairs so an injected expression
+	// generic (vector_numbers, a vhdl.Expr rather than a design.Value) can be
+	// sorted into alphabetical formal order alongside the design.Value generics.
+	type genPair struct {
+		formal string
+		actual vhdl.Expr
+	}
+	gens := make([]genPair, 0, len(generics)+1)
 	for _, g := range sortedKeys(generics) {
-		inst.GenericMap = append(inst.GenericMap, &vhdl.AssocElement{Formal: lc(g), Actual: emitValue(generics[g])})
+		gens = append(gens, genPair{formal: lc(g), actual: emitValue(generics[g])})
+	}
+	if vecAgg != nil {
+		gens = append(gens, genPair{formal: "vector_numbers", actual: vecAgg})
+	}
+	sort.Slice(gens, func(i, j int) bool { return gens[i].formal < gens[j].formal })
+	for _, g := range gens {
+		inst.GenericMap = append(inst.GenericMap, &vhdl.AssocElement{Formal: g.formal, Actual: g.actual})
 	}
 	for _, p := range ports {
-		inst.PortMap = append(inst.PortMap, &vhdl.AssocElement{Formal: lc(p.Name), Actual: portActual(p, busLit, subst)})
+		inst.PortMap = append(inst.PortMap, &vhdl.AssocElement{Formal: lc(p.Name), Actual: portActual(p, busLit, subst, portOv)})
 	}
 	return inst
 }
@@ -118,7 +146,15 @@ func instStmt(label, entity, arch string, generics map[string]design.Value, port
 // devs_bus_o(DEV_x); generate.clj:609-612). subst remaps a KindSignal port's
 // global signal to its DevicesExtra alias. IRQ/deferred ports remain placeholders
 // wired in later sub-milestones (P5e IRQ).
-func portActual(p *elaborate.ResolvedPort, busLit string, subst map[string]string) vhdl.Expr {
+func portActual(p *elaborate.ResolvedPort, busLit string, subst map[string]string, portOv map[string]string) vhdl.Expr {
+	// IRQ wiring (P5e) overrides a port's actual outright: an explicit override
+	// text (e.g. "irqs0(4)"|"irqs0"), or "open"/"" for an unrouted irq path.
+	if ov, ok := portOv[p.Name]; ok {
+		if ov == "" || ov == "open" {
+			return &vhdl.Ident{Name: "open"}
+		}
+		return &vhdl.Ident{Name: ov}
+	}
 	switch p.Kind {
 	case elaborate.KindSignal:
 		gs := p.GlobalSignal
