@@ -169,29 +169,111 @@ func DeviceTree(b *board.Board, res *elaborate.Resolution) (*dts.Node, error) {
 		}
 	}
 
-	return buildRoot(b.Name, freq, dram, busBase, busWidth, stdoutPath, socChildren), nil
+	// SMP additions (device_tree.clj / irq.clj). is-smp = the "cpu1" peripheral
+	// bus being present & true. nil-map read -> false.
+	isSMP := b.Design.PeripheralBuses["cpu1"]
+	var ipiNode *dts.Node
+	if isSMP {
+		n, err := ipiNode2(b, res)
+		if err != nil {
+			return nil, err
+		}
+		ipiNode = n
+	}
+
+	return buildRoot(b.Name, freq, dram, busBase, busWidth, stdoutPath, socChildren, isSMP, ipiNode), nil
 }
 
-// buildRoot assembles the "/" boilerplate around the soc children.
-func buildRoot(model string, freq int, dram [2]uint64, busBase, busWidth uint64, stdoutPath string, socChildren []*dts.Node) *dts.Node {
-	cpuProps := []*dts.Prop{
-		{Name: "device_type", Values: []dts.Value{dts.Str("cpu")}},
-		{Name: "compatible", Values: []dts.Value{dts.Str("jcore,j2")}},
-		{Name: "clock-frequency", Values: []dts.Value{dts.Cells{Nums: []uint64{uint64(freq)}}}},
-		{Name: "reg", Values: []dts.Value{dts.Cells{Nums: []uint64{0}}}},
+// ipiNode2 builds the root-level "ipi" node for an SMP design (device_tree.clj
+// to-dt ~335-341). The ipi memory region + irq come from the cache device
+// (irq.clj ipi-info, aic1 path): the cache_ctrl/cache_ctrl_wsbu device's
+// base-addr (ipi reg addr) and the distinct raw irq numbers of its irq map. The
+// interrupts cell is the first (only) raw irq number — NOT 0x11+irq — faithful
+// to the Clojure `(or (:dt-irq x) (:irq x))` collection (cache irqs carry no
+// :dt-irq, so this is the raw :irq) and `(first (:irqs ipi-info))`.
+//
+// Returns nil (no node) when no cache device is present (Clojure emits the ipi
+// node only `(when (and is-smp ipi-info))`). Errors (DTError{ErrIPI}) when the
+// cache device exists but has no base-addr, or has >1 distinct irq.
+func ipiNode2(b *board.Board, _ *elaborate.Resolution) (*dts.Node, error) {
+	var cache *design.Device
+	for _, dev := range b.Design.Devices {
+		c := lc(dev.Class)
+		if c == "cache_ctrl" || c == "cache_ctrl_wsbu" {
+			cache = dev
+			break
+		}
 	}
+	if cache == nil {
+		return nil, nil // no ipi-info -> Clojure omits the node.
+	}
+
+	// distinct raw irq numbers of the cache device's irq map.
+	irqSet := map[int]bool{}
+	if cache.IRQ != nil {
+		if cache.IRQ.Int != nil {
+			irqSet[*cache.IRQ.Int] = true
+		}
+		for _, e := range cache.IRQ.Named {
+			irqSet[e.IRQ] = true
+		}
+	}
+	if len(irqSet) > 1 {
+		irqs := make([]int, 0, len(irqSet))
+		for i := range irqSet {
+			irqs = append(irqs, i)
+		}
+		sort.Ints(irqs)
+		return nil, &DTError{Kind: ErrIPI, Detail: fmt.Sprintf("multiple irqs detected for ipi (%v)", irqs)}
+	}
+	if cache.BaseAddr == nil {
+		return nil, &DTError{Kind: ErrIPI, Detail: "no memory region for ipi"}
+	}
+
+	props := []*dts.Prop{
+		{Name: "compatible", Values: []dts.Value{dts.Str("jcore,ipi-controller")}},
+		{Name: "reg", Values: []dts.Value{dts.Cells{Nums: []uint64{uint64(*cache.BaseAddr), 8}, Hex: true}}},
+	}
+	for i := range irqSet { // at most one entry here.
+		props = append(props, &dts.Prop{Name: "interrupts", Values: []dts.Value{dts.Cells{Nums: []uint64{uint64(i)}, Hex: true}}})
+	}
+	return &dts.Node{Name: "ipi", Props: props}, nil
+}
+
+// buildRoot assembles the "/" boilerplate around the soc children. When isSMP,
+// the cpus node gains enable-method + a cpu@1 child, and ipiNode (when non-nil)
+// is appended as a root child.
+func buildRoot(model string, freq int, dram [2]uint64, busBase, busWidth uint64, stdoutPath string, socChildren []*dts.Node, isSMP bool, ipiNode *dts.Node) *dts.Node {
+	// cpu props shared by cpu@0 and cpu@1 (the Clojure cpu-props, before reg).
+	cpuPropsBase := func() []*dts.Prop {
+		return []*dts.Prop{
+			{Name: "device_type", Values: []dts.Value{dts.Str("cpu")}},
+			{Name: "compatible", Values: []dts.Value{dts.Str("jcore,j2")}},
+			{Name: "clock-frequency", Values: []dts.Value{dts.Cells{Nums: []uint64{uint64(freq)}}}},
+		}
+	}
+	cpu0Props := append(cpuPropsBase(), &dts.Prop{Name: "reg", Values: []dts.Value{dts.Cells{Nums: []uint64{0}}}})
 
 	chosen := &dts.Node{Name: "chosen"}
 	if stdoutPath != "" {
 		chosen.Props = []*dts.Prop{{Name: "stdout-path", Values: []dts.Value{dts.Str(stdoutPath)}}}
 	}
 
-	cpus := &dts.Node{Name: "cpus", Props: []*dts.Prop{
+	cpusProps := []*dts.Prop{
 		{Name: "#address-cells", Values: []dts.Value{dts.Cells{Nums: []uint64{1}}}},
 		{Name: "#size-cells", Values: []dts.Value{dts.Cells{Nums: []uint64{0}}}},
-	}, Children: []*dts.Node{
-		{Name: "cpu@0", Props: cpuProps},
-	}}
+	}
+	cpuChildren := []*dts.Node{{Name: "cpu@0", Props: cpu0Props}}
+	if isSMP {
+		cpusProps = append(cpusProps, &dts.Prop{Name: "enable-method", Values: []dts.Value{dts.Str("jcore,spin-table")}})
+		// cpu@1: base props + reg<1> + the hardcoded cpu-release-addr.
+		cpu1Props := append(cpuPropsBase(),
+			&dts.Prop{Name: "reg", Values: []dts.Value{dts.Cells{Nums: []uint64{1}}}},
+			&dts.Prop{Name: "cpu-release-addr", Values: []dts.Value{dts.Cells{Nums: []uint64{0xabcd0640, 0x8000}, Hex: true}}},
+		)
+		cpuChildren = append(cpuChildren, &dts.Node{Name: "cpu@1", Props: cpu1Props})
+	}
+	cpus := &dts.Node{Name: "cpus", Props: cpusProps, Children: cpuChildren}
 
 	clocks := &dts.Node{Name: "clocks", Children: []*dts.Node{
 		{Name: nodeName("bus_clock", "bus_clock"), Props: []*dts.Prop{
@@ -218,6 +300,14 @@ func buildRoot(model string, freq int, dram [2]uint64, busBase, busWidth uint64,
 		{Name: "reg", Values: []dts.Value{dts.Cells{Nums: []uint64{0xabcd0600, 0x4}, Hex: true}}},
 	}}
 
+	// root children: chosen, cpus, clocks, memory, soc, cpuid, then (SMP) ipi.
+	// The Clojure to-dt lists ipi last, after cpuid (it is `(when (and is-smp
+	// ipi-info) [...])` at the tail of the "/" children).
+	rootChildren := []*dts.Node{chosen, cpus, clocks, memory, soc, cpuid}
+	if isSMP && ipiNode != nil {
+		rootChildren = append(rootChildren, ipiNode)
+	}
+
 	return &dts.Node{Name: "/", Props: []*dts.Prop{
 		{Name: "model", Values: []dts.Value{dts.Str(model)}},
 		{Name: "compatible", Values: []dts.Value{dts.Str("jcore,j2-soc")}},
@@ -228,7 +318,7 @@ func buildRoot(model string, freq int, dram [2]uint64, busBase, busWidth uint64,
 		// device's dt-label is "aic" (matching aicClass). We do not derive it
 		// from the device's DtLabel.
 		{Name: "interrupt-parent", Values: []dts.Value{dts.Cells{Refs: []string{aicClass}}}},
-	}, Children: []*dts.Node{chosen, cpus, clocks, memory, soc, cpuid}}
+	}, Children: rootChildren}
 }
 
 // selectDevices filters b.Design.Devices to data-bus devices that want a dt
