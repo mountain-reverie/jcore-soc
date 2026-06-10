@@ -77,6 +77,7 @@ func Elaborate(b *board.Board) (*Resolution, error) {
 	applyZeroSignals(res.Signals, b.Design.ZeroSignals)
 	errs = append(errs, validateSignals(res.Signals))
 	injectInternalBusPorts(res)
+	removeWriteOnlySignals(res, b.Design)
 	sl, cerr := categorize(res)
 	res.SignalLocations = sl
 	errs = append(errs, cerr)

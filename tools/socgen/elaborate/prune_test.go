@@ -25,3 +25,41 @@ func TestMarkNamedIRQPorts(t *testing.T) {
 	// nil irq -> no panic, no change.
 	markNamedIRQPorts(ports, nil)
 }
+
+func TestRemoveWriteOnlySignals(t *testing.T) {
+	woPort := &ResolvedPort{Name: "busy", Kind: KindSignal, GlobalSignal: "flash_busy"}
+	res := &Resolution{
+		Devices: []*ResolvedDevice{{Name: "flash", Ports: []*ResolvedPort{woPort}}},
+		Signals: map[string]*Signal{
+			// write-only: a single out port, no reader -> pruned.
+			"flash_busy": {Name: "flash_busy", Ports: []*SignalPortRef{
+				{Context: Context{Kind: "device", ID: "flash"}, PortName: "busy", Dir: dirOut},
+			}},
+			// has a reader -> kept.
+			"clk_sys": {Name: "clk_sys", Ports: []*SignalPortRef{
+				{Context: Context{Kind: "device", ID: "flash"}, PortName: "clk", Dir: dirIn},
+			}},
+			// pin context (out dir) -> kept.
+			"led0": {Name: "led0", Ports: []*SignalPortRef{
+				{Context: Context{Kind: ctxKindPin, ID: "led0"}, PortName: "led0", Dir: dirOut},
+			}},
+			// out-only but in ZeroSignals -> kept.
+			"zeroed": {Name: "zeroed", Ports: []*SignalPortRef{
+				{Context: Context{Kind: "device", ID: "x"}, PortName: "z", Dir: dirOut},
+			}},
+		},
+	}
+	d := &design.Design{ZeroSignals: []string{"zeroed"}}
+	removeWriteOnlySignals(res, d)
+	if _, ok := res.Signals["flash_busy"]; ok {
+		t.Errorf("flash_busy (write-only) should be pruned")
+	}
+	for _, keep := range []string{"clk_sys", "led0", "zeroed"} {
+		if _, ok := res.Signals[keep]; !ok {
+			t.Errorf("%s should be kept", keep)
+		}
+	}
+	if woPort.GlobalSignal != "" {
+		t.Errorf("pruned signal's port should have GlobalSignal cleared, got %q", woPort.GlobalSignal)
+	}
+}

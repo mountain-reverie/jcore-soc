@@ -26,9 +26,9 @@ func TestElaborateNetlist(t *testing.T) {
 	if s := res.Signals["sysclk"]; s == nil || len(s.Ports) != 2 {
 		t.Fatalf("sysclk = %+v", res.Signals["sysclk"])
 	}
-	// shared driven by d0.q (out)
-	if res.Signals["shared"] == nil {
-		t.Errorf("shared missing")
+	// shared is driven only by d0.q (out) and nothing reads it — write-only, so pruned.
+	if res.Signals["shared"] != nil {
+		t.Errorf("shared (write-only) should be pruned by removeWriteOnlySignals")
 	}
 }
 
