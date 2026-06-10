@@ -139,6 +139,80 @@ func parsePioKey(kn *yaml.Node) (lo, hi int, err error) {
 	return n, n, nil
 }
 
+// DtProp is one device-tree property, preserving its YAML source position.
+type DtProp struct {
+	Key string
+	Val any
+}
+
+// DtProps is an ordered set of device-tree properties. The Clojure reference
+// relies on EDN/YAML definition order for board.dts output, so this preserves
+// source order rather than decoding into an unordered map.
+type DtProps []DtProp
+
+// UnmarshalYAML reads a mapping node's key/value pairs in source order, decoding
+// each value generically into any (the same int/string/[]any/bool shapes that a
+// map[string]any decode produced).
+func (p *DtProps) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind != yaml.MappingNode {
+		return &SpecError{Line: n.Line, Msg: "dt-props: expected a mapping"}
+	}
+	out := make(DtProps, 0, len(n.Content)/2)
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		var v any
+		if err := n.Content[i+1].Decode(&v); err != nil {
+			return &SpecError{Line: n.Content[i+1].Line, Msg: "dt-props: value decode", Err: err}
+		}
+		out = append(out, DtProp{Key: n.Content[i].Value, Val: v})
+	}
+	*p = out
+	return nil
+}
+
+// Get returns the value for key (and whether present). O(n); prop lists are tiny.
+func (p DtProps) Get(key string) (any, bool) {
+	for _, kv := range p {
+		if kv.Key == key {
+			return kv.Val, true
+		}
+	}
+	return nil, false
+}
+
+// DtChild is one dt-children entry: a [name, {properties, children}] pair.
+type DtChild struct {
+	Name     string
+	Props    DtProps
+	Children []DtChild
+}
+
+// UnmarshalYAML decodes the 2-element [name, body] sequence; body is a mapping
+// with an ordered "properties" map and an optional "children" sequence.
+func (c *DtChild) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind != yaml.SequenceNode || len(n.Content) != 2 {
+		return &SpecError{Line: n.Line, Msg: "dt-children entry: expected [name, body]"}
+	}
+	c.Name = n.Content[0].Value
+	body := n.Content[1]
+	if body.Kind != yaml.MappingNode {
+		return &SpecError{Line: body.Line, Msg: "dt-children body: expected a mapping"}
+	}
+	for i := 0; i+1 < len(body.Content); i += 2 {
+		key, val := body.Content[i].Value, body.Content[i+1]
+		switch key {
+		case "properties":
+			if err := val.Decode(&c.Props); err != nil {
+				return err
+			}
+		case "children":
+			if err := val.Decode(&c.Children); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 type DeviceClass struct {
 	Entity        string           `yaml:"entity"`
 	Configuration string           `yaml:"configuration"`
