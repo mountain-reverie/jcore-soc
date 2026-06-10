@@ -42,6 +42,9 @@ func Elaborate(b *board.Board) (*Resolution, error) {
 			}
 		}
 		dev.Ports = buildPorts(dev.Name, rc.Entity, spec, env, merge, false)
+		if i < len(b.Design.Devices) {
+			markNamedIRQPorts(dev.Ports, b.Design.Devices[i].IRQ)
+		}
 	}
 	errs = append(errs, classifyDataBus(res.Devices))
 	topEnts, terr := resolveEntities("top", b.Design.TopEntities, b.Library, merge)
