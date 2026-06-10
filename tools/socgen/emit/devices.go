@@ -9,6 +9,9 @@ import (
 	"github.com/j-core/jcore-soc/tools/socgen/vhdl"
 )
 
+// stdLogicMark is the VHDL std_logic type mark used throughout the emit package.
+const stdLogicMark = "std_logic"
+
 // Devices renders devices.vhd from the elaborated model: a `devices` entity whose
 // ports are the TopDevices boundary signals (P5c-i categorization), and an
 // architecture `impl` declaring the Devices-category internal signals (+ DevicesExtra
@@ -192,7 +195,7 @@ func portActual(p *elaborate.ResolvedPort, busLit string, subst map[string]strin
 // literal '0'/'1' (faithful to vmagic num-val on a std_logic Subtype). Returns nil
 // for any other type/value so the caller falls back to emitValue.
 func stdLogicLit(t *elaborate.ResolvedType, v design.Value) vhdl.Expr {
-	if t == nil || t.Mark != "std_logic" || v.Kind != design.KindInt || (v.Int != 0 && v.Int != 1) {
+	if t == nil || t.Mark != stdLogicMark || v.Kind != design.KindInt || (v.Int != 0 && v.Int != 1) {
 		return nil
 	}
 	val := "'0'"
@@ -241,7 +244,7 @@ func typeForDecl(res *elaborate.Resolution, declName string, subst map[string]st
 // symbolic type keeps its as-written constraint; a nil type defaults to std_logic.
 func typeToSubtype(t *elaborate.ResolvedType) (string, vhdl.Expr) {
 	if t == nil {
-		return "std_logic", nil
+		return stdLogicMark, nil
 	}
 	if t.Left != nil && t.Right != nil {
 		dir := vhdl.TO
