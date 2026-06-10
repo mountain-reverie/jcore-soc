@@ -254,7 +254,7 @@ func mergeDtProps(cls *design.DeviceClass, dev *design.Device) map[string]any {
 // device's effective IRQ number; hasIRQ reports whether an interrupts property
 // should be emitted (the caller resolves dt? on the device's irq set).
 // regWidth = 1 << (cls.LeftAddrBit+1); base = uint64(*dev.BaseAddr) - busBase.
-func devToDT(dev *design.Device, cls *design.DeviceClass, nodeName string, busBase uint64, vector int, hasIRQ bool) *dts.Node {
+func devToDT(dev *design.Device, cls *design.DeviceClass, dtNodeName string, busBase uint64, vector int, hasIRQ bool) *dts.Node {
 	merged := mergeDtProps(cls, dev)
 
 	props := dtProps(merged, busBase)
@@ -283,5 +283,5 @@ func devToDT(dev *design.Device, cls *design.DeviceClass, nodeName string, busBa
 	// migrated YAML boards).
 	kids := dtChildren(cls.DtChildren)
 
-	return &dts.Node{Name: nodeName, Props: props, Children: kids}
+	return &dts.Node{Name: dtNodeName, Props: props, Children: kids}
 }
