@@ -150,7 +150,7 @@ func TestBuildMimasV2(t *testing.T) {
 	}
 
 	// 1. file set matches the golden set exactly.
-	var got []string
+	got := make([]string, 0, len(files))
 	byName := map[string]string{}
 	for _, f := range files {
 		got = append(got, f.Name)
