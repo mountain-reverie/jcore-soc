@@ -122,9 +122,10 @@ func socEntityPorts(res *elaborate.Resolution) []*vhdl.InterfaceDecl {
 }
 
 // topInstStmt instantiates a top-entity: `configuration work.<cfg>` when resolved
-// via a configuration, else `entity work.<entity>(<arch>)`. Ports wire to their
-// global signals (no data-bus/subst at the top level). ResolvedEntity carries no
-// generics, so the generic map is omitted (a later refinement; the golden has it).
+// via a configuration, else `entity work.<entity>(<arch>)`. Builds a generic map
+// from re.Generics (YAML keys lowercased; bool TRUE/FALSE casing deferred to
+// P6b-3c) and a port map wiring each port to its global signal (no data-bus/subst
+// at the top level). sortInstMaps sorts both maps before printing.
 // Requires: if re.Config is nil, re.Entity must be non-nil (caller ensures binding).
 func topInstStmt(re *elaborate.ResolvedEntity) *vhdl.InstantiationStmt {
 	inst := &vhdl.InstantiationStmt{Label: lc(re.Name)}
@@ -135,6 +136,9 @@ func topInstStmt(re *elaborate.ResolvedEntity) *vhdl.InstantiationStmt {
 		inst.UnitKind = vhdl.ENTITY
 		inst.Unit = "work." + lc(re.Entity.Name)
 		inst.Arch = re.ArchName
+	}
+	for name, val := range re.Generics {
+		inst.GenericMap = append(inst.GenericMap, &vhdl.AssocElement{Formal: lc(name), Actual: emitValue(val)})
 	}
 	for _, p := range re.Ports {
 		inst.PortMap = append(inst.PortMap, &vhdl.AssocElement{Formal: lc(p.Name), Actual: portActual(p, "", nil, nil)})
