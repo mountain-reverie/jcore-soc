@@ -6,8 +6,10 @@ import (
 )
 
 func TestPrintInstMapMultiline(t *testing.T) {
+	// Reversed input (b before a) so the assertion FALSIFIES accidental sorting:
+	// the printer must preserve order (emit, not the printer, sorts).
 	src := "architecture a of e is\nbegin\n" +
-		"  u : entity work.foo port map (a => x, b => y);\n" +
+		"  u : entity work.foo port map (b => y, a => x);\n" +
 		"end architecture;"
 	f1, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
 	if errs != nil {
@@ -16,11 +18,11 @@ func TestPrintInstMapMultiline(t *testing.T) {
 	out := Print(f1)
 	want := "    u : entity work.foo\n" +
 		"        port map (\n" +
-		"            a => x,\n" +
-		"            b => y\n" +
+		"            b => y,\n" +
+		"            a => x\n" +
 		"        );"
 	if !strings.Contains(out, want) {
-		t.Errorf("multi-line port map mismatch:\n got:\n%s\nwant block:\n%s", out, want)
+		t.Errorf("multi-line port map mismatch (printer must NOT sort):\n got:\n%s\nwant block:\n%s", out, want)
 	}
 	f2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
 	if errs2 != nil {
