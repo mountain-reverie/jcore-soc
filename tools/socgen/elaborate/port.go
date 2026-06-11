@@ -120,7 +120,7 @@ func applyClkRstHeuristic(ports []*ResolvedPort, explicit map[string]bool, merge
 				continue
 			}
 			for _, c := range cands {
-				if p.Name == c {
+				if lc(p.Name) == c {
 					n++
 					cand = p
 				}
@@ -131,8 +131,8 @@ func applyClkRstHeuristic(ports []*ResolvedPort, explicit map[string]bool, merge
 		}
 		tgt := mergeName(target, merge)
 		for _, p := range ports {
-			if p.Kind == KindSignal && p.GlobalSignal == tgt {
-				return // target already used by another port
+			if p.Kind == KindSignal && !explicit[p.Name] && p.GlobalSignal == tgt {
+				return // target already used by another non-explicit port
 			}
 		}
 		cand.GlobalSignal = tgt
