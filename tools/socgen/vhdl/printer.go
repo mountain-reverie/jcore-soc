@@ -211,15 +211,14 @@ func printStmt(b *strings.Builder, s Stmt, indent string) {
 			b.WriteString(n.Arch)
 			b.WriteByte(')')
 		}
+		mapIndent := indent + indentUnit
 		if len(n.GenericMap) > 0 {
-			b.WriteString(" generic map (")
-			printAssocList(b, n.GenericMap)
-			b.WriteByte(')')
+			b.WriteByte('\n')
+			printInstMap(b, mapIndent, "generic map", n.GenericMap)
 		}
 		if len(n.PortMap) > 0 {
-			b.WriteString(" port map (")
-			printAssocList(b, n.PortMap)
-			b.WriteByte(')')
+			b.WriteByte('\n')
+			printInstMap(b, mapIndent, "port map", n.PortMap)
 		}
 		b.WriteByte(';')
 	case *GenerateStmt:
@@ -569,6 +568,37 @@ func printAssocList(b *strings.Builder, elems []*AssocElement) {
 		}
 		printExpr(b, e.Actual)
 	}
+}
+
+// printInstMap prints a multi-line generic-map/port-map association list:
+//
+//	<mapIndent><keyword> (
+//	<mapIndent><indentUnit><formal> => <actual>,
+//	...
+//	<mapIndent>)
+//
+// Association ORDER IS PRESERVED — emit sorts the AST; the printer must not
+// reorder, or the order-sensitive corpus round-trip (equalAST) would fail. The
+// last association has no trailing comma. The caller writes the preceding newline.
+func printInstMap(b *strings.Builder, mapIndent, keyword string, elems []*AssocElement) {
+	b.WriteString(mapIndent)
+	b.WriteString(keyword)
+	b.WriteString(" (\n")
+	for i, e := range elems {
+		b.WriteString(mapIndent)
+		b.WriteString(indentUnit)
+		if e.Formal != "" {
+			b.WriteString(e.Formal)
+			b.WriteString(" => ")
+		}
+		printExpr(b, e.Actual)
+		if i < len(elems)-1 {
+			b.WriteByte(',')
+		}
+		b.WriteByte('\n')
+	}
+	b.WriteString(mapIndent)
+	b.WriteByte(')')
 }
 
 // exprString renders an expression to its canonical text (used for association
