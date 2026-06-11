@@ -43,9 +43,6 @@ func Devices(res *elaborate.Resolution) (string, error) {
 		sort.Strings(declNames)
 	}
 	decls := make([]vhdl.Decl, 0, len(declNames))
-	// IRQ signal declarations (irqs<cpu> + OR-source scalars) precede the
-	// Devices-category internal signals (golden devices.vhd).
-	decls = append(decls, irqDecls(res.IRQ)...)
 	for _, n := range declNames {
 		mark, con := typeToSubtype(typeForDecl(res, n, subst))
 		decls = append(decls, &vhdl.SignalDecl{Names: []string{n}, SubtypeMark: mark, Constraint: con})
@@ -53,8 +50,13 @@ func Devices(res *elaborate.Resolution) (string, error) {
 
 	// Statements: device instantiations only. Top/padring entities move to
 	// soc.vhd / pad_ring in a later sub-milestone (P5a correction).
-	stmts := make([]vhdl.Stmt, 0, len(res.Devices))
-	for _, dev := range res.Devices {
+	stmts := make([]vhdl.Stmt, 0, len(res.Devices)+1)
+	// Device instantiations, alphabetical by label (golden order), led by the
+	// `Instantiate devices` section comment.
+	devs := append(res.Devices[:0:0], res.Devices...) // fresh backing array; sort must not mutate res.Devices
+	sort.Slice(devs, func(i, j int) bool { return lc(devs[i].Name) < lc(devs[j].Name) })
+	insts := make([]vhdl.Stmt, 0, len(devs))
+	for _, dev := range devs {
 		rc := res.Classes[lc(dev.Class)]
 		var ent, arch string
 		if rc != nil && rc.Entity != nil {
@@ -76,7 +78,11 @@ func Devices(res *elaborate.Resolution) (string, error) {
 				vecAgg = vectorNumbersAgg(vn)
 			}
 		}
-		stmts = append(stmts, instStmt(lc(dev.Name), ent, arch, dev.Generics, dev.Ports, busLit, subst, portOv, vecAgg))
+		insts = append(insts, instStmt(lc(dev.Name), ent, arch, dev.Generics, dev.Ports, busLit, subst, portOv, vecAgg))
+	}
+	if len(insts) > 0 {
+		stmts = append(stmts, &vhdl.Comment{Text: "Instantiate devices"})
+		stmts = append(stmts, insts...)
 	}
 	// DevicesExtra: drive each output port from its readable alias (name <= sig_name).
 	substKeys := make([]string, 0, len(subst))
@@ -96,6 +102,8 @@ func Devices(res *elaborate.Resolution) (string, error) {
 		decls = append(decls, databusDecls(res)...)
 		stmts = append(databusStmts(res), stmts...)
 	}
+	// irqs<cpu> signals are the final declarations before `begin` (golden).
+	decls = append(decls, irqDecls(res.IRQ)...)
 	context := deviceContext(res)
 
 	df := &vhdl.DesignFile{

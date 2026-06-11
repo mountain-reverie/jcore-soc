@@ -1,6 +1,7 @@
 package emit
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -124,7 +125,11 @@ func buildCond(index int, expect string) vhdl.Expr {
 func buildIfs(offset int, t *trieNode, lits map[string]string) []vhdl.Stmt {
 	index := 31 - offset
 	if t.leaf != nil {
-		return []vhdl.Stmt{&vhdl.ReturnStmt{Value: &vhdl.Ident{Name: lits[t.leaf.Name]}}}
+		rng := fmt.Sprintf("%08X-%08X", t.leaf.BaseAddr, t.leaf.BaseAddr+(2<<uint(t.leaf.LeftAddrBit))-1)
+		return []vhdl.Stmt{
+			&vhdl.Comment{Text: rng},
+			&vhdl.ReturnStmt{Value: &vhdl.Ident{Name: lits[t.leaf.Name]}},
+		}
 	}
 
 	leftPrefix, leftTrie := extractPrefix(t.without('1'))
@@ -205,8 +210,7 @@ func devicePrefixes(devs []busDevice, simple bool) map[string]string {
 
 // decodeFunction builds the `decode_address(addr) return device_t` function
 // (create-decode-fn, generate.clj:220-329). lits maps device names (and "none")
-// to enum literal identifiers. The leaf address-range comments emitted by the
-// Clojure version are dropped (the printer cannot emit comments).
+// to enum literal identifiers.
 func decodeFunction(devs []busDevice, lits map[string]string, simple bool) *vhdl.SubprogramBody {
 	param := &vhdl.InterfaceDecl{
 		Names:       []string{"addr"},
@@ -222,6 +226,9 @@ func decodeFunction(devs []busDevice, lits map[string]string, simple bool) *vhdl
 	}
 
 	if len(devs) > 0 {
+		fn.Stmts = append(fn.Stmts,
+			&vhdl.Comment{Text: `Assumes addr(31 downto 28) = x"a".`},
+			&vhdl.Comment{Text: "Address decoding closer to CPU checks those bits."})
 		prefixes := devicePrefixes(devs, simple)
 		trie := newTrie()
 		for i := range devs {
@@ -352,18 +359,34 @@ func muxChainStmts(res *elaborate.Resolution) []vhdl.Stmt {
 }
 
 // databusStmts builds the data-bus concurrent statements in golden order
-// (generate.clj:654-685; devices.vhd:88-95): the (Task 7) mux chain, the
-// active_dev decode, the master read-back, the per-device bus_split for-generate,
-// the NONE loopback, and the disconnected-bus loopbacks.
+// (generate.clj:654-685; devices.vhd:87-95): the disconnected-bus loopbacks lead
+// the concurrent region, then the `multiplex data bus to and from devices` block
+// (the mux chain, the active_dev decode, the master read-back, the per-device
+// bus_split for-generate, and the NONE loopback).
 func databusStmts(res *elaborate.Resolution) []vhdl.Stmt {
 	if res.DataBus == nil {
 		return nil
 	}
 	master := res.DataBus.MasterBus
-	stmts := make([]vhdl.Stmt, 0, 4+len(res.DataBus.Disconnected))
+	out := make([]vhdl.Stmt, 0, 7+len(res.DataBus.Disconnected)+len(res.DataBus.MuxStages))
+
+	// Disconnected peripheral buses lead the concurrent region (golden):
+	//   <bus>_periph_dbus_i <= loopback_bus(<bus>_periph_dbus_o);
+	if len(res.DataBus.Disconnected) > 0 {
+		out = append(out, &vhdl.Comment{Text: "Disconnected peripheral buses"})
+		for _, bus := range res.DataBus.Disconnected {
+			out = append(out, concAssign(
+				&vhdl.Ident{Name: bus + "_periph_dbus_i"},
+				&vhdl.CallExpr{Fun: &vhdl.Ident{Name: "loopback_bus"}, Args: []*vhdl.AssocElement{{Actual: &vhdl.Ident{Name: bus + "_periph_dbus_o"}}}}))
+		}
+	}
+
+	// multiplex data bus to and from devices.
+	out = append(out, &vhdl.Comment{Text: "multiplex data bus to and from devices"})
+	out = append(out, muxChainStmts(res)...)
 
 	// active_dev <= decode_address(<master>_periph_dbus_o.a);
-	stmts = append(stmts, concAssign(
+	out = append(out, concAssign(
 		&vhdl.Ident{Name: "active_dev"},
 		&vhdl.CallExpr{
 			Fun:  &vhdl.Ident{Name: "decode_address"},
@@ -371,7 +394,7 @@ func databusStmts(res *elaborate.Resolution) []vhdl.Stmt {
 		}))
 
 	// <master>_periph_dbus_i <= devs_bus_i(active_dev);
-	stmts = append(stmts, concAssign(
+	out = append(out, concAssign(
 		&vhdl.Ident{Name: master + "_periph_dbus_i"},
 		&vhdl.CallExpr{
 			Fun:  &vhdl.Ident{Name: "devs_bus_i"},
@@ -380,7 +403,7 @@ func databusStmts(res *elaborate.Resolution) []vhdl.Stmt {
 
 	// bus_split : for dev in device_t'left to device_t'right generate
 	//   devs_bus_o(dev) <= mask_data_o(<master>_periph_dbus_o, to_bit(dev = active_dev));
-	stmts = append(stmts, &vhdl.GenerateStmt{
+	out = append(out, &vhdl.GenerateStmt{
 		Label: "bus_split", Kind: vhdl.FOR, Param: "dev",
 		Range: &vhdl.Ident{Name: "device_t'left to device_t'right"},
 		Stmts: []vhdl.Stmt{concAssign(
@@ -393,19 +416,11 @@ func databusStmts(res *elaborate.Resolution) []vhdl.Stmt {
 	})
 
 	// devs_bus_i(NONE) <= loopback_bus(devs_bus_o(NONE));
-	stmts = append(stmts, concAssign(
+	out = append(out, concAssign(
 		&vhdl.CallExpr{Fun: &vhdl.Ident{Name: "devs_bus_i"}, Args: []*vhdl.AssocElement{{Actual: &vhdl.Ident{Name: "NONE"}}}},
 		&vhdl.CallExpr{Fun: &vhdl.Ident{Name: "loopback_bus"}, Args: []*vhdl.AssocElement{
 			{Actual: &vhdl.CallExpr{Fun: &vhdl.Ident{Name: "devs_bus_o"}, Args: []*vhdl.AssocElement{{Actual: &vhdl.Ident{Name: "NONE"}}}}},
 		}}))
 
-	// Disconnected peripheral buses: <bus>_periph_dbus_i <= loopback_bus(<bus>_periph_dbus_o);
-	// (Disconnected is already sorted by elaborate's resolvePeripheralBuses.)
-	for _, bus := range res.DataBus.Disconnected {
-		stmts = append(stmts, concAssign(
-			&vhdl.Ident{Name: bus + "_periph_dbus_i"},
-			&vhdl.CallExpr{Fun: &vhdl.Ident{Name: "loopback_bus"}, Args: []*vhdl.AssocElement{{Actual: &vhdl.Ident{Name: bus + "_periph_dbus_o"}}}}))
-	}
-
-	return append(muxChainStmts(res), stmts...)
+	return out
 }
