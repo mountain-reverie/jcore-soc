@@ -16,6 +16,7 @@ import (
 // Best-effort: a port-less, nil-entity ResolvedEntity is returned on bind failure.
 func resolveEntity(kind, name string, te *design.TopEntity, lib *iface.Library, merge map[string]string) (*ResolvedEntity, error) {
 	re := &ResolvedEntity{Name: name}
+	re.Generics = te.Generics
 	entityName := te.Entity
 	if lc(entityName) == "" {
 		entityName = name

@@ -103,6 +103,26 @@ func TestResolveEntityUnknownEntity(t *testing.T) {
 	}
 }
 
+func TestResolveEntityGenerics(t *testing.T) {
+	te := &design.TopEntity{
+		Entity:   "e",
+		Generics: map[string]design.Value{"A": {Kind: design.KindInt, Int: 1}, "B": {Kind: design.KindInt, Int: 2}},
+	}
+	lib := buildLib(t, `entity e is generic (A : integer; B : integer); port (clk : in std_logic); end entity;`)
+	re, _ := resolveEntity("top", "e", te, lib, nil)
+	if re.Generics == nil || len(re.Generics) != 2 {
+		t.Fatalf("re.Generics = %v, want 2 entries", re.Generics)
+	}
+	if re.Generics["A"].Int != 1 || re.Generics["B"].Int != 2 {
+		t.Errorf("re.Generics values wrong: %+v", re.Generics)
+	}
+	te2 := &design.TopEntity{Entity: "e"}
+	re2, _ := resolveEntity("top", "e", te2, lib, nil)
+	if len(re2.Generics) != 0 {
+		t.Errorf("re2.Generics = %v, want empty", re2.Generics)
+	}
+}
+
 func TestResolveEntitiesSortedAndAccumulates(t *testing.T) {
 	lib := buildLib(t,
 		`entity a is port (clk : in std_logic); end entity;`,

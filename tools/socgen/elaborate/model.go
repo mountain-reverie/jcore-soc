@@ -152,6 +152,7 @@ type ResolvedEntity struct {
 	ArchName string               // effective architecture name ("" if unresolved)
 	Config   *iface.Configuration // non-nil iff resolved via a configuration
 	Ports    []*ResolvedPort
+	Generics map[string]design.Value // top/padring-entity generics (P6b-3a)
 }
 
 // BufferKind is the semantic I/O buffer a pin needs; emit (P5) instantiates it.
