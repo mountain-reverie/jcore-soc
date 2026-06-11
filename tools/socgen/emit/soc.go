@@ -38,7 +38,7 @@ func SoC(res *elaborate.Resolution) (string, error) {
 	}
 
 	// statements: TopExtra assigns, top instantiations, devices instance, zero-out
-	stmts := make([]vhdl.Stmt, 0, len(subst)+len(res.TopEntities)+1+len(zeroNames))
+	stmts := make([]vhdl.Stmt, 0, len(subst)+len(res.TopEntities)+1+len(zeroNames)+1)
 	for _, name := range sortedKeysStr(subst) {
 		stmts = append(stmts, concAssign(&vhdl.Ident{Name: name}, &vhdl.Ident{Name: subst[name]}))
 	}
@@ -51,6 +51,9 @@ func SoC(res *elaborate.Resolution) (string, error) {
 		stmts = append(stmts, topInstStmt(re))
 	}
 	stmts = append(stmts, devicesInstStmt(res))
+	if len(zeroNames) > 0 {
+		stmts = append(stmts, &vhdl.Comment{Text: "Zero out unused signals"})
+	}
 	for _, n := range zeroNames {
 		var mark string
 		if s := res.Signals[n]; s != nil && s.Type != nil {
