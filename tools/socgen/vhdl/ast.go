@@ -448,6 +448,20 @@ func (n *NullStmt) Pos() Pos { return n.P }
 func (n *NullStmt) End() Pos { return n.P }
 func (n *NullStmt) stmtNode() {}
 
+// Comment is a single-line VHDL comment (`-- Text`). It is emit-only: the parser
+// discards COMMENT tokens, so a parsed AST never contains a Comment (keeps the
+// corpus round-trip comment-free and order-stable). It implements both Decl and
+// Stmt so it can lead either a declaration list or a statement list.
+type Comment struct {
+	P    Pos
+	Text string
+}
+
+func (n *Comment) Pos() Pos { return n.P }
+func (n *Comment) End() Pos { return n.P }
+func (n *Comment) declNode() {}
+func (n *Comment) stmtNode() {}
+
 // ReturnStmt is `[label:] return [expression] ;`. Value is nil for a bare return.
 type ReturnStmt struct{ P Pos; Label string; Value Expr }
 
