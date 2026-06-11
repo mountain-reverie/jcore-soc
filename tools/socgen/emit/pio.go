@@ -9,7 +9,7 @@ import (
 
 // pioStatements builds the system.pio loopback assignments: pi(idx) <= po(idx)
 // for a loopback bit, pi(idx) <= '<const>' for a constant bit. Faithful to
-// generate.clj pio-stmts (statement comments are a P6 concern; skipped).
+// generate.clj pio-stmts.
 func pioStatements(res *elaborate.Resolution) []vhdl.Stmt {
 	stmts := make([]vhdl.Stmt, 0, len(res.Pio))
 	for _, b := range res.Pio {
@@ -20,6 +20,9 @@ func pioStatements(res *elaborate.Resolution) []vhdl.Stmt {
 			rhs = &vhdl.BasicLit{Kind: vhdl.CHARLIT, Value: "'" + strconv.Itoa(*b.Const) + "'"}
 		} else {
 			rhs = &vhdl.Ident{Name: "po(" + idx + ")"}
+		}
+		if b.Name != "" {
+			stmts = append(stmts, &vhdl.Comment{Text: b.Name})
 		}
 		stmts = append(stmts, concAssign(pi, rhs))
 	}

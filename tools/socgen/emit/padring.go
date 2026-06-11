@@ -82,6 +82,11 @@ func pinAttrs(res *elaborate.Resolution) []vhdl.Decl {
 	for _, name := range declOrder {
 		out = append(out, &vhdl.AttributeDecl{Name: name, TypeMark: "string"})
 	}
+	// `-- Pin attributes` leads the per-pin specifications (after the bare
+	// `attribute <name> : string;` declarations); omitted when there are none.
+	if len(specs) > 0 {
+		out = append(out, &vhdl.Comment{Text: "Pin attributes"})
+	}
 	for _, s := range specs {
 		out = append(out, &vhdl.AttributeSpec{
 			Name: s.name, Entities: []string{s.ent}, EntityClass: vhdl.SIGNAL,

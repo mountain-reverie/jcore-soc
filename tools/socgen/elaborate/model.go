@@ -78,6 +78,7 @@ type IRQOrAssign struct {
 type PioBit struct {
 	Idx   int
 	Const *int
+	Name  string // pio group name (e.g. "led"); "" for a constant entry
 }
 
 // PortLoc is a boundary signal that becomes an entity port (P5c).

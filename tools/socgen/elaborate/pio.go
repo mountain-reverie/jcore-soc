@@ -20,7 +20,7 @@ func resolvePio(d *design.Design) []PioBit {
 	var bits []PioBit
 	for _, e := range d.System.Pio {
 		for idx := e.Lo; idx <= e.Hi; idx++ {
-			b := PioBit{Idx: idx}
+			b := PioBit{Idx: idx, Name: e.Name}
 			if e.Const != nil {
 				c := *e.Const
 				b.Const = &c
