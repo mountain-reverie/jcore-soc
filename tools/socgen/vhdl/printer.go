@@ -861,7 +861,7 @@ func printSubprogramSpec(b *strings.Builder, isProc, pure, impure bool, desig st
 	}
 	b.WriteString(desig)
 	if len(params) > 0 {
-		b.WriteByte('(')
+		b.WriteString(" (")
 		for i, prm := range params {
 			if i > 0 {
 				b.WriteString("; ")
