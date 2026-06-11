@@ -142,3 +142,65 @@ func TestAttrSpecAlign(t *testing.T) {
 		t.Errorf("round-trip AST changed")
 	}
 }
+
+func TestCommentDeclAndStmt(t *testing.T) {
+	arch := &ArchitectureBody{
+		Name:   "a",
+		Entity: "e",
+		Decls:  []Decl{&Comment{Text: "a decl comment"}},
+		Stmts:  []Stmt{&Comment{Text: "a stmt comment"}},
+	}
+	f := &DesignFile{Units: []DesignUnit{arch}}
+	out := Print(f)
+	if !strings.Contains(out, "\n    -- a decl comment\n") {
+		t.Errorf("decl comment not rendered at 4-space indent:\n%s", out)
+	}
+	if !strings.Contains(out, "\n    -- a stmt comment\n") {
+		t.Errorf("stmt comment not rendered at 4-space indent:\n%s", out)
+	}
+}
+
+func TestCommentNestedIndent(t *testing.T) {
+	// A comment that is a sequential stmt inside an if-then prints at the
+	// deeper indent, like its sibling return: architecture body (4) +
+	// subprogram body (4) + if-then (4) = 12 spaces.
+	arch := &ArchitectureBody{
+		Name: "a", Entity: "e",
+		Decls: []Decl{&SubprogramBody{
+			Designator: "f", ReturnMark: "t",
+			Stmts: []Stmt{&IfStmt{
+				Cond: &Ident{Name: "c"},
+				Then: []Stmt{
+					&Comment{Text: "range"},
+					&ReturnStmt{Value: &Ident{Name: "x"}},
+				},
+			}},
+		}},
+	}
+	out := Print(&DesignFile{Units: []DesignUnit{arch}})
+	if !strings.Contains(out, "\n            -- range\n") {
+		t.Errorf("nested comment not at 12-space indent:\n%s", out)
+	}
+}
+
+func TestCommentRoundTrip(t *testing.T) {
+	// Parsing drops comments; printing a parsed (comment-free) AST stays stable.
+	src := "architecture a of e is\n" +
+		"    -- a comment\n" +
+		"    signal s : bit;\n" +
+		"begin\n" +
+		"    -- another\n" +
+		"    s <= '0';\n" +
+		"end architecture;"
+	f1, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
+	if errs != nil {
+		t.Fatalf("parse: %v", errs)
+	}
+	f2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(Print(f1)))
+	if errs2 != nil {
+		t.Fatalf("reparse: %v", errs2)
+	}
+	if !equalAST(f1, f2) {
+		t.Errorf("round-trip AST changed")
+	}
+}

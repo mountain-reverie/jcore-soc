@@ -174,6 +174,9 @@ func printArchitectureBody(b *strings.Builder, n *ArchitectureBody) {
 // printStmt prints a concurrent (or, later, sequential) statement.
 func printStmt(b *strings.Builder, s Stmt, indent string) {
 	switch n := s.(type) {
+	case *Comment:
+		b.WriteString("-- ")
+		b.WriteString(n.Text)
 	case *ConcurrentSignalAssign:
 		if n.Label != "" {
 			b.WriteString(n.Label)
@@ -734,6 +737,9 @@ func printAttributeSpecAligned(b *strings.Builder, n *AttributeSpec, width int) 
 
 func printDecl(b *strings.Builder, d Decl, indent string) {
 	switch n := d.(type) {
+	case *Comment:
+		b.WriteString("-- ")
+		b.WriteString(n.Text)
 	case *ConstantDecl:
 		b.WriteString("constant ")
 		b.WriteString(strings.Join(n.Names, ", "))
