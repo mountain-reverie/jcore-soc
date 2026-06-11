@@ -163,7 +163,7 @@ func printArchitectureBody(b *strings.Builder, n *ArchitectureBody) {
 		printStmt(b, s, indentUnit)
 		b.WriteByte('\n')
 	}
-	b.WriteString("end architecture;\n")
+	b.WriteString("end;\n")
 }
 
 // printStmt prints a concurrent (or, later, sequential) statement.
@@ -630,7 +630,7 @@ func printEntityDecl(b *strings.Builder, n *EntityDecl) {
 			b.WriteByte('\n')
 		}
 	}
-	b.WriteString("end entity;\n")
+	b.WriteString("end;\n")
 }
 
 func printInterfaceList(b *strings.Builder, decls []*InterfaceDecl, indent string) {
@@ -812,7 +812,7 @@ func printDecl(b *strings.Builder, d Decl, indent string) {
 		if n.IsProcedure {
 			b.WriteString("end procedure;")
 		} else {
-			b.WriteString("end function;")
+			b.WriteString("end;")
 		}
 	}
 }
