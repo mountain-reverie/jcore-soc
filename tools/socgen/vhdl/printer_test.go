@@ -70,6 +70,25 @@ func TestPrintInstMapPositional(t *testing.T) {
 	}
 }
 
+func TestPrintSubprogramSpace(t *testing.T) {
+	src := "package p is\n  function f (a : std_logic) return std_logic;\nend package;"
+	f1, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
+	if errs != nil {
+		t.Fatalf("parse: %v", errs)
+	}
+	out := Print(f1)
+	if !strings.Contains(out, "function f (a : std_logic) return std_logic") {
+		t.Errorf("subprogram should print `f (a …)` with a space before (:\n%s", out)
+	}
+	f2, errs2 := ParseFile(NewFileSet(), "t.vhd", []byte(out))
+	if errs2 != nil {
+		t.Fatalf("reparse: %v", errs2)
+	}
+	if !equalAST(f1, f2) {
+		t.Errorf("round-trip AST changed")
+	}
+}
+
 func TestPrintReparseStable(t *testing.T) {
 	srcs := []string{
 		"package p is\n  constant C : integer := 5;\nend package;",
