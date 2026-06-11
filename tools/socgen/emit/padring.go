@@ -155,5 +155,6 @@ func PadRing(res *elaborate.Resolution) (string, error) {
 			&vhdl.ArchitectureBody{Name: "impl", Entity: "pad_ring", Decls: decls, Stmts: stmts},
 		},
 	}
+	sortInstMaps(df)
 	return withBanner(vhdl.Print(df)), errors.Join(errs...)
 }

@@ -105,6 +105,7 @@ func Devices(res *elaborate.Resolution) (string, error) {
 			&vhdl.ArchitectureBody{Name: "impl", Entity: "devices", Decls: decls, Stmts: stmts},
 		},
 	}
+	sortInstMaps(df)
 	return withBanner(vhdl.Print(df)), errors.Join(errs...)
 }
 
