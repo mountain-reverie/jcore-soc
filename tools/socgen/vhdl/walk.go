@@ -170,6 +170,8 @@ func Walk(v Visitor, node Node) {
 		}
 	case *NullStmt:
 		// no child nodes
+	case *Comment:
+		// no child nodes (emit-only leaf; implements both Decl and Stmt)
 	case *ReturnStmt:
 		if n.Value != nil {
 			Walk(v, n.Value)
