@@ -62,3 +62,9 @@ func TestSocVhdComplete(t *testing.T) {
 	soc, _ := SoC(res)
 	assertFileEqual(t, soc, filepath.Join(os.Getenv("JCORE_SOC_ROOT"), "targets/boards/mimas_v2/soc.vhd"))
 }
+
+func TestDevicesVhdComplete(t *testing.T) {
+	res := loadMimas(t)
+	dev, _ := Devices(res)
+	assertFileEqual(t, dev, filepath.Join(os.Getenv("JCORE_SOC_ROOT"), "targets/boards/mimas_v2/devices.vhd"))
+}
