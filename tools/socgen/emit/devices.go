@@ -105,7 +105,7 @@ func Devices(res *elaborate.Resolution) (string, error) {
 			&vhdl.ArchitectureBody{Name: "impl", Entity: "devices", Decls: decls, Stmts: stmts},
 		},
 	}
-	return vhdl.Print(df), errors.Join(errs...)
+	return withBanner(vhdl.Print(df)), errors.Join(errs...)
 }
 
 // instStmt builds one `label : entity work.<entity>(<arch>) generic map(...) port map(...)`.

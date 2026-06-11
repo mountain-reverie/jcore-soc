@@ -66,7 +66,7 @@ func SoC(res *elaborate.Resolution) (string, error) {
 			&vhdl.ArchitectureBody{Name: "impl", Entity: "soc", Decls: decls, Stmts: stmts},
 		},
 	}
-	return vhdl.Print(df), errors.Join(errs...)
+	return withBanner(vhdl.Print(df)), errors.Join(errs...)
 }
 
 // zeroOutSignals returns the sorted names of signals carrying a synthetic
