@@ -20,6 +20,17 @@ func render(t *testing.T, e vhdl.Expr) string {
 	return vhdl.Print(df)
 }
 
+func TestEmitValueBoolUppercase(t *testing.T) {
+	tr := emitValue(design.Value{Kind: design.KindBool, Bool: true})
+	if id, ok := tr.(*vhdl.Ident); !ok || id.Name != "TRUE" {
+		t.Errorf("emitValue(true) = %#v, want Ident TRUE", tr)
+	}
+	fl := emitValue(design.Value{Kind: design.KindBool, Bool: false})
+	if id, ok := fl.(*vhdl.Ident); !ok || id.Name != "FALSE" {
+		t.Errorf("emitValue(false) = %#v, want Ident FALSE", fl)
+	}
+}
+
 func TestEmitValue(t *testing.T) {
 	cases := []struct {
 		name string
@@ -28,7 +39,7 @@ func TestEmitValue(t *testing.T) {
 	}{
 		{"expr", design.Value{Kind: design.KindExpr, Text: "num_cs-1"}, "num_cs-1"},
 		{"int", design.Value{Kind: design.KindInt, Int: 8}, "8"},
-		{"bool", design.Value{Kind: design.KindBool, Bool: true}, "true"},
+		{"bool", design.Value{Kind: design.KindBool, Bool: true}, "TRUE"},
 		{"str", design.Value{Kind: design.KindStr, Text: "hello"}, `"hello"`},
 		{"float_whole", design.Value{Kind: design.KindFloat, Float: 1.0}, "1.0"},
 		{"float_frac", design.Value{Kind: design.KindFloat, Float: 1.5}, "1.5"},

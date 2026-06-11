@@ -32,9 +32,9 @@ func emitValue(v design.Value) vhdl.Expr {
 		return &vhdl.BasicLit{Kind: vhdl.REAL, Value: vhdlReal(v.Float)}
 	case design.KindBool:
 		if v.Bool {
-			return &vhdl.Ident{Name: "true"}
+			return &vhdl.Ident{Name: "TRUE"}
 		}
-		return &vhdl.Ident{Name: "false"}
+		return &vhdl.Ident{Name: "FALSE"}
 	case design.KindStr:
 		return &vhdl.BasicLit{Kind: vhdl.STRINGLIT, Value: `"` + vhdlEscape(v.Text) + `"`}
 	case design.KindMap:
