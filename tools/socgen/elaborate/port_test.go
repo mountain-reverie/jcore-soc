@@ -116,12 +116,13 @@ func TestClkRstHeuristicSkips(t *testing.T) {
 	if g := gsOf(ps2, "clk"); g != "myclk" {
 		t.Errorf("explicit clk mapping = %q, want myclk", g)
 	}
-	// skip when target already used by another port's global-signal
+	// skip when target already used by another NON-EXPLICIT port's global-signal
 	e3 := ent(iport("clk", "in"), iport("x", "in"))
 	spec3 := map[string]design.Value{"x": {Kind: design.KindExpr, Text: "clk_sys"}}
 	ps3 := buildPorts("d", e3, spec3, nil, noMerge, false)
-	if g := gsOf(ps3, "clk"); g == "clk_sys" {
-		t.Errorf("clk must not map to clk_sys when already used by another port")
+	// x is explicit and holds clk_sys; clk is still allowed to map to clk_sys
+	if g := gsOf(ps3, "clk"); g != "clk_sys" {
+		t.Errorf("clk should map to clk_sys even when an explicit port holds clk_sys, got %q", g)
 	}
 }
 
@@ -191,6 +192,34 @@ func TestBuildPortsSocPortIRQ(t *testing.T) {
 	pe := buildPorts("gpio0", e, spec, nil, noMerge, false)
 	if g := gsOf(pe, "irq"); g != "wired_irq" {
 		t.Errorf("explicit irq mapping = %q, want wired_irq", g)
+	}
+}
+
+func TestClkRstHeuristicCaseAndExplicit(t *testing.T) {
+	// Uppercase RST on a non-explicit port maps to reset (case-insensitive).
+	e := ent(iport("RST", "in"), iport("db", "in"))
+	ps := buildPorts("d", e, map[string]design.Value{}, nil, nil, true)
+	var rst *ResolvedPort
+	for _, p := range ps {
+		if p.Name == "RST" {
+			rst = p
+		}
+	}
+	if rst == nil || rst.GlobalSignal != "reset" {
+		t.Errorf("RST should map to reset, got %+v", rst)
+	}
+	// An explicit port already holding clk_sys must NOT block clk->clk_sys.
+	e2 := ent(iport("clk", "in"), iport("clk_ddr", "in"))
+	spec := map[string]design.Value{"clk_ddr": {Kind: design.KindExpr, Text: "clk_sys"}}
+	ps2 := buildPorts("d", e2, spec, nil, nil, true)
+	var clk *ResolvedPort
+	for _, p := range ps2 {
+		if p.Name == "clk" {
+			clk = p
+		}
+	}
+	if clk == nil || clk.GlobalSignal != "clk_sys" {
+		t.Errorf("clk should map to clk_sys despite explicit clk_ddr, got %+v", clk)
 	}
 }
 
