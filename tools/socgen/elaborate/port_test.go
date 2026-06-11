@@ -239,6 +239,24 @@ func TestGenericEnv(t *testing.T) {
 	}
 }
 
+func TestBuildPortsBareDefaultMergeKey(t *testing.T) {
+	e := ent(iport("reset_i", "in"), iport("event_o", "out"))
+	merge := map[string]string{"ddr_clkgen_reset_i": "pll_rst"}
+	ps := buildPorts("ddr_clkgen", e, map[string]design.Value{}, nil, merge, true, nil)
+	got := map[string]string{}
+	for _, p := range ps {
+		got[p.Name] = p.GlobalSignal
+	}
+	// prefixed merge key (ddr_clkgen_reset_i) -> pll_rst.
+	if got["reset_i"] != "pll_rst" {
+		t.Errorf("reset_i should merge to pll_rst, got %q", got["reset_i"])
+	}
+	// no merge entry for ddr_clkgen_event_o -> bare boundary name event_o.
+	if got["event_o"] != "event_o" {
+		t.Errorf("event_o should be the bare name, got %q", got["event_o"])
+	}
+}
+
 func TestBuildPortsConstantValue(t *testing.T) {
 	lib := buildLib(t, `package p is constant NULL_X : integer := 0; end package;`,
 		`entity e is port (cin : in integer); end entity;`)

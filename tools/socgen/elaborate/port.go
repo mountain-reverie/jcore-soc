@@ -73,10 +73,16 @@ func buildPorts(devName string, ent *iface.Entity, spec map[string]design.Value,
 					local = p.LocalName
 				}
 				def := devName + "_" + local
-				if bareDefault {
-					def = local
+				switch {
+				case bareDefault && mergeName(def, merge) != def:
+					// merge-signals keys are devName_portName (Clojure assign-device-ports);
+					// the prefixed key matched a merge entry (e.g. ddr_clkgen_reset_i -> pll_rst).
+					rp.GlobalSignal = mergeName(def, merge)
+				case bareDefault:
+					rp.GlobalSignal = mergeName(local, merge) // bare boundary name (cpus global_ports)
+				default:
+					rp.GlobalSignal = mergeName(def, merge) // device: devName_port (+ merge)
 				}
-				rp.GlobalSignal = mergeName(def, merge)
 			}
 		case v.Kind == design.KindMap:
 			switch {
