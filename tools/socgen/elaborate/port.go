@@ -44,7 +44,7 @@ func reverseMerge(m map[string][]string) map[string]string {
 // bareDefault is true (top/padring-entities), an unmapped port's default
 // global-signal is the bare port id so it unifies with shared/device signals;
 // otherwise (devices) it is devName_portName.
-func buildPorts(devName string, ent *iface.Entity, spec map[string]design.Value, env map[string]int64, merge map[string]string, bareDefault bool) []*ResolvedPort {
+func buildPorts(devName string, ent *iface.Entity, spec map[string]design.Value, env map[string]int64, merge map[string]string, bareDefault bool, lib *iface.Library) []*ResolvedPort {
 	if ent == nil {
 		return nil
 	}
@@ -88,8 +88,15 @@ func buildPorts(devName string, ent *iface.Entity, spec map[string]design.Value,
 				rp.Kind = KindDeferred // bist-chain/ring-bus/open? — recorded only (P4d/P5)
 			}
 		case v.Kind == design.KindExpr:
-			rp.GlobalSignal = mergeName(v.Text, merge) // explicit signal name
-			explicit[p.Name] = true
+			if lib != nil && lib.IsConstant(v.Text) {
+				// A library constant: rendered as the identifier actual, not
+				// declared as a signal (faithful to the Clojure :value classification).
+				vv := v
+				rp.Kind, rp.Value = KindValue, &vv
+			} else {
+				rp.GlobalSignal = mergeName(v.Text, merge) // explicit signal name
+				explicit[p.Name] = true
+			}
 		default: // KindInt/KindStr/KindFloat/KindBool -> constant value
 			vv := v
 			rp.Kind, rp.Value = KindValue, &vv

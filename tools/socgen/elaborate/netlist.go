@@ -41,7 +41,7 @@ func Elaborate(b *board.Board) (*Resolution, error) {
 				spec[k] = v
 			}
 		}
-		dev.Ports = buildPorts(dev.Name, rc.Entity, spec, env, merge, false)
+		dev.Ports = buildPorts(dev.Name, rc.Entity, spec, env, merge, false, b.Library)
 		if i < len(b.Design.Devices) {
 			markNamedIRQPorts(dev.Ports, b.Design.Devices[i].IRQ)
 		}

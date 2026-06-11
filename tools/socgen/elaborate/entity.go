@@ -28,7 +28,7 @@ func resolveEntity(kind, name string, te *design.TopEntity, lib *iface.Library, 
 	ent, arch, cfg, _, err := chooseArch(ctx, entityName, te.Architecture, te.Configuration, lib)
 	re.Entity, re.ArchName, re.Config = ent, arch, cfg
 	env := genericEnv(te.Generics, ent)
-	re.Ports = buildPorts(name, ent, te.Ports, env, merge, true)
+	re.Ports = buildPorts(name, ent, te.Ports, env, merge, true, lib)
 	return re, err
 }
 

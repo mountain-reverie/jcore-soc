@@ -25,7 +25,7 @@ func TestBuildPorts(t *testing.T) {
 		"open_port": {Kind: design.KindMap, Map: map[string]any{"open?": true}}, // KindDeferred
 		// en unspecified -> autogen dev0_en -> merged_en
 	}
-	ports := buildPorts("dev0", e, spec, env, merge, false)
+	ports := buildPorts("dev0", e, spec, env, merge, false, nil)
 	byName := map[string]*ResolvedPort{}
 	for _, p := range ports {
 		byName[p.Name] = p
@@ -72,16 +72,16 @@ func TestBuildPortsBareVsPrefixed(t *testing.T) {
 	noSpec := map[string]design.Value{}
 	noMerge := map[string]string{}
 
-	dev := buildPorts("aic0", e, noSpec, nil, noMerge, false) // device default: prefixed
+	dev := buildPorts("aic0", e, noSpec, nil, noMerge, false, nil) // device default: prefixed
 	if g := gsOf(dev, "cpu0_event_o"); g != "aic0_cpu0_event_o" {
 		t.Errorf("device default = %q, want aic0_cpu0_event_o", g)
 	}
-	top := buildPorts("cpus", e, noSpec, nil, noMerge, true) // top/padring default: bare
+	top := buildPorts("cpus", e, noSpec, nil, noMerge, true, nil) // top/padring default: bare
 	if g := gsOf(top, "cpu0_event_o"); g != "cpu0_event_o" {
 		t.Errorf("top default = %q, want bare cpu0_event_o", g)
 	}
 	spec := map[string]design.Value{"cpu0_event_o": {Kind: design.KindExpr, Text: "wired_sig"}}
-	tw := buildPorts("cpus", e, spec, nil, noMerge, true) // explicit mapping still wins
+	tw := buildPorts("cpus", e, spec, nil, noMerge, true, nil) // explicit mapping still wins
 	if g := gsOf(tw, "cpu0_event_o"); g != "wired_sig" {
 		t.Errorf("explicit mapping = %q, want wired_sig", g)
 	}
@@ -90,7 +90,7 @@ func TestBuildPortsBareVsPrefixed(t *testing.T) {
 func TestClkRstHeuristic(t *testing.T) {
 	noMerge := map[string]string{}
 	e := ent(iport("clk", "in"), iport("rst", "in"), iport("data", "out"))
-	ps := buildPorts("aic0", e, map[string]design.Value{}, nil, noMerge, false)
+	ps := buildPorts("aic0", e, map[string]design.Value{}, nil, noMerge, false, nil)
 	if g := gsOf(ps, "clk"); g != "clk_sys" {
 		t.Errorf("clk -> %q, want clk_sys", g)
 	}
@@ -106,20 +106,20 @@ func TestClkRstHeuristicSkips(t *testing.T) {
 	noMerge := map[string]string{}
 	// ambiguous: two clk-ish ports -> skip both
 	e := ent(iport("clk", "in"), iport("clk_bus", "in"))
-	ps := buildPorts("d", e, map[string]design.Value{}, nil, noMerge, false)
+	ps := buildPorts("d", e, map[string]design.Value{}, nil, noMerge, false, nil)
 	if gsOf(ps, "clk") == "clk_sys" || gsOf(ps, "clk_bus") == "clk_sys" {
 		t.Errorf("ambiguous clk ports must not map to clk_sys: %q / %q", gsOf(ps, "clk"), gsOf(ps, "clk_bus"))
 	}
 	// explicit mapping wins over heuristic
 	spec := map[string]design.Value{"clk": {Kind: design.KindExpr, Text: "myclk"}}
-	ps2 := buildPorts("d", ent(iport("clk", "in")), spec, nil, noMerge, false)
+	ps2 := buildPorts("d", ent(iport("clk", "in")), spec, nil, noMerge, false, nil)
 	if g := gsOf(ps2, "clk"); g != "myclk" {
 		t.Errorf("explicit clk mapping = %q, want myclk", g)
 	}
 	// skip when target already used by another NON-EXPLICIT port's global-signal
 	e3 := ent(iport("clk", "in"), iport("x", "in"))
 	spec3 := map[string]design.Value{"x": {Kind: design.KindExpr, Text: "clk_sys"}}
-	ps3 := buildPorts("d", e3, spec3, nil, noMerge, false)
+	ps3 := buildPorts("d", e3, spec3, nil, noMerge, false, nil)
 	// x is explicit and holds clk_sys; clk is still allowed to map to clk_sys
 	if g := gsOf(ps3, "clk"); g != "clk_sys" {
 		t.Errorf("clk should map to clk_sys even when an explicit port holds clk_sys, got %q", g)
@@ -134,7 +134,7 @@ func TestBuildPortsSocPortNames(t *testing.T) {
 	eg := &iface.Entity{Name: "pio", Ports: []*iface.Port{
 		{Name: "p_o", Dir: "out", Type: iface.TypeRef{Mark: "std_logic"}, GlobalName: "po"},
 	}}
-	pg := buildPorts("gpio0", eg, noSpec, nil, noMerge, false)
+	pg := buildPorts("gpio0", eg, noSpec, nil, noMerge, false, nil)
 	if g := gsOf(pg, "p_o"); g != "po" {
 		t.Errorf("p_o GlobalName apply = %q, want bare po", g)
 	}
@@ -143,13 +143,13 @@ func TestBuildPortsSocPortNames(t *testing.T) {
 	el := &iface.Entity{Name: "spi", Ports: []*iface.Port{
 		{Name: "spi_clk", Dir: "out", Type: iface.TypeRef{Mark: "std_logic"}, LocalName: "clk"},
 	}}
-	pl := buildPorts("flash", el, noSpec, nil, noMerge, false)
+	pl := buildPorts("flash", el, noSpec, nil, noMerge, false, nil)
 	if g := gsOf(pl, "spi_clk"); g != "flash_clk" {
 		t.Errorf("spi_clk LocalName apply = %q, want flash_clk", g)
 	}
 
 	// LocalName under bareDefault (top/padring): the suffix is used bare (no prefix).
-	plb := buildPorts("flash", el, noSpec, nil, noMerge, true)
+	plb := buildPorts("flash", el, noSpec, nil, noMerge, true, nil)
 	if g := gsOf(plb, "spi_clk"); g != "clk" {
 		t.Errorf("spi_clk LocalName bare = %q, want clk", g)
 	}
@@ -159,7 +159,7 @@ func TestBuildPortsSocPortNames(t *testing.T) {
 		{Name: "p_o", Dir: "out", Type: iface.TypeRef{Mark: "std_logic"}, GlobalName: "po"},
 	}}
 	spec := map[string]design.Value{"p_o": {Kind: design.KindExpr, Text: "explicit_sig"}}
-	pe := buildPorts("gpio0", ee, spec, nil, noMerge, false)
+	pe := buildPorts("gpio0", ee, spec, nil, noMerge, false, nil)
 	if g := gsOf(pe, "p_o"); g != "explicit_sig" {
 		t.Errorf("explicit mapping = %q, want explicit_sig (wins over GlobalName)", g)
 	}
@@ -175,7 +175,7 @@ func TestBuildPortsSocPortIRQ(t *testing.T) {
 		{Name: "irq", Dir: "out", Type: iface.TypeRef{Mark: "std_logic"}, IRQ: true},
 		{Name: "p_o", Dir: "out", Type: iface.TypeRef{Mark: "std_logic"}},
 	}}
-	ports := buildPorts("gpio0", e, noSpec, nil, noMerge, false)
+	ports := buildPorts("gpio0", e, noSpec, nil, noMerge, false, nil)
 	byName := map[string]*ResolvedPort{}
 	for _, p := range ports {
 		byName[p.Name] = p
@@ -189,7 +189,7 @@ func TestBuildPortsSocPortIRQ(t *testing.T) {
 
 	// An explicit design mapping on the irq port wins (stays its explicit signal).
 	spec := map[string]design.Value{"irq": {Kind: design.KindExpr, Text: "wired_irq"}}
-	pe := buildPorts("gpio0", e, spec, nil, noMerge, false)
+	pe := buildPorts("gpio0", e, spec, nil, noMerge, false, nil)
 	if g := gsOf(pe, "irq"); g != "wired_irq" {
 		t.Errorf("explicit irq mapping = %q, want wired_irq", g)
 	}
@@ -198,7 +198,7 @@ func TestBuildPortsSocPortIRQ(t *testing.T) {
 func TestClkRstHeuristicCaseAndExplicit(t *testing.T) {
 	// Uppercase RST on a non-explicit port maps to reset (case-insensitive).
 	e := ent(iport("RST", "in"), iport("db", "in"))
-	ps := buildPorts("d", e, map[string]design.Value{}, nil, nil, true)
+	ps := buildPorts("d", e, map[string]design.Value{}, nil, nil, true, nil)
 	var rst *ResolvedPort
 	for _, p := range ps {
 		if p.Name == "RST" {
@@ -211,7 +211,7 @@ func TestClkRstHeuristicCaseAndExplicit(t *testing.T) {
 	// An explicit port already holding clk_sys must NOT block clk->clk_sys.
 	e2 := ent(iport("clk", "in"), iport("clk_ddr", "in"))
 	spec := map[string]design.Value{"clk_ddr": {Kind: design.KindExpr, Text: "clk_sys"}}
-	ps2 := buildPorts("d", e2, spec, nil, nil, true)
+	ps2 := buildPorts("d", e2, spec, nil, nil, true, nil)
 	var clk *ResolvedPort
 	for _, p := range ps2 {
 		if p.Name == "clk" {
@@ -236,5 +236,20 @@ func TestGenericEnv(t *testing.T) {
 	}
 	if env["n"] != 3 { // device override
 		t.Errorf("n = %d want 3", env["n"])
+	}
+}
+
+func TestBuildPortsConstantValue(t *testing.T) {
+	lib := buildLib(t, `package p is constant NULL_X : integer := 0; end package;`,
+		`entity e is port (cin : in integer); end entity;`)
+	e, ok := lib.Entity("e")
+	if !ok {
+		t.Fatal("entity e not found")
+	}
+	spec := map[string]design.Value{"cin": {Kind: design.KindExpr, Text: "NULL_X"}}
+	ps := buildPorts("d", e, spec, nil, nil, true, lib)
+	if len(ps) != 1 || ps[0].Kind != KindValue || ps[0].GlobalSignal != "" ||
+		ps[0].Value == nil || ps[0].Value.Text != "NULL_X" {
+		t.Errorf("constant-valued port should be KindValue carrying NULL_X, no GlobalSignal: %+v", ps[0])
 	}
 }

@@ -139,4 +139,14 @@ func (l *Library) Configuration(name string) (*Configuration, bool) {
 	return c, ok
 }
 
+// IsConstant reports whether name is a constant declared in a parsed package.
+// A nil library (a failed board load) reports false.
+func (l *Library) IsConstant(name string) bool {
+	if l == nil {
+		return false
+	}
+	s, ok := l.index[lower(name)]
+	return ok && s.Kind == "constant"
+}
+
 func lower(s string) string { return strings.ToLower(s) }
