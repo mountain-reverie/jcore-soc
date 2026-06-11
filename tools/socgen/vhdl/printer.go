@@ -5,6 +5,10 @@ import (
 	"strings"
 )
 
+// indentUnit is one level of VHDL indentation. The vmagic/soc_gen golden uses 4
+// spaces per level.
+const indentUnit = "    "
+
 // Print renders a DesignFile back to canonical VHDL text.
 func Print(f *DesignFile) string {
 	var b strings.Builder
@@ -60,12 +64,12 @@ func printConfigurationDecl(b *strings.Builder, n *ConfigurationDecl) {
 	b.WriteString(n.Entity)
 	b.WriteString(" is\n")
 	for _, u := range n.Decls {
-		b.WriteString("  use ")
+		b.WriteString(indentUnit + "use ")
 		b.WriteString(strings.Join(u.Names, ", "))
 		b.WriteString(";\n")
 	}
 	if n.Block != nil {
-		printBlockConfig(b, n.Block, "  ")
+		printBlockConfig(b, n.Block, indentUnit)
 	}
 	b.WriteString("end configuration;\n")
 }
@@ -77,16 +81,16 @@ func printBlockConfig(b *strings.Builder, n *BlockConfig, indent string) {
 	b.WriteByte('\n')
 	for _, u := range n.Uses {
 		b.WriteString(indent)
-		b.WriteString("  use ")
+		b.WriteString(indentUnit + "use ")
 		b.WriteString(strings.Join(u.Names, ", "))
 		b.WriteString(";\n")
 	}
 	for _, it := range n.Items {
 		switch c := it.(type) {
 		case *BlockConfig:
-			printBlockConfig(b, c, indent+"  ")
+			printBlockConfig(b, c, indent+indentUnit)
 		case *ComponentConfig:
-			printComponentConfig(b, c, indent+"  ")
+			printComponentConfig(b, c, indent+indentUnit)
 		}
 	}
 	b.WriteString(indent)
@@ -102,12 +106,12 @@ func printComponentConfig(b *strings.Builder, n *ComponentConfig, indent string)
 	b.WriteByte('\n')
 	if n.Binding != nil {
 		b.WriteString(indent)
-		b.WriteString("  ")
+		b.WriteString(indentUnit)
 		printBindingIndication(b, n.Binding)
 		b.WriteString(";\n")
 	}
 	if n.Block != nil {
-		printBlockConfig(b, n.Block, indent+"  ")
+		printBlockConfig(b, n.Block, indent+indentUnit)
 	}
 	b.WriteString(indent)
 	b.WriteString("end for;\n")
@@ -149,14 +153,14 @@ func printArchitectureBody(b *strings.Builder, n *ArchitectureBody) {
 	b.WriteString(n.Entity)
 	b.WriteString(" is\n")
 	for _, d := range n.Decls {
-		b.WriteString("  ")
-		printDecl(b, d, "  ")
+		b.WriteString(indentUnit)
+		printDecl(b, d, indentUnit)
 		b.WriteByte('\n')
 	}
 	b.WriteString("begin\n")
 	for _, s := range n.Stmts {
-		b.WriteString("  ")
-		printStmt(b, s, "  ")
+		b.WriteString(indentUnit)
+		printStmt(b, s, indentUnit)
 		b.WriteByte('\n')
 	}
 	b.WriteString("end architecture;\n")
@@ -235,8 +239,8 @@ func printStmt(b *strings.Builder, s Stmt, indent string) {
 		b.WriteString(" generate\n")
 		for _, d := range n.Decls {
 			b.WriteString(indent)
-			b.WriteString("  ")
-			printDecl(b, d, indent+"  ")
+			b.WriteString(indentUnit)
+			printDecl(b, d, indent+indentUnit)
 			b.WriteByte('\n')
 		}
 		if len(n.Decls) > 0 {
@@ -245,8 +249,8 @@ func printStmt(b *strings.Builder, s Stmt, indent string) {
 		}
 		for _, s := range n.Stmts {
 			b.WriteString(indent)
-			b.WriteString("  ")
-			printStmt(b, s, indent+"  ")
+			b.WriteString(indentUnit)
+			printStmt(b, s, indent+indentUnit)
 			b.WriteByte('\n')
 		}
 		b.WriteString(indent)
@@ -273,16 +277,16 @@ func printStmt(b *strings.Builder, s Stmt, indent string) {
 		b.WriteByte('\n')
 		for _, d := range n.Decls {
 			b.WriteString(indent)
-			b.WriteString("  ")
-			printDecl(b, d, indent+"  ")
+			b.WriteString(indentUnit)
+			printDecl(b, d, indent+indentUnit)
 			b.WriteByte('\n')
 		}
 		b.WriteString(indent)
 		b.WriteString("begin\n")
 		for _, s := range n.Stmts {
 			b.WriteString(indent)
-			b.WriteString("  ")
-			printStmt(b, s, indent+"  ")
+			b.WriteString(indentUnit)
+			printStmt(b, s, indent+indentUnit)
 			b.WriteByte('\n')
 		}
 		b.WriteString(indent)
@@ -345,7 +349,7 @@ func printStmt(b *strings.Builder, s Stmt, indent string) {
 		b.WriteString(" is\n")
 		for _, alt := range n.Alts {
 			b.WriteString(indent)
-			b.WriteString("  when ")
+			b.WriteString(indentUnit + "when ")
 			for i, c := range alt.Choices {
 				if i > 0 {
 					b.WriteString(" | ")
@@ -353,7 +357,7 @@ func printStmt(b *strings.Builder, s Stmt, indent string) {
 				printExpr(b, c)
 			}
 			b.WriteString(" =>\n")
-			printSeqStmts(b, alt.Stmts, indent+"  ")
+			printSeqStmts(b, alt.Stmts, indent+indentUnit)
 		}
 		b.WriteString(indent)
 		b.WriteString("end case;")
@@ -516,8 +520,8 @@ func printStmt(b *strings.Builder, s Stmt, indent string) {
 func printSeqStmts(b *strings.Builder, stmts []Stmt, indent string) {
 	for _, s := range stmts {
 		b.WriteString(indent)
-		b.WriteString("  ")
-		printStmt(b, s, indent+"  ")
+		b.WriteString(indentUnit)
+		printStmt(b, s, indent+indentUnit)
 		b.WriteByte('\n')
 	}
 }
@@ -580,8 +584,8 @@ func printPackageDecl(b *strings.Builder, n *PackageDecl) {
 	b.WriteString(n.Name)
 	b.WriteString(" is\n")
 	for _, d := range n.Decls {
-		b.WriteString("  ")
-		printDecl(b, d, "  ")
+		b.WriteString(indentUnit)
+		printDecl(b, d, indentUnit)
 		b.WriteByte('\n')
 	}
 	b.WriteString("end package;\n")
@@ -592,8 +596,8 @@ func printPackageBody(b *strings.Builder, n *PackageBody) {
 	b.WriteString(n.Name)
 	b.WriteString(" is\n")
 	for _, d := range n.Decls {
-		b.WriteString("  ")
-		printDecl(b, d, "  ")
+		b.WriteString(indentUnit)
+		printDecl(b, d, indentUnit)
 		b.WriteByte('\n')
 	}
 	b.WriteString("end package body;\n")
@@ -604,25 +608,25 @@ func printEntityDecl(b *strings.Builder, n *EntityDecl) {
 	b.WriteString(n.Name)
 	b.WriteString(" is\n")
 	if len(n.Generics) > 0 {
-		b.WriteString("  generic (\n")
-		printInterfaceList(b, n.Generics, "    ")
-		b.WriteString("  );\n")
+		b.WriteString(indentUnit + "generic (\n")
+		printInterfaceList(b, n.Generics, indentUnit+indentUnit)
+		b.WriteString(indentUnit + ");\n")
 	}
 	if len(n.Ports) > 0 {
-		b.WriteString("  port (\n")
-		printInterfaceList(b, n.Ports, "    ")
-		b.WriteString("  );\n")
+		b.WriteString(indentUnit + "port (\n")
+		printInterfaceList(b, n.Ports, indentUnit+indentUnit)
+		b.WriteString(indentUnit + ");\n")
 	}
 	for _, d := range n.Decls {
-		b.WriteString("  ")
-		printDecl(b, d, "  ")
+		b.WriteString(indentUnit)
+		printDecl(b, d, indentUnit)
 		b.WriteByte('\n')
 	}
 	if len(n.Stmts) > 0 {
 		b.WriteString("begin\n")
 		for _, s := range n.Stmts {
-			b.WriteString("  ")
-			printStmt(b, s, "  ")
+			b.WriteString(indentUnit)
+			printStmt(b, s, indentUnit)
 			b.WriteByte('\n')
 		}
 	}
@@ -797,8 +801,8 @@ func printDecl(b *strings.Builder, d Decl, indent string) {
 		b.WriteString(" is\n")
 		for _, d := range n.Decls {
 			b.WriteString(indent)
-			b.WriteString("  ")
-			printDecl(b, d, indent+"  ")
+			b.WriteString(indentUnit)
+			printDecl(b, d, indent+indentUnit)
 			b.WriteByte('\n')
 		}
 		b.WriteString(indent)
@@ -855,7 +859,7 @@ func printTypeDecl(b *strings.Builder, n *TypeDecl, indent string) {
 		b.WriteString("record\n")
 		for _, f := range def.Fields {
 			b.WriteString(indent)
-			b.WriteString("  ")
+			b.WriteString(indentUnit)
 			b.WriteString(strings.Join(f.Names, ", "))
 			b.WriteString(" : ")
 			printSubtypeIndication(b, f.SubtypeMark, f.Constraint)
@@ -883,17 +887,17 @@ func printComponentDecl(b *strings.Builder, n *ComponentDecl, indent string) {
 	b.WriteString(" is\n")
 	if len(n.Generics) > 0 {
 		b.WriteString(indent)
-		b.WriteString("  generic (\n")
-		printInterfaceList(b, n.Generics, indent+"    ")
+		b.WriteString(indentUnit + "generic (\n")
+		printInterfaceList(b, n.Generics, indent+indentUnit+indentUnit)
 		b.WriteString(indent)
-		b.WriteString("  );\n")
+		b.WriteString(indentUnit + ");\n")
 	}
 	if len(n.Ports) > 0 {
 		b.WriteString(indent)
-		b.WriteString("  port (\n")
-		printInterfaceList(b, n.Ports, indent+"    ")
+		b.WriteString(indentUnit + "port (\n")
+		printInterfaceList(b, n.Ports, indent+indentUnit+indentUnit)
 		b.WriteString(indent)
-		b.WriteString("  );\n")
+		b.WriteString(indentUnit + ");\n")
 	}
 	b.WriteString(indent)
 	b.WriteString("end component;")
