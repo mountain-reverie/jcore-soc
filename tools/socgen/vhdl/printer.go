@@ -152,9 +152,14 @@ func printArchitectureBody(b *strings.Builder, n *ArchitectureBody) {
 	b.WriteString(" of ")
 	b.WriteString(n.Entity)
 	b.WriteString(" is\n")
+	attrW := attrSpecAlignWidth(n.Decls)
 	for _, d := range n.Decls {
 		b.WriteString(indentUnit)
-		printDecl(b, d, indentUnit)
+		if spec, ok := d.(*AttributeSpec); ok {
+			printAttributeSpecAligned(b, spec, attrW)
+		} else {
+			printDecl(b, d, indentUnit)
+		}
 		b.WriteByte('\n')
 	}
 	b.WriteString("begin\n")
@@ -693,6 +698,40 @@ func printInterfaceDecl(b *strings.Builder, d *InterfaceDecl) {
 	}
 }
 
+// attrSpecPre is the pre-colon text of an attribute spec.
+func attrSpecPre(s *AttributeSpec) string {
+	return "attribute " + s.Name + " of " + strings.Join(s.Entities, ", ")
+}
+
+// attrSpecAlignWidth returns the max pre-colon width over the *AttributeSpec
+// decls (0 if none), used to column-align their `:` (vmagic style).
+func attrSpecAlignWidth(decls []Decl) int {
+	w := 0
+	for _, d := range decls {
+		if s, ok := d.(*AttributeSpec); ok {
+			if n := len(attrSpecPre(s)); n > w {
+				w = n
+			}
+		}
+	}
+	return w
+}
+
+// printAttributeSpecAligned prints an attribute spec, right-padding the pre-colon
+// text to width (no padding added when width <= len(pre); pass 0 for unaligned output).
+func printAttributeSpecAligned(b *strings.Builder, n *AttributeSpec, width int) {
+	pre := attrSpecPre(n)
+	b.WriteString(pre)
+	if width > len(pre) {
+		b.WriteString(strings.Repeat(" ", width-len(pre)))
+	}
+	b.WriteString(" : ")
+	b.WriteString(n.EntityClass.String())
+	b.WriteString(" is ")
+	printExpr(b, n.Value)
+	b.WriteByte(';')
+}
+
 func printDecl(b *strings.Builder, d Decl, indent string) {
 	switch n := d.(type) {
 	case *ConstantDecl:
@@ -745,15 +784,7 @@ func printDecl(b *strings.Builder, d Decl, indent string) {
 		b.WriteString(n.TypeMark)
 		b.WriteByte(';')
 	case *AttributeSpec:
-		b.WriteString("attribute ")
-		b.WriteString(n.Name)
-		b.WriteString(" of ")
-		b.WriteString(strings.Join(n.Entities, ", "))
-		b.WriteString(" : ")
-		b.WriteString(n.EntityClass.String())
-		b.WriteString(" is ")
-		printExpr(b, n.Value)
-		b.WriteByte(';')
+		printAttributeSpecAligned(b, n, 0)
 	case *AliasDecl:
 		b.WriteString("alias ")
 		b.WriteString(n.Name)
