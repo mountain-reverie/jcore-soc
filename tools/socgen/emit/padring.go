@@ -53,7 +53,7 @@ func pinAttrs(res *elaborate.Resolution) []vhdl.Decl {
 		port := "pin_" + p.Net
 		if p.Pad != "" {
 			hasLoc = true
-			specs = append(specs, spec{"loc", port, vhdlEscape(p.Pad)})
+			specs = append(specs, spec{"loc", port, vhdlEscape(lc(p.Pad))})
 		}
 		// other attrs (sorted) excluding buffer generics and loc.
 		var keys []string

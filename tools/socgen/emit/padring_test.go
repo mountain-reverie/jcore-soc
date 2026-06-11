@@ -70,6 +70,23 @@ func renderDeclsForTest(t *testing.T, decls []vhdl.Decl) string {
 }
 func containsStr(s, sub string) bool { return strings.Contains(s, sub) }
 
+func TestPinAttrsLocLowercase(t *testing.T) {
+	res := &elaborate.Resolution{
+		Pins: []*elaborate.ResolvedPin{
+			{Net: "clk_100mhz", Pad: "V10", PadDir: "in"},
+		},
+	}
+	out := renderDeclsForTest(t, pinAttrs(res))
+	want := `attribute loc of pin_clk_100mhz : signal is "v10";`
+	if !containsStr(out, want) {
+		t.Errorf("pinAttrs loc should be lowercased, missing %q:\n%s", want, out)
+	}
+	no := `"V10"`
+	if containsStr(out, no) {
+		t.Errorf("pinAttrs loc must NOT be uppercase %q:\n%s", no, out)
+	}
+}
+
 func TestPadRingAssembly(t *testing.T) {
 	res := &elaborate.Resolution{
 		Pins: []*elaborate.ResolvedPin{
