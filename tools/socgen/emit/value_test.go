@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/j-core/jcore-soc/tools/socgen/design"
+	"github.com/j-core/jcore-soc/tools/socgen/elaborate"
 	"github.com/j-core/jcore-soc/tools/socgen/vhdl"
 )
 
@@ -18,6 +19,33 @@ func render(t *testing.T, e vhdl.Expr) string {
 		}},
 	}}
 	return vhdl.Print(df)
+}
+
+func TestNumVal(t *testing.T) {
+	ptr := func(i int) *int { return &i }
+	slv := func(l, r int) *elaborate.ResolvedType {
+		return &elaborate.ResolvedType{Mark: "std_logic_vector", Left: ptr(l), Right: ptr(r), Dir: "downto"}
+	}
+	cases := []struct {
+		name string
+		typ  *elaborate.ResolvedType
+		v    design.Value
+		want string
+	}{
+		{"slv32-zero", slv(31, 0), design.Value{Kind: design.KindInt, Int: 0}, `:= x"00000000"`},
+		{"slv4-zero", slv(3, 0), design.Value{Kind: design.KindInt, Int: 0}, `:= x"0"`},
+		{"slv5-zero-binary", slv(4, 0), design.Value{Kind: design.KindInt, Int: 0}, `:= "00000"`},
+		{"slv48-nonzero", slv(47, 0), design.Value{Kind: design.KindInt, Int: 0xabcd}, `:= x"00000000abcd"`},
+		{"integer-decimal", &elaborate.ResolvedType{Mark: "integer"}, design.Value{Kind: design.KindInt, Int: 7}, `:= 7`},
+		{"stdlogic-zero", &elaborate.ResolvedType{Mark: "std_logic"}, design.Value{Kind: design.KindInt, Int: 0}, `:= '0'`},
+		{"stdlogic-one", &elaborate.ResolvedType{Mark: "std_logic"}, design.Value{Kind: design.KindInt, Int: 1}, `:= '1'`},
+	}
+	for _, c := range cases {
+		got := render(t, numVal(c.typ, c.v))
+		if !strings.Contains(got, c.want) {
+			t.Errorf("%s: numVal rendered %q, want contains %q", c.name, got, c.want)
+		}
+	}
 }
 
 func TestEmitValueBoolUppercase(t *testing.T) {
