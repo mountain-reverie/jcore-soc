@@ -2,6 +2,7 @@ package emit
 
 import (
 	"errors"
+	"slices"
 	"sort"
 
 	"github.com/j-core/jcore-soc/tools/socgen/design"
@@ -53,7 +54,7 @@ func Devices(res *elaborate.Resolution) (string, error) {
 	stmts := make([]vhdl.Stmt, 0, len(res.Devices)+1)
 	// Device instantiations, alphabetical by label (golden order), led by the
 	// `Instantiate devices` section comment.
-	devs := append(res.Devices[:0:0], res.Devices...) // fresh backing array; sort must not mutate res.Devices
+	devs := slices.Clone(res.Devices) // copy so the sort does not mutate res.Devices
 	sort.Slice(devs, func(i, j int) bool { return lc(devs[i].Name) < lc(devs[j].Name) })
 	insts := make([]vhdl.Stmt, 0, len(devs))
 	for _, dev := range devs {
