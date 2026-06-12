@@ -30,14 +30,20 @@ func loadMimas(t *testing.T) *elaborate.Resolution {
 }
 
 // assertFileEqual compares got to the golden file byte-for-byte, reporting the
-// first differing line with a little context.
+// first differing line.
 func assertFileEqual(t *testing.T, got, goldenPath string) {
 	t.Helper()
 	wantB, err := os.ReadFile(goldenPath)
 	if err != nil {
 		t.Fatalf("read golden %s: %v", goldenPath, err)
 	}
-	want := string(wantB)
+	assertEqualStr(t, got, string(wantB), goldenPath)
+}
+
+// assertEqualStr compares got to want byte-for-byte, reporting the first
+// differing line. label names the comparison target in failure messages.
+func assertEqualStr(t *testing.T, got, want, label string) {
+	t.Helper()
 	if got == want {
 		return
 	}
@@ -51,11 +57,11 @@ func assertFileEqual(t *testing.T, got, goldenPath string) {
 			w = wl[i]
 		}
 		if g != w {
-			t.Errorf("%s differs at line %d:\n got:  %q\n want: %q", goldenPath, i+1, g, w)
+			t.Errorf("%s differs at line %d:\n got:  %q\n want: %q", label, i+1, g, w)
 			return
 		}
 	}
-	t.Errorf("%s differs (length %d vs %d)", goldenPath, len(got), len(want))
+	t.Errorf("%s differs (length %d vs %d)", label, len(got), len(want))
 }
 
 func TestSocVhdComplete(t *testing.T) {
@@ -68,6 +74,33 @@ func TestDevicesVhdComplete(t *testing.T) {
 	res := loadMimas(t)
 	dev, _ := Devices(res)
 	assertFileEqual(t, dev, filepath.Join(os.Getenv("JCORE_SOC_ROOT"), "targets/boards/mimas_v2/devices.vhd"))
+}
+
+func TestPadRingComplete(t *testing.T) {
+	res := loadMimas(t)
+	pad, _ := PadRing(res)
+
+	// Focused IOBUF port-order check (clear failure if the sort gate regresses):
+	// the dq0 IOBUF keeps the primitive's declared order I, T, O, IO (golden),
+	// not alphabetical I, IO, O, T.
+	iobuf := "            I => dr_data_o.dqo(0),\n" +
+		"            T => dr_data_o.dq_outen(0),\n" +
+		"            O => dr_data_i.dqi(0),\n" +
+		"            IO => pin_mcb3_dram_dq0"
+	if !strings.Contains(pad, iobuf) {
+		t.Errorf("dq0 IOBUF ports not in golden order I,T,O,IO:\n got pad_ring excerpt around the IOBUF, want:\n%s", iobuf)
+	}
+
+	// Whole-file byte-exact modulo one known intentional divergence (P6b-3f):
+	// the golden declares a vestigial, undriven/unread `signal clock_locked1`
+	// (reset_gen.clock_locked1 is tied to '1', so the signal is never driven or
+	// read). We omit it — the cleaner netlist. Drop that one line before compare.
+	goldenB, err := os.ReadFile(filepath.Join(os.Getenv("JCORE_SOC_ROOT"), "targets/boards/mimas_v2/pad_ring.vhd"))
+	if err != nil {
+		t.Fatalf("read golden: %v", err)
+	}
+	golden := strings.Replace(string(goldenB), "    signal clock_locked1 : std_logic;\n", "", 1)
+	assertEqualStr(t, pad, golden, "pad_ring.vhd (modulo clock_locked1)")
 }
 
 func TestPadRingComments(t *testing.T) {
