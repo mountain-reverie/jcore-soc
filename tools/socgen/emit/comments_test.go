@@ -206,6 +206,27 @@ func pinPortLines(s string) string {
 	return b.String()
 }
 
+// TestDevicesMicroboardRtcDivergence documents + guards an intentional divergence
+// from microboard's committed golden: the aic outputs rtc_sec/rtc_nsec are write-only
+// (driven, unread), so removeWriteOnlySignals prunes them — we emit `=> open` and do
+// NOT declare the signals, whereas the (stale) golden declares them. Same class as the
+// pad_ring clock_locked1 divergence (P6b-3f). Keeps our prune behavior consistent with
+// mimas (which the golden also prunes).
+func TestDevicesMicroboardRtcDivergence(t *testing.T) {
+	res := loadBoard(t, "microboard")
+	dev, _ := Devices(res)
+	for _, w := range []string{"rtc_nsec => open", "rtc_sec => open"} {
+		if !strings.Contains(dev, w) {
+			t.Errorf("devices.vhd: expected pruned write-only output %q (intentional divergence)", w)
+		}
+	}
+	for _, bad := range []string{"signal rtc_nsec :", "signal rtc_sec :", "rtc_nsec => rtc_nsec", "rtc_sec => rtc_sec"} {
+		if strings.Contains(dev, bad) {
+			t.Errorf("devices.vhd: %q present — the rtc write-only signals must stay pruned (see doc)", bad)
+		}
+	}
+}
+
 func TestDevicesMicroboardVectorConsts(t *testing.T) {
 	res := loadBoard(t, "microboard")
 	dev, _ := Devices(res)
