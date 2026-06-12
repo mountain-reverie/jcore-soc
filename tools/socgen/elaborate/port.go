@@ -103,6 +103,13 @@ func buildPorts(devName string, ent *iface.Entity, spec map[string]design.Value,
 				rp.GlobalSignal = mergeName(v.Text, merge) // explicit signal name
 				explicit[p.Name] = true
 			}
+		// KindInt/KindStr/KindFloat/KindBool: a constant value override. The port's
+		// actual is the literal; it gets NO GlobalSignal, so no signal is declared
+		// for it (the rule that keeps soc.vhd/devices.vhd byte-exact). This is the
+		// intentional divergence behind the golden's lone vestigial
+		// `signal clock_locked1` (reset_gen.clock_locked1 is tied to '1', undriven
+		// and unread): we deliberately omit that dead net — the cleaner netlist
+		// (FPGA & ASIC synthesis discard it; lint would flag it). See P6b-3f.
 		default: // KindInt/KindStr/KindFloat/KindBool -> constant value
 			vv := v
 			rp.Kind, rp.Value = KindValue, &vv
