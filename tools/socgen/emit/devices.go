@@ -79,7 +79,7 @@ func Devices(res *elaborate.Resolution) (string, error) {
 				vecAgg = vectorNumbersAgg(vn)
 			}
 		}
-		insts = append(insts, instStmt(lc(dev.Name), ent, arch, dev.Generics, dev.Ports, busLit, subst, portOv, vecAgg))
+		insts = append(insts, instStmt(lc(dev.Name), ent, arch, dev.Generics, dev.GenericTypes, dev.Ports, busLit, subst, portOv, vecAgg))
 	}
 	if len(insts) > 0 {
 		stmts = append(stmts, &vhdl.Comment{Text: "Instantiate devices"})
@@ -123,7 +123,7 @@ func Devices(res *elaborate.Resolution) (string, error) {
 // participant, "" otherwise; it wires the device's KindDataBus ports to the
 // shared devs_bus_i/o arrays. subst remaps a port's global signal to its
 // DevicesExtra alias (sig_<name>) when present.
-func instStmt(label, entity, arch string, generics map[string]design.Value, ports []*elaborate.ResolvedPort, busLit string, subst map[string]string, portOv map[string]string, vecAgg vhdl.Expr) *vhdl.InstantiationStmt {
+func instStmt(label, entity, arch string, generics map[string]design.Value, genTypes map[string]*elaborate.ResolvedType, ports []*elaborate.ResolvedPort, busLit string, subst map[string]string, portOv map[string]string, vecAgg vhdl.Expr) *vhdl.InstantiationStmt {
 	inst := &vhdl.InstantiationStmt{Label: label, UnitKind: vhdl.ENTITY, Unit: "work." + lc(entity), Arch: arch}
 	// Build the generic map as (formal, actual) pairs so an injected expression
 	// generic (vector_numbers, a vhdl.Expr rather than a design.Value) can be
@@ -134,7 +134,10 @@ func instStmt(label, entity, arch string, generics map[string]design.Value, port
 	}
 	gens := make([]genPair, 0, len(generics)+1)
 	for _, g := range sortedKeys(generics) {
-		gens = append(gens, genPair{formal: lc(g), actual: emitValue(generics[g])})
+		// genTypes is keyed by entity generic name; a generic absent from the entity
+		// (caught as ErrUnknownGeneric upstream) yields nil → numVal falls back to emitValue.
+		key := lc(g)
+		gens = append(gens, genPair{formal: key, actual: numVal(genTypes[key], generics[g])})
 	}
 	if vecAgg != nil {
 		gens = append(gens, genPair{formal: "vector_numbers", actual: vecAgg})

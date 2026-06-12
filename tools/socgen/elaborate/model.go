@@ -142,6 +142,9 @@ type ResolvedDevice struct {
 	BaseAddr *uint64                 // carried, validated in P4e
 	Ports    []*ResolvedPort
 	DataBus  bool // entity carries a cpu data-bus port pair (set by classifyDataBus)
+	// GenericTypes maps lower-cased entity generic name → resolved type, for typed
+	// value rendering (e.g. a std_logic_vector generic constant → sized hex literal).
+	GenericTypes map[string]*ResolvedType
 }
 
 // ResolvedEntity is a resolved top-entity or padring-entity: an entity bound to

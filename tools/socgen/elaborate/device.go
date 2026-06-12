@@ -116,7 +116,15 @@ func resolveDevices(d *design.Design, classes map[string]*ResolvedClass) ([]*Res
 			u := uint64(*dev.BaseAddr)
 			base = &u
 		}
-		out = append(out, &ResolvedDevice{Name: name, Class: dev.Class, Generics: generics, BaseAddr: base})
+		var gtypes map[string]*ResolvedType
+		if rc != nil && rc.Entity != nil {
+			env := genericEnv(generics, rc.Entity)
+			gtypes = make(map[string]*ResolvedType, len(rc.Entity.Generics))
+			for _, g := range rc.Entity.Generics {
+				gtypes[lc(g.Name)] = resolveType(g.Type.Mark, g.Type.Constraint, env)
+			}
+		}
+		out = append(out, &ResolvedDevice{Name: name, Class: dev.Class, Generics: generics, BaseAddr: base, GenericTypes: gtypes})
 	}
 	return out, errors.Join(errs...)
 }
