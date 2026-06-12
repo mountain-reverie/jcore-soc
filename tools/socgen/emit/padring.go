@@ -3,7 +3,9 @@ package emit
 import (
 	"errors"
 	"sort"
+	"strconv"
 
+	"github.com/j-core/jcore-soc/tools/socgen/design"
 	"github.com/j-core/jcore-soc/tools/socgen/elaborate"
 	"github.com/j-core/jcore-soc/tools/socgen/vhdl"
 )
@@ -17,8 +19,76 @@ var bufferGenericAttrs = map[string]bool{"iostandard": true, "drive": true, "sle
 // sortedPins returns res.Pins sorted by net for deterministic emission.
 func sortedPins(res *elaborate.Resolution) []*elaborate.ResolvedPin {
 	ps := append([]*elaborate.ResolvedPin(nil), res.Pins...)
-	sort.Slice(ps, func(i, j int) bool { return ps[i].Net < ps[j].Net })
+	sort.Slice(ps, func(i, j int) bool { return natLess(ps[i].Net, ps[j].Net) })
 	return ps
+}
+
+// natLess reports whether net a sorts before net b, replicating the original
+// soc_gen `:sort` key (devices.clj): the key is
+//
+//	[firstWord, inner]
+//
+// where firstWord is the leading non-digit run, and inner is [firstWord, num, net]
+// when the net has a first digit run (num = its integer value) or [net] when the
+// net has no digits. Keys compare firstWord first, then inner element-by-element
+// (Clojure vector order: a shorter vector that is a prefix of the other is less).
+// This sorts e.g. "lpddr_a9" < "lpddr_a10" (first number differs) while keeping
+// "mcb3_dram_a10" < "mcb3_dram_a2" (first number "3" ties, so the full net breaks
+// the tie bytewise) — matching both the microboard and mimas golden orderings.
+func natLess(a, b string) bool {
+	fa, na, ia, hasA := pinSortKey(a)
+	fb, nb, ib, hasB := pinSortKey(b)
+	if fa != fb {
+		return fa < fb
+	}
+	// inner vectors: [firstWord, num, net] (digits) or [firstWord] (no digits).
+	// Element 0 is firstWord, already equal. Element 1 is num (only present when
+	// the net has digits); a vector without it is the shorter prefix → less.
+	if hasA != hasB {
+		// Shorter inner vector ([firstWord]) is a Clojure-prefix → less. So a<b
+		// iff a has no digits (its key is the prefix of b's [firstWord, num, net]).
+		return !hasA
+	}
+	if !hasA { // neither has digits; inner is [firstWord] == [firstWord]
+		return false
+	}
+	if na != nb {
+		return na < nb
+	}
+	return ia < ib // element 2: the full net, bytewise
+}
+
+// pinSortKey returns the original soc_gen sort components for a net: firstWord (the
+// leading non-digit run), the integer value of the first digit run and the full net
+// (when present), and whether the net contains a digit run.
+func pinSortKey(s string) (firstWord string, num int64, net string, hasDigit bool) {
+	i := 0
+	for i < len(s) && (s[i] < '0' || s[i] > '9') {
+		i++
+	}
+	firstWord = s[:i]
+	if i >= len(s) {
+		return firstWord, 0, s, false
+	}
+	j := i
+	for j < len(s) && s[j] >= '0' && s[j] <= '9' {
+		j++
+	}
+	n, _ := strconv.ParseInt(s[i:j], 10, 64)
+	return firstWord, n, s, true
+}
+
+// attrText renders a pad-attribute value as its VHDL string content: a bool as
+// lowercase "true"/"false", an int as its digits, otherwise the verbatim text.
+func attrText(v design.Value) string {
+	switch v.Kind {
+	case design.KindBool:
+		return strconv.FormatBool(v.Bool)
+	case design.KindInt:
+		return strconv.FormatInt(v.Int, 10)
+	default: // KindExpr / KindStr — verbatim text; the caller wraps it in VHDL quotes
+		return v.Text
+	}
 }
 
 // padRingPorts builds the pad_ring entity ports: one `pin_<net> : <dir> std_logic`
@@ -71,7 +141,7 @@ func pinAttrs(res *elaborate.Resolution) []vhdl.Decl {
 				seen[lk] = true
 				otherDecls = append(otherDecls, lk)
 			}
-			specs = append(specs, spec{lk, port, vhdlEscape(p.Attrs[k].Text)})
+			specs = append(specs, spec{lk, port, vhdlEscape(attrText(p.Attrs[k]))})
 		}
 	}
 	declOrder := otherDecls

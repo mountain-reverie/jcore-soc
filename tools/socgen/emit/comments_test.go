@@ -11,16 +11,16 @@ import (
 	"github.com/j-core/jcore-soc/tools/socgen/elaborate"
 )
 
-// loadMimas loads + elaborates mimas_v2 for the gated comment tests, or skips.
-func loadMimas(t *testing.T) *elaborate.Resolution {
+// loadBoard loads + elaborates a board for the gated parity tests, or skips.
+func loadBoard(t *testing.T, name string) *elaborate.Resolution {
 	t.Helper()
 	root := os.Getenv("JCORE_SOC_ROOT")
 	if root == "" {
 		t.Skip("JCORE_SOC_ROOT not set")
 	}
-	b, lerr := board.Load(root, "mimas_v2")
+	b, lerr := board.Load(root, name)
 	if b == nil || b.Design == nil {
-		t.Fatalf("board.Load: %v", lerr)
+		t.Fatalf("board.Load(%q): %v", name, lerr)
 	}
 	res, rerr := elaborate.Elaborate(b)
 	if rerr != nil {
@@ -28,6 +28,8 @@ func loadMimas(t *testing.T) *elaborate.Resolution {
 	}
 	return res
 }
+
+func loadMimas(t *testing.T) *elaborate.Resolution { return loadBoard(t, "mimas_v2") }
 
 // assertFileEqual compares got to the golden file byte-for-byte, reporting the
 // first differing line.
@@ -153,4 +155,53 @@ func TestPadRingComments(t *testing.T) {
 // pi renders the loopback assignment line for bit i as the printer emits it.
 func pi(i int) string {
 	return "    pi(" + strconv.Itoa(i) + ") <= po(" + strconv.Itoa(i) + ");"
+}
+
+func TestPadRingMicroboardFormatting(t *testing.T) {
+	res := loadBoard(t, "microboard")
+	pad, _ := PadRing(res)
+	goldenB, err := os.ReadFile(filepath.Join(os.Getenv("JCORE_SOC_ROOT"), "targets/boards/microboard/pad_ring.vhd"))
+	if err != nil {
+		t.Fatalf("read golden: %v", err)
+	}
+	golden := string(goldenB)
+
+	// Known divergence (out of scope here): the eth_rx_clk/eth_tx_clk pads are
+	// bare-`signal:` pins whose target nets (eth_rx_clk_i/eth_tx_clk_i) are driven
+	// only by the `eth_clk_bufs` padring-entity, which does not yet map to an
+	// entity. With no real driver, elaborate drops those two pads as `:missing`
+	// (resolvePins/signalIsReal), so they are absent from the emitted entity ports
+	// and attribute specs. Excise their golden lines before the byte-exact block
+	// compare — same idiom as TestPadRingComplete's clock_locked1 excision — so the
+	// test exercises this task's emit fixes (natural pin sort + bool attr values)
+	// over every pad that does elaborate, without depending on that upstream gap.
+	for _, line := range []string{
+		"        pin_eth_rx_clk : in std_logic;\n",
+		"        pin_eth_tx_clk : in std_logic;\n",
+		"    attribute loc      of pin_eth_rx_clk  : signal is \"l15\";\n",
+		"    attribute loc      of pin_eth_tx_clk  : signal is \"h17\";\n",
+	} {
+		golden = strings.Replace(golden, line, "", 1)
+	}
+
+	// Entity pin-port block: `        pin_<net> : <dir> std_logic;` lines, in order.
+	// Byte-exact and order-exact: verifies the natural pin sort (pin_lpddr_a9 before
+	// pin_lpddr_a10) over the full set of elaborated pads.
+	assertEqualStr(t, pinPortLines(pad), pinPortLines(golden), "microboard pad_ring pin-port block")
+	// Attribute-spec block: `    attribute <name> of <ent> : signal is "<v>";` lines.
+	// Verifies bool pad-attribute values render as "true" (was "") and two-column
+	// alignment, byte-exact and in order.
+	assertEqualStr(t, attrLines(pad), attrLines(golden), "microboard pad_ring attribute block")
+}
+
+// pinPortLines returns the `        pin_… : … std_logic;` entity-port lines, joined in order.
+func pinPortLines(s string) string {
+	var b strings.Builder
+	for _, ln := range strings.Split(s, "\n") {
+		if strings.HasPrefix(ln, "        pin_") && strings.Contains(ln, " std_logic") {
+			b.WriteString(ln)
+			b.WriteByte('\n')
+		}
+	}
+	return b.String()
 }
