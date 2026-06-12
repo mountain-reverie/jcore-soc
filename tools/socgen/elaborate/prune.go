@@ -31,6 +31,16 @@ func markNamedIRQPorts(ports []*ResolvedPort, irq *design.IRQRef) {
 // signal, the referencing device ports have GlobalSignal cleared so emit renders
 // the port actual as `open` (Clojure relies on the signal-map miss returning nil →
 // open; clearing the port is the equivalent Go effect).
+//
+// DIVERGENCE (microboard): the aic outputs rtc_sec/rtc_nsec are write-only on every
+// board (the aic drives them; no device reads them — emac's rtc_sec_i inputs are tied
+// to constants). mimas's golden prunes them (we match); microboard's *committed* golden
+// instead declares `signal rtc_sec/rtc_nsec` and wires them — a stale artifact (same
+// class as the pad_ring clock_locked1 divergence, P6b-3f), almost certainly predating
+// this prune. We deliberately keep the consistent prune (the cleaner netlist: the dead
+// aic RTC logic is synthesised away either way, and `=> open` is the canonical
+// unused-output idiom). So microboard devices.vhd intentionally lacks those two signal
+// declarations vs its golden. See TestDevicesMicroboardRtcDivergence.
 func removeWriteOnlySignals(res *Resolution, d *design.Design) {
 	zero := make(map[string]bool, len(d.ZeroSignals))
 	for _, z := range d.ZeroSignals {
