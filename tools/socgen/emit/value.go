@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/j-core/jcore-soc/tools/socgen/design"
+	"github.com/j-core/jcore-soc/tools/socgen/elaborate"
 	"github.com/j-core/jcore-soc/tools/socgen/vhdl"
 )
 
@@ -42,6 +43,60 @@ func emitValue(v design.Value) vhdl.Expr {
 	default: // KindExpr — verbatim VHDL text
 		return &vhdl.Ident{Name: v.Text}
 	}
+}
+
+// numVal renders an integer constant on a formal of resolved type t, faithful to
+// vmagic num-val: a std_logic scalar 0/1 → '0'/'1'; an array type (std_logic_vector
+// etc.) with concrete width → a sized hex/binary literal (numLiteral); anything else
+// falls back to emitValue (decimal integers, strings, exprs).
+func numVal(t *elaborate.ResolvedType, v design.Value) vhdl.Expr {
+	if v.Kind == design.KindInt && t != nil {
+		if t.Mark == stdLogicMark && (v.Int == 0 || v.Int == 1) {
+			val := "'0'"
+			if v.Int == 1 {
+				val = "'1'"
+			}
+			return &vhdl.BasicLit{Kind: vhdl.CHARLIT, Value: val}
+		}
+		if vectorMark(t.Mark) && t.Left != nil && t.Right != nil {
+			w := *t.Left - *t.Right
+			if w < 0 {
+				w = -w
+			}
+			return numLiteral(w+1, v.Int)
+		}
+	}
+	return emitValue(v)
+}
+
+// numLiteral renders val into a width-bit literal (vmagic num-literal): a hex
+// bit-string when width is a multiple of 4, otherwise a binary string literal;
+// both zero-padded to the type width.
+func numLiteral(width int, val int64) vhdl.Expr {
+	if width%4 == 0 {
+		return &vhdl.BasicLit{Kind: vhdl.STRINGLIT, Value: `x"` + zeroPad(strconv.FormatInt(val, 16), width/4) + `"`}
+	}
+	return &vhdl.BasicLit{Kind: vhdl.STRINGLIT, Value: `"` + zeroPad(strconv.FormatInt(val, 2), width) + `"`}
+}
+
+// zeroPad left-pads s with '0' to width characters, truncating from the left
+// when len(s) > width (matching vmagic zero-pad). s must be a non-negative base-2
+// or base-16 digit string; a leading '-' would be silently truncated.
+func zeroPad(s string, width int) string {
+	if len(s) >= width {
+		return s[len(s)-width:]
+	}
+	return strings.Repeat("0", width-len(s)) + s
+}
+
+// vectorMark reports whether a type mark is an array/vector type whose integer
+// constants render as a sized bit-string (vs an integer scalar → decimal).
+func vectorMark(mark string) bool {
+	switch lc(mark) {
+	case "std_logic_vector", "std_ulogic_vector", "unsigned", "signed", "bit_vector":
+		return true
+	}
+	return false
 }
 
 // vhdlReal formats a float as a VHDL-93 real literal. A VHDL real literal

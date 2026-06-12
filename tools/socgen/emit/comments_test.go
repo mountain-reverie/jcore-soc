@@ -205,3 +205,25 @@ func pinPortLines(s string) string {
 	}
 	return b.String()
 }
+
+func TestDevicesMicroboardVectorConsts(t *testing.T) {
+	res := loadBoard(t, "microboard")
+	dev, _ := Devices(res)
+	// Vector-typed constant PORTS render as sized hex (MB-2), not bare 0.
+	for _, w := range []string{
+		`            dbsys_i_a => x"00000000",`,
+		`            dbsys_i_d => x"00000000",`,
+		`            dbsys_i_we => x"0",`,
+		`            rtc_nsec_i => x"00000000",`,
+		`            rtc_sec_i => x"0000000000000000"`,
+	} {
+		if !strings.Contains(dev, w) {
+			t.Errorf("devices.vhd missing typed port constant:\n%s", w)
+		}
+	}
+	for _, bad := range []string{"dbsys_i_a => 0", "rtc_sec_i => 0", "dbsys_i_we => 0"} {
+		if strings.Contains(dev, bad) {
+			t.Errorf("devices.vhd still has a bare-int port constant: %q", bad)
+		}
+	}
+}
