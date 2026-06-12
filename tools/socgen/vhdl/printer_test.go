@@ -115,19 +115,19 @@ func TestAttrSpecAlign(t *testing.T) {
 	src := "architecture a of e is\n" +
 		"  attribute loc : string;\n" +
 		"  attribute loc of x : signal is \"p1\";\n" +
-		"  attribute loc of pin_long : signal is \"p2\";\n" +
+		"  attribute pulldown of pin_long : signal is \"p2\";\n" +
 		"begin\nend architecture;"
 	f1, errs := ParseFile(NewFileSet(), "t.vhd", []byte(src))
 	if errs != nil {
 		t.Fatalf("parse: %v", errs)
 	}
 	out := Print(f1)
-	// The two specs' colons align: the shorter "attribute loc of x" pre is padded
-	// to the width of "attribute loc of pin_long".
-	want := "    attribute loc of x        : signal is \"p1\";\n" +
-		"    attribute loc of pin_long : signal is \"p2\";\n"
+	// Two columns: the name is padded so `of` aligns (loc -> width of pulldown=8),
+	// the entity is padded so `:` aligns (x -> width of pin_long=8).
+	want := "    attribute loc      of x        : signal is \"p1\";\n" +
+		"    attribute pulldown of pin_long : signal is \"p2\";\n"
 	if !strings.Contains(out, want) {
-		t.Errorf("attribute specs not column-aligned:\n got:\n%s\nwant block:\n%s", out, want)
+		t.Errorf("attribute specs not two-column aligned:\n got:\n%s\nwant block:\n%s", out, want)
 	}
 	// The attribute DECLARATION line is not padded.
 	if !strings.Contains(out, "    attribute loc : string;\n") {

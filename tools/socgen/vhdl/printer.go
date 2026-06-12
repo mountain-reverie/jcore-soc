@@ -152,11 +152,11 @@ func printArchitectureBody(b *strings.Builder, n *ArchitectureBody) {
 	b.WriteString(" of ")
 	b.WriteString(n.Entity)
 	b.WriteString(" is\n")
-	attrW := attrSpecAlignWidth(n.Decls)
+	attrNameW, attrEntW := attrSpecWidths(n.Decls)
 	for _, d := range n.Decls {
 		b.WriteString(indentUnit)
 		if spec, ok := d.(*AttributeSpec); ok {
-			printAttributeSpecAligned(b, spec, attrW)
+			printAttributeSpecAligned(b, spec, attrNameW, attrEntW)
 		} else {
 			printDecl(b, d, indentUnit)
 		}
@@ -701,33 +701,39 @@ func printInterfaceDecl(b *strings.Builder, d *InterfaceDecl) {
 	}
 }
 
-// attrSpecPre is the pre-colon text of an attribute spec.
-func attrSpecPre(s *AttributeSpec) string {
-	return "attribute " + s.Name + " of " + strings.Join(s.Entities, ", ")
-}
-
-// attrSpecAlignWidth returns the max pre-colon width over the *AttributeSpec
-// decls (0 if none), used to column-align their `:` (vmagic style).
-func attrSpecAlignWidth(decls []Decl) int {
-	w := 0
+// attrSpecWidths returns the max attribute-name width and max entity-list width
+// over the *AttributeSpec decls (0,0 if none), for vmagic two-column alignment:
+// `attribute <name padded> of <entities padded> : <class> is <value>;`.
+func attrSpecWidths(decls []Decl) (nameW, entW int) {
 	for _, d := range decls {
 		if s, ok := d.(*AttributeSpec); ok {
-			if n := len(attrSpecPre(s)); n > w {
-				w = n
+			if n := len(s.Name); n > nameW {
+				nameW = n
+			}
+			if e := len(strings.Join(s.Entities, ", ")); e > entW {
+				entW = e
 			}
 		}
 	}
-	return w
+	return nameW, entW
 }
 
-// printAttributeSpecAligned prints an attribute spec, right-padding the pre-colon
-// text to width (no padding added when width <= len(pre); pass 0 for unaligned output).
-func printAttributeSpecAligned(b *strings.Builder, n *AttributeSpec, width int) {
-	pre := attrSpecPre(n)
-	b.WriteString(pre)
-	if width > len(pre) {
-		b.WriteString(strings.Repeat(" ", width-len(pre)))
+// writePadded writes s then right-pads with spaces to width (no-op when width <= len(s)).
+func writePadded(b *strings.Builder, s string, width int) {
+	b.WriteString(s)
+	if width > len(s) {
+		b.WriteString(strings.Repeat(" ", width-len(s)))
 	}
+}
+
+// printAttributeSpecAligned prints an attribute spec, right-padding the name to
+// nameW and the entity list to entW (no padding when width <= len; pass 0,0 for
+// the unaligned default used by the generic printDecl path).
+func printAttributeSpecAligned(b *strings.Builder, n *AttributeSpec, nameW, entW int) {
+	b.WriteString("attribute ")
+	writePadded(b, n.Name, nameW)
+	b.WriteString(" of ")
+	writePadded(b, strings.Join(n.Entities, ", "), entW)
 	b.WriteString(" : ")
 	b.WriteString(n.EntityClass.String())
 	b.WriteString(" is ")
@@ -790,7 +796,7 @@ func printDecl(b *strings.Builder, d Decl, indent string) {
 		b.WriteString(n.TypeMark)
 		b.WriteByte(';')
 	case *AttributeSpec:
-		printAttributeSpecAligned(b, n, 0)
+		printAttributeSpecAligned(b, n, 0, 0)
 	case *AliasDecl:
 		b.WriteString("alias ")
 		b.WriteString(n.Name)
