@@ -2,6 +2,7 @@ package iface
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/j-core/jcore-soc/tools/socgen/vhdl"
 )
@@ -19,10 +20,11 @@ func Extract(files []*vhdl.DesignFile) (*Library, error) {
 	}
 	var errs []error
 	for _, df := range files {
+		uses := fileWorkUses(df)
 		for _, u := range df.Units {
 			switch n := u.(type) {
 			case *vhdl.EntityDecl:
-				errs = append(errs, lib.addEntity(n))
+				errs = append(errs, lib.addEntity(n, uses))
 			case *vhdl.ArchitectureBody:
 				lib.addArchitecture(n)
 			case *vhdl.PackageDecl:
@@ -35,7 +37,7 @@ func Extract(files []*vhdl.DesignFile) (*Library, error) {
 	return lib, errors.Join(errs...)
 }
 
-func (l *Library) addEntity(n *vhdl.EntityDecl) error {
+func (l *Library) addEntity(n *vhdl.EntityDecl, uses []string) error {
 	key := lower(n.Name)
 	var err error
 	if _, dup := l.Entities[key]; dup {
@@ -48,8 +50,34 @@ func (l *Library) addEntity(n *vhdl.EntityDecl) error {
 		Generics:        toGenerics(n.Generics),
 		Ports:           ports,
 		PeripheralBuses: toPeripheralBuses(n.Decls),
+		// copy: fileWorkUses returns one slice per file, shared across its entities.
+		Uses: append([]string(nil), uses...),
 	}
 	return err
+}
+
+// fileWorkUses returns the distinct lower-cased work-package names used by a
+// design file's context clauses, e.g. `use work.ddr_pack.all` -> "ddr_pack".
+func fileWorkUses(df *vhdl.DesignFile) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, c := range df.Context {
+		uc, ok := c.(*vhdl.UseClause)
+		if !ok {
+			continue
+		}
+		for _, n := range uc.Names {
+			parts := strings.Split(n, ".")
+			if len(parts) >= 3 && lower(parts[0]) == "work" {
+				p := lower(parts[1])
+				if !seen[p] {
+					seen[p] = true
+					out = append(out, p)
+				}
+			}
+		}
+	}
+	return out
 }
 
 func (l *Library) addArchitecture(n *vhdl.ArchitectureBody) {

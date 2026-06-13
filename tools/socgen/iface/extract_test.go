@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/j-core/jcore-soc/tools/socgen/internal/errutil"
@@ -280,6 +281,38 @@ func TestExtractDuplicateConfiguration(t *testing.T) {
 	var de *DuplicateError
 	if !errors.As(err, &de) || de.Decl != "configuration" || de.Symbol != "c" {
 		t.Fatalf("DuplicateError = %+v", de)
+	}
+}
+
+func TestEntityUsesAndTypePackages(t *testing.T) {
+	src := "library ieee;\n" +
+		"use work.ddr_pack.all;\n" +
+		"use work.cpu2j0_pack.all;\n" +
+		"entity e1 is port (p : in std_logic); end entity;\n" +
+		"package ddr_pack is\n  type sd_ctrl_t is record f : std_logic; end record;\nend package;\n" +
+		"package ddrc_cnt_pack is\n  type sd_ctrl_t is record f : std_logic; end record;\nend package;"
+	df, errs := vhdl.ParseFile(vhdl.NewFileSet(), "t.vhd", []byte(src))
+	if errs != nil {
+		t.Fatalf("parse: %v", errs)
+	}
+	// The fixture declares sd_ctrl_t in two packages: Extract returns a
+	// best-effort Library alongside a non-fatal ErrDuplicateSymbol (the global
+	// symbol index). That dual declaration is exactly what TypePackages exposes,
+	// so tolerate that error and reject any other.
+	lib, err := Extract([]*vhdl.DesignFile{df})
+	if err != nil && !errors.Is(err, ErrDuplicateSymbol) {
+		t.Fatalf("extract: %v", err)
+	}
+	e, ok := lib.Entity("e1")
+	if !ok {
+		t.Fatal("entity e1 not found")
+	}
+	if !slices.Contains(e.Uses, "ddr_pack") || !slices.Contains(e.Uses, "cpu2j0_pack") {
+		t.Errorf("e1.Uses = %v, want ddr_pack + cpu2j0_pack", e.Uses)
+	}
+	pkgs := lib.TypePackages("sd_ctrl_t")
+	if len(pkgs) != 2 || pkgs[0] != "ddr_pack" || pkgs[1] != "ddrc_cnt_pack" {
+		t.Errorf("TypePackages(sd_ctrl_t) = %v, want [ddr_pack ddrc_cnt_pack]", pkgs)
 	}
 }
 

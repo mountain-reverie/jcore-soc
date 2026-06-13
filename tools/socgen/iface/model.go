@@ -1,6 +1,7 @@
 package iface
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/j-core/jcore-soc/tools/socgen/vhdl"
@@ -28,6 +29,7 @@ type Entity struct {
 	Generics        []*Generic
 	Ports           []*Port
 	PeripheralBuses []*PeripheralBus
+	Uses            []string // lower-cased work packages from this entity's file context (P6 MB-5)
 }
 
 // PeripheralBus is an entity `group <name> : peripheral_bus(<ports>)` declaration:
@@ -132,6 +134,23 @@ func (l *Library) TypePackage(name string) (string, bool) {
 		return "", false
 	}
 	return s.Package, true
+}
+
+// TypePackages returns all work packages that declare the named type/subtype,
+// sorted (empty if none). Unlike TypePackage (last-indexed wins), this exposes
+// the full set so callers can disambiguate a type declared in multiple packages.
+func (l *Library) TypePackages(name string) []string {
+	var out []string
+	for _, p := range l.Packages {
+		for _, te := range p.Types {
+			if lower(te.Name) == lower(name) {
+				out = append(out, p.Name)
+				break
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 func (l *Library) Configuration(name string) (*Configuration, bool) {
