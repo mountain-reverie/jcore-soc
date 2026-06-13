@@ -73,8 +73,17 @@ func SoC(res *elaborate.Resolution) (string, error) {
 	return withBanner(vhdl.Print(df)), errors.Join(errs...)
 }
 
-// zeroOutSignals returns the sorted names of signals carrying a synthetic
-// "zero"-context driver (set by applyZeroSignals) — driven to their type's zero.
+// zeroOutSignals returns the names of zero-context global signals, sorted
+// alphabetically for deterministic output.
+//
+// DIVERGENCE (order): golden emits the zero-out concurrent assignments in the
+// Clojure global-signals map-insertion order (not alphabetical). Concurrent-
+// statement order is semantically irrelevant in VHDL (reordering is bit-identical
+// in simulation and synthesis), so we keep a stable alphabetical order. mimas's
+// zero-signals are alphabetical in golden (so it matches); microboard's are not (a
+// cosmetic, non-byte-exact difference — moot, as microboard can't be whole-file
+// byte-exact anyway: eth_clk_bufs, MB-4). A faithful insertion-order match is
+// deferred until turtle_1v0 provides a second example to derive the rule. See MB-6.
 func zeroOutSignals(res *elaborate.Resolution) []string {
 	var out []string
 	for name, s := range res.Signals {

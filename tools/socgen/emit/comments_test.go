@@ -3,6 +3,7 @@ package emit
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -261,6 +262,35 @@ func TestDevicesMicroboardVectorConsts(t *testing.T) {
 		if strings.Contains(dev, bad) {
 			t.Errorf("devices.vhd still has a bare-int port constant: %q", bad)
 		}
+	}
+}
+
+// TestSocMicroboardDivergences documents + guards two intentional microboard
+// divergences from golden (both hardware-equivalent): (1) the vestigial
+// `signal debug_i` — cpus.debug_i is tied to the constant CPU_DEBUG_NOP, so the
+// signal is never driven/read; we omit it (clock_locked1/rtc pattern). (2) the
+// zero-out concurrent assignments are emitted in deterministic alphabetical order
+// (concurrent-statement order is semantically irrelevant in VHDL); golden uses the
+// Clojure insertion order. A faithful order match is deferred to turtle_1v0.
+func TestSocMicroboardDivergences(t *testing.T) {
+	res := loadBoard(t, "microboard")
+	soc, _ := SoC(res)
+	if strings.Contains(soc, "signal debug_i") {
+		t.Errorf("soc.vhd should NOT declare the vestigial `signal debug_i` (tied to CPU_DEBUG_NOP)")
+	}
+	// Zero-out assignments (`    <name> <= (en => '0', ...)`) are alphabetical.
+	var names []string
+	for _, ln := range strings.Split(soc, "\n") {
+		if strings.HasPrefix(ln, "    ") && strings.Contains(ln, " <= (en => '0'") {
+			f := strings.Fields(strings.TrimSpace(ln))
+			names = append(names, f[0])
+		}
+	}
+	if len(names) < 2 {
+		t.Fatalf("expected several zero-out assignments, got %v", names)
+	}
+	if !sort.StringsAreSorted(names) {
+		t.Errorf("zero-out assignments not in alphabetical order: %v", names)
 	}
 }
 
