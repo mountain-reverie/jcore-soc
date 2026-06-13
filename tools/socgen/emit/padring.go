@@ -207,6 +207,14 @@ func PadRing(res *elaborate.Resolution) (string, error) {
 	for _, name := range sortedTopNames(res.PadringEntities) {
 		re := res.PadringEntities[name]
 		if re.Entity == nil && re.Config == nil {
+			// An unbound padring-entity (no VHDL source for the entity) is dropped
+			// best-effort. KNOWN DIVERGENCE (microboard): `eth_clk_bufs` is declared a
+			// padring-entity but has no entity source in the repo, so we (and the current
+			// Clojure) cannot bind it — its golden instance + the eth_rx_clk/eth_tx_clk
+			// boundary ports it would drive are a stale artifact (same class as the
+			// clock_locked1/rtc divergences). Consequently eth_rx_clk/eth_tx_clk are
+			// emitted as undriven internal signals, not boundary ports. See
+			// TestPadRingMicroboardFormatting (which excises the eth pads).
 			errs = append(errs, &EmitError{Kind: ErrUnboundEntity, Inst: re.Name})
 			continue
 		}
