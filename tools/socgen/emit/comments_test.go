@@ -263,3 +263,17 @@ func TestDevicesMicroboardVectorConsts(t *testing.T) {
 		}
 	}
 }
+
+func TestUseClauseMicroboardDdrPack(t *testing.T) {
+	res := loadBoard(t, "microboard")
+	soc, _ := SoC(res)
+	pad, _ := PadRing(res)
+	for name, out := range map[string]string{"soc.vhd": soc, "pad_ring.vhd": pad} {
+		if !strings.Contains(out, "use work.ddr_pack.all;") {
+			t.Errorf("%s: missing `use work.ddr_pack.all;` (entity-scoped resolution)", name)
+		}
+		if strings.Contains(out, "use work.ddrc_cnt_pack.all;") {
+			t.Errorf("%s: still has the wrong `use work.ddrc_cnt_pack.all;`", name)
+		}
+	}
+}
