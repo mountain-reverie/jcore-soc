@@ -95,8 +95,13 @@ func buildPorts(devName string, ent *iface.Entity, spec map[string]design.Value,
 			}
 		case v.Kind == design.KindExpr:
 			if isCharLiteral(v.Text) || (lib != nil && lib.IsConstant(v.Text)) {
-				// A VHDL char literal ('0'/'1'/...) or a library constant is a value
-				// actual, not a declared signal (faithful to the Clojure :value path).
+				// A VHDL char literal ('0'/'1') or a library constant is a value
+				// actual, not a declared signal (Clojure :value path). Like the
+				// literal-constant case below, this is why golden's vestigial
+				// constant-tied signals are deliberately omitted — e.g. microboard
+				// `debug_i` (tied to CPU_DEBUG_NOP) and reset_gen `clock_locked1`:
+				// dead nets (synthesis discards them; lint would flag them), so the
+				// cleaner netlist drops them. See MB-6 / P6b-3f.
 				vv := v
 				rp.Kind, rp.Value = KindValue, &vv
 			} else {
