@@ -54,6 +54,20 @@ func TestBuildPorts(t *testing.T) {
 	}
 }
 
+func TestIsCharLiteral(t *testing.T) {
+	for _, c := range []struct {
+		in   string
+		want bool
+	}{
+		{"'0'", true}, {"'1'", true}, {"'Z'", true}, {"'-'", true},
+		{"0", false}, {"clk_sys", false}, {"''", false}, {"'ab'", false}, {"", false}, {"'", false},
+	} {
+		if got := isCharLiteral(c.in); got != c.want {
+			t.Errorf("isCharLiteral(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
 func ent(ports ...*iface.Port) *iface.Entity { return &iface.Entity{Name: "e", Ports: ports} }
 func iport(name, dir string) *iface.Port {
 	return &iface.Port{Name: name, Dir: dir, Type: iface.TypeRef{Mark: "std_logic"}}

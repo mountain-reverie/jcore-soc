@@ -227,6 +227,20 @@ func TestDevicesMicroboardRtcDivergence(t *testing.T) {
 	}
 }
 
+func TestDevicesMicroboardCharLiteral(t *testing.T) {
+	res := loadBoard(t, "microboard")
+	dev, _ := Devices(res)
+	// A port tied to a VHDL char literal renders the literal directly, with no signal.
+	for _, w := range []string{"dbsys_i_en => '0',", "dbsys_i_wr => '0',"} {
+		if !strings.Contains(dev, w) {
+			t.Errorf("devices.vhd missing char-literal port actual %q", w)
+		}
+	}
+	if strings.Contains(dev, "signal '0'") {
+		t.Errorf("devices.vhd still declares a bogus `signal '0'`")
+	}
+}
+
 func TestDevicesMicroboardVectorConsts(t *testing.T) {
 	res := loadBoard(t, "microboard")
 	dev, _ := Devices(res)

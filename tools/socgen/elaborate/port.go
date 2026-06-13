@@ -94,9 +94,9 @@ func buildPorts(devName string, ent *iface.Entity, spec map[string]design.Value,
 				rp.Kind = KindDeferred // bist-chain/ring-bus/open? — recorded only (P4d/P5)
 			}
 		case v.Kind == design.KindExpr:
-			if lib != nil && lib.IsConstant(v.Text) {
-				// A library constant: rendered as the identifier actual, not
-				// declared as a signal (faithful to the Clojure :value classification).
+			if isCharLiteral(v.Text) || (lib != nil && lib.IsConstant(v.Text)) {
+				// A VHDL char literal ('0'/'1'/...) or a library constant is a value
+				// actual, not a declared signal (faithful to the Clojure :value path).
 				vv := v
 				rp.Kind, rp.Value = KindValue, &vv
 			} else {
@@ -169,3 +169,8 @@ func mergeName(s string, merge map[string]string) string {
 }
 
 func hasKey(m map[string]any, k string) bool { _, ok := m[k]; return ok }
+
+// isCharLiteral reports whether s is a VHDL character literal ('X'), e.g. '0' or '1'.
+func isCharLiteral(s string) bool {
+	return len(s) == 3 && s[0] == '\'' && s[2] == '\''
+}
