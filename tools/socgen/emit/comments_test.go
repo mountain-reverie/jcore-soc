@@ -441,3 +441,31 @@ func TestDevicesTurtleDeclOrder(t *testing.T) {
 		t.Errorf("expected cpu01 decl(%d) before device_t(%d):\n%s", cpu01, devT, dev)
 	}
 }
+
+// TestDevicesTurtleRtcDivergence documents + guards C5: turtle's write-only
+// rtc_sec/rtc_nsec are pruned to `=> open` (current Clojure, like mimas); the
+// committed golden's declared+wired rtc is a stale artifact (cf. MB-3, P6b-3f).
+func TestDevicesTurtleRtcDivergence(t *testing.T) {
+	res := loadBoard(t, "turtle_1v0")
+	dev, _ := Devices(res)
+	if !strings.Contains(dev, "rtc_nsec => open") || !strings.Contains(dev, "rtc_sec => open") {
+		t.Errorf("expected rtc_* => open (pruned), got:\n%s", dev)
+	}
+	if strings.Contains(dev, "signal rtc_sec") || strings.Contains(dev, "signal rtc_nsec") {
+		t.Errorf("rtc signals should be pruned (write-only), not declared")
+	}
+}
+
+// TestDevicesTurtleMuxEntityDivergence documents + guards C6: cpus_mux binds the
+// combinational multi_master_bus_mux (current Clojure, generate.clj:434); the
+// golden's multi_master_bus_muxff(a) is removed/stale registered hardware.
+func TestDevicesTurtleMuxEntityDivergence(t *testing.T) {
+	res := loadBoard(t, "turtle_1v0")
+	dev, _ := Devices(res)
+	if !strings.Contains(dev, "cpus_mux : entity work.multi_master_bus_mux") {
+		t.Errorf("cpus_mux not bound to multi_master_bus_mux:\n%s", dev)
+	}
+	if strings.Contains(dev, "muxff") {
+		t.Errorf("cpus_mux should not use the (stale) muxff variant")
+	}
+}
