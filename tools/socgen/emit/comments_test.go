@@ -416,3 +416,16 @@ func TestPadRingTurtleComplete(t *testing.T) {
 	golden := strings.Replace(string(goldenB), "    signal clock_locked1 : std_logic;\n", "", 1)
 	assertEqualStr(t, pad, golden, "turtle pad_ring.vhd (modulo clock_locked1)")
 }
+
+// TestDevicesTurtleMuxCommentPlacement verifies the comment leads the active_dev
+// block, after the cpus_mux instance (T2/C3).
+func TestDevicesTurtleMuxCommentPlacement(t *testing.T) {
+	res := loadBoard(t, "turtle_1v0")
+	dev, _ := Devices(res)
+	mux := strings.Index(dev, "cpus_mux :")
+	cmt := strings.Index(dev, "-- multiplex data bus to and from devices")
+	act := strings.Index(dev, "active_dev <=")
+	if !(mux >= 0 && cmt >= 0 && act >= 0 && mux < cmt && cmt < act) {
+		t.Errorf("expected order cpus_mux(%d) < comment(%d) < active_dev(%d):\n%s", mux, cmt, act, dev)
+	}
+}

@@ -382,9 +382,11 @@ func databusStmts(res *elaborate.Resolution) []vhdl.Stmt {
 		}
 	}
 
-	// multiplex data bus to and from devices.
-	out = append(out, &vhdl.Comment{Text: "multiplex data bus to and from devices"})
+	// The mux chain leads; the `multiplex data bus to and from devices` comment then
+	// leads the active_dev/decode block (Clojure attaches it to active_dev, after the
+	// mux). Single-master designs have no mux, so the comment position is unchanged.
 	out = append(out, muxChainStmts(res)...)
+	out = append(out, &vhdl.Comment{Text: "multiplex data bus to and from devices"})
 
 	// active_dev <= decode_address(<master>_periph_dbus_o.a);
 	out = append(out, concAssign(
