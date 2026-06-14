@@ -346,6 +346,22 @@ func TestPadRingTurtleConstPins(t *testing.T) {
 	}
 }
 
+// TestDevicesTurtleEmacConfig verifies a device class with a configuration (and no
+// architecture) is instantiated via `configuration work.<cfg>`, not entity+arch.
+// Clojure instantiate-factory matches component, then architecture, then
+// configuration (first match wins); emac has no architecture key, so it binds the
+// configuration (T2/C1).
+func TestDevicesTurtleEmacConfig(t *testing.T) {
+	res := loadBoard(t, "turtle_1v0")
+	dev, _ := Devices(res)
+	if !strings.Contains(dev, "emac : configuration work.eth_mac_rmii_fpga") {
+		t.Errorf("emac not configuration-bound:\n%s", dev)
+	}
+	if strings.Contains(dev, "emac : entity work.eth_mac_rmii") {
+		t.Errorf("emac still entity-bound (should be configuration)")
+	}
+}
+
 // TestPadRingTurtleComplete asserts turtle pad_ring.vhd is byte-identical to the
 // canonical golden (T1 milestone gate), modulo the one known clock_locked1
 // divergence: turtle's reset_gen ties clock_locked1 to '1' (design.yaml), so the
