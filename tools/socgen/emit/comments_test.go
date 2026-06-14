@@ -307,3 +307,16 @@ func TestUseClauseMicroboardDdrPack(t *testing.T) {
 		}
 	}
 }
+
+// TestPadRingTurtleDropsDanglingPins verifies that turtle pins whose signal has
+// no device driver/consumer (eth_intr, sd_det, usb_clk, vid_en) are dropped from
+// pad_ring, faithful to the Clojure :missing rule (T1/A2).
+func TestPadRingTurtleDropsDanglingPins(t *testing.T) {
+	res := loadBoard(t, "turtle_1v0")
+	pad, _ := PadRing(res)
+	for _, net := range []string{"eth_intr", "sd_det", "usb_clk", "vid_en"} {
+		if strings.Contains(pad, "pin_"+net) {
+			t.Errorf("pad_ring still references dangling pin_%s (should be dropped)", net)
+		}
+	}
+}

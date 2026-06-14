@@ -195,17 +195,25 @@ func resolvePins(d *design.Design, sigs map[string]*Signal) []*ResolvedPin {
 		if f.signalRef == "" && f.inRef == "" && f.outRef == "" && f.outEnRef == "" {
 			continue
 		}
-		// Drop a bare-signal pin whose target signal is not a real net (no
+		// Drop a pin if any of its signal legs targets a non-real net (no
 		// device/top/padring port and not a zero-signal) — faithful to Clojure
-		// :missing (devices.clj). mimas io_p* pads map to io_p<n> signals no
-		// device declares, so they would otherwise emit a spurious pad port +
-		// buffer. Only the bare-signal case occurs in practice; an explicit
-		// in/out/out-en pin always targets a real device signal.
-		if f.signalRef != "" && f.inRef == "" && f.outRef == "" && f.outEnRef == "" {
-			base, _ := splitSignal(f.signalRef)
-			if !signalIsReal(sigs, d, base) {
+		// :missing (devices.clj match-pins-to-signals): a pin with any missing leg
+		// is filtered out. mimas io_p* pads map to io_p<n> signals no device
+		// declares; turtle's eth_intr/sd_det/usb_clk/vid_en target signals no
+		// device uses. Both are dropped. (Constant pins have no signal leg and are
+		// handled elsewhere, so they are never dropped here.)
+		drop := false
+		for _, ref := range []string{f.signalRef, f.inRef, f.outRef, f.outEnRef} {
+			if ref == "" {
 				continue
 			}
+			if base, _ := splitSignal(ref); !signalIsReal(sigs, d, base) {
+				drop = true
+				break
+			}
+		}
+		if drop {
+			continue
 		}
 		rp := &ResolvedPin{Net: pin.Net, Pad: pin.Pad, Attrs: f.attrs, Diff: f.signalDiff}
 		bareDir := ""
