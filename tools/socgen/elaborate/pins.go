@@ -89,7 +89,7 @@ type folded struct {
 	inRef      string
 	outRef     string
 	outEnRef   string
-	hasConst   bool // a SigConst target (e.g. out: 0)
+	outConst   *int64 // integer value of a constant out: leg (nil if not const)
 }
 
 // foldRules applies every matching rule to pin in order: attrs accumulate, and
@@ -107,24 +107,26 @@ func foldRules(rules []*design.PinRule, pin *design.Pin) folded {
 			f.buff = r.Buff
 		}
 		if r.Signal != nil {
-			ref, diff, kind := expandSig(r.Signal, pin.Net, env)
+			ref, diff, _ := expandSig(r.Signal, pin.Net, env)
 			f.signalRef, f.signalDiff = ref, diff
-			f.hasConst = f.hasConst || kind == design.SigConst
 		}
 		if r.In != nil {
-			ref, _, kind := expandSig(r.In, pin.Net, env)
+			ref, _, _ := expandSig(r.In, pin.Net, env)
 			f.inRef = ref
-			f.hasConst = f.hasConst || kind == design.SigConst
 		}
 		if r.Out != nil {
 			ref, _, kind := expandSig(r.Out, pin.Net, env)
 			f.outRef = ref
-			f.hasConst = f.hasConst || kind == design.SigConst
+			if kind == design.SigConst {
+				v := r.Out.Int
+				f.outConst = &v
+			} else {
+				f.outConst = nil
+			}
 		}
 		if r.OutEn != nil {
-			ref, _, kind := expandSig(r.OutEn, pin.Net, env)
+			ref, _, _ := expandSig(r.OutEn, pin.Net, env)
 			f.outEnRef = ref
-			f.hasConst = f.hasConst || kind == design.SigConst
 		}
 	}
 	return f
@@ -189,9 +191,30 @@ func resolvePins(d *design.Design, sigs map[string]*Signal) []*ResolvedPin {
 	out := make([]*ResolvedPin, 0, len(d.Pins.Pins))
 	for _, pin := range d.Pins.Pins {
 		f := foldRules(d.Pins.Rules, pin)
+		// Constant-driven output pin (e.g. atmel_rst out: 1, eth_mdc out: 0): the
+		// out: leg targets an integer constant, not a signal, so it adds no net-list
+		// leg. Emit it as an OBUF whose I is a '0'/'1' literal (Clojure :out <int>).
+		// A non-0/1 constant is out of scope and dropped. (A constant out-en, which
+		// would belong on an OBUFT T input, does not occur in any repo board and is
+		// not handled here.)
+		if f.outConst != nil {
+			n := *f.outConst
+			if n != 0 && n != 1 {
+				continue
+			}
+			lit := "'0'"
+			if n == 1 {
+				lit = "'1'"
+			}
+			out = append(out, &ResolvedPin{
+				Net: pin.Net, Pad: pin.Pad, Attrs: f.attrs,
+				BufferKind: BufOBUF, PadDir: dirOut, OutConst: lit,
+			})
+			continue
+		}
 		// Skip pins with no signal connection (matched only attr rules, or nothing):
-		// these are unmapped pads, ignored — faithful to the Clojure :ignore. (A
-		// const-only target, e.g. out: 0, also produces no leg and is deferred.)
+		// these are unmapped pads, ignored — faithful to the Clojure :ignore.
+		// (Constant-driven pins are handled above and never reach this point.)
 		if f.signalRef == "" && f.inRef == "" && f.outRef == "" && f.outEnRef == "" {
 			continue
 		}
