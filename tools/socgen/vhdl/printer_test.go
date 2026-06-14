@@ -204,3 +204,20 @@ func TestCommentRoundTrip(t *testing.T) {
 		t.Errorf("round-trip AST changed")
 	}
 }
+
+func TestInstStmtKeepPortOrderPrintIgnored(t *testing.T) {
+	mk := func(keep bool) *InstantiationStmt {
+		return &InstantiationStmt{
+			Label: "u", UnitKind: ENTITY, Unit: "work.x", KeepPortOrder: keep,
+			PortMap: []*AssocElement{
+				{Formal: "b", Actual: &Ident{Name: "y"}},
+				{Formal: "a", Actual: &Ident{Name: "z"}},
+			},
+		}
+	}
+	a := Print(&DesignFile{Units: []DesignUnit{&ArchitectureBody{Name: "i", Entity: "e", Stmts: []Stmt{mk(true)}}}})
+	b := Print(&DesignFile{Units: []DesignUnit{&ArchitectureBody{Name: "i", Entity: "e", Stmts: []Stmt{mk(false)}}}})
+	if a != b {
+		t.Errorf("KeepPortOrder must not affect printing:\n%s\n---\n%s", a, b)
+	}
+}
