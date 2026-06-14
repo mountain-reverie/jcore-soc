@@ -336,10 +336,29 @@ func TestPadRingTurtleConstPins(t *testing.T) {
 		"obuf_eth_mdc : OBUF",
 		"I => '0',",
 		"O => pin_eth_mdc",
+		"obuf_eth_mdio : OBUF",
+		"O => pin_eth_mdio",
 	}
 	for _, w := range wants {
 		if !strings.Contains(pad, w) {
 			t.Errorf("pad_ring missing constant-pin fragment %q", w)
 		}
 	}
+}
+
+// TestPadRingTurtleComplete asserts turtle pad_ring.vhd is byte-identical to the
+// canonical golden (T1 milestone gate), modulo the one known clock_locked1
+// divergence: turtle's reset_gen ties clock_locked1 to '1' (design.yaml), so the
+// golden declares a vestigial, undriven/unread `signal clock_locked1` while we
+// omit it — the cleaner netlist, identical hardware. Same class as mimas
+// (P6b-3f); drop that one line before compare.
+func TestPadRingTurtleComplete(t *testing.T) {
+	res := loadBoard(t, "turtle_1v0")
+	pad, _ := PadRing(res)
+	goldenB, err := os.ReadFile(filepath.Join(os.Getenv("JCORE_SOC_ROOT"), "targets/boards/turtle_1v0/pad_ring.vhd"))
+	if err != nil {
+		t.Fatalf("read golden: %v", err)
+	}
+	golden := strings.Replace(string(goldenB), "    signal clock_locked1 : std_logic;\n", "", 1)
+	assertEqualStr(t, pad, golden, "turtle pad_ring.vhd (modulo clock_locked1)")
 }

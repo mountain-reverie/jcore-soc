@@ -46,6 +46,28 @@ func TestConnExprs(t *testing.T) {
 	if renderExprStr(t, inExpr(rp2)) != "dr_data_i.dqi(0)" {
 		t.Errorf("inExpr explicit leg wrong")
 	}
+	// OutConst: outExpr returns the literal, not a signal name.
+	rpConst := &elaborate.ResolvedPin{OutConst: "'1'"}
+	if got := renderExprStr(t, outExpr(rpConst)); got != "'1'" {
+		t.Errorf("OutConst outExpr = %q, want '1'", got)
+	}
+	// OutInvert: outExpr returns the pad_<base>_n intermediate.
+	rpInv := &elaborate.ResolvedPin{Out: "reset", OutInvert: true}
+	if got := renderExprStr(t, outExpr(rpInv)); got != "pad_reset_n" {
+		t.Errorf("OutInvert outExpr = %q, want pad_reset_n", got)
+	}
+}
+
+func TestInvertSignalName(t *testing.T) {
+	for _, c := range []struct{ ref, want string }{
+		{"reset", "pad_reset_n"},
+		{"po(0)", "pad_po_0_n"},
+		{"bus.data(3)", "pad_bus_data_3_n"},
+	} {
+		if got := invertSignalName(c.ref); got != c.want {
+			t.Errorf("invertSignalName(%q) = %q, want %q", c.ref, got, c.want)
+		}
+	}
 }
 
 func TestInstBuf(t *testing.T) {

@@ -64,11 +64,12 @@ const (
 
 // SigSpec is a signal target value in a pin rule.
 type SigSpec struct {
-	Kind  SigKind
-	Name  string
-	Int   int64
-	Parts []SeqPart
-	Diff  string
+	Kind   SigKind
+	Name   string
+	Int    int64
+	Parts  []SeqPart
+	Diff   string
+	Invert bool // {name, invert: true}: drive the pad/signal with the inverted value
 }
 
 // isSymbolNode reports whether n is a parametric capture variable.
@@ -132,13 +133,14 @@ func (s *SigSpec) UnmarshalYAML(n *yaml.Node) error {
 	case yaml.MappingNode:
 		s.Kind = SigMap
 		var m struct {
-			Name string `yaml:"name"`
-			Diff string `yaml:"diff"`
+			Name   string `yaml:"name"`
+			Diff   string `yaml:"diff"`
+			Invert bool   `yaml:"invert"`
 		}
 		if err := n.Decode(&m); err != nil {
 			return &SpecError{Line: n.Line, Msg: "invalid signal map", Err: err}
 		}
-		s.Name, s.Diff = m.Name, m.Diff
+		s.Name, s.Diff, s.Invert = m.Name, m.Diff, m.Invert
 	default:
 		return &SpecError{Line: n.Line, Msg: "invalid signal node"}
 	}

@@ -1,10 +1,37 @@
 package elaborate
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/j-core/jcore-soc/tools/socgen/design"
 )
+
+func TestValidatePinInvert(t *testing.T) {
+	mk := func(leg string) *design.Design {
+		r := &design.PinRule{Match: &design.Match{Regex: "x"}}
+		s := &design.SigSpec{Kind: design.SigMap, Name: "foo", Invert: true}
+		switch leg {
+		case "signal":
+			r.Signal = s
+		case "in":
+			r.In = s
+		case "out-en":
+			r.OutEn = s
+		case "out":
+			r.Out = s
+		}
+		return &design.Design{Pins: &design.PinsSpec{Rules: []*design.PinRule{r}}}
+	}
+	for _, leg := range []string{"signal", "in", "out-en"} {
+		if err := validatePinInvert(mk(leg)); err == nil || !errors.Is(err, ErrUnsupportedInvert) {
+			t.Errorf("%s invert: want ErrUnsupportedInvert, got %v", leg, err)
+		}
+	}
+	if err := validatePinInvert(mk("out")); err != nil {
+		t.Errorf("out invert should be allowed, got %v", err)
+	}
+}
 
 func TestMatchPinRegexAndParametric(t *testing.T) {
 	// regex full-match

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/j-core/jcore-soc/tools/socgen/design"
 	"github.com/j-core/jcore-soc/tools/socgen/elaborate"
@@ -166,6 +167,52 @@ func pinAttrs(res *elaborate.Resolution) []vhdl.Decl {
 	return out
 }
 
+// invertSig is an inverted-pad intermediate: the generated signal name and its
+// source signal, e.g. {name: "pad_reset_n", src: "reset"} for eth_rst's
+// out: {name: reset, invert: true}.
+type invertSig struct{ name, src string }
+
+// invertSignalName returns the intermediate signal name for an inverted out: leg
+// — "pad_<base>_n" (Clojure generate.clj update-pin-signals). A bus/record
+// element ref collapses its '.'/'(' separators to '_' (rare; none in the repo).
+func invertSignalName(ref string) string {
+	if strings.ContainsAny(ref, ".(") {
+		return "pad_" + strings.NewReplacer(".", "_", "(", "_", ")", "").Replace(ref) + "_n"
+	}
+	return "pad_" + ref + "_n"
+}
+
+// invertIntermediates collects the deduped inverted-out intermediates, in
+// sorted-pin (= Clojure invert-signals insertion) order.
+func invertIntermediates(res *elaborate.Resolution) []invertSig {
+	seen := map[string]bool{}
+	out := make([]invertSig, 0, len(res.Pins))
+	for _, p := range sortedPins(res) {
+		if !p.OutInvert || p.Out == "" {
+			continue
+		}
+		name := invertSignalName(p.Out)
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, invertSig{name: name, src: p.Out})
+	}
+	return out
+}
+
+// invertAssigns emits the `pad_<base>_n <= not <base>;` concurrent assignments for
+// the inverted-out intermediates (one per distinct intermediate).
+func invertAssigns(res *elaborate.Resolution) []vhdl.Stmt {
+	ints := invertIntermediates(res)
+	out := make([]vhdl.Stmt, 0, len(ints))
+	for _, iv := range ints {
+		out = append(out, concAssign(&vhdl.Ident{Name: iv.name},
+			&vhdl.UnaryExpr{Op: vhdl.NOT, X: &vhdl.Ident{Name: iv.src}}))
+	}
+	return out
+}
+
 // socInstStmt instantiates the soc architecture inside pad_ring, wiring each
 // PadringTop port to the same-named pad_ring signal (name => name).
 func socInstStmt(res *elaborate.Resolution) *vhdl.InstantiationStmt {
@@ -202,6 +249,11 @@ func PadRing(res *elaborate.Resolution) (string, error) {
 			decls = append(decls, &vhdl.SignalDecl{Names: []string{n}, SubtypeMark: mark, Constraint: con})
 		}
 	}
+	// Inverted-pad intermediates (e.g. pad_reset_n) are appended after the sorted
+	// Padring signals, matching golden (generate.clj appends `vals invert-signals`).
+	for _, iv := range invertIntermediates(res) {
+		decls = append(decls, &vhdl.SignalDecl{Names: []string{iv.name}, SubtypeMark: stdLogicMark})
+	}
 
 	stmts := []vhdl.Stmt{socInstStmt(res)}
 	for _, name := range sortedTopNames(res.PadringEntities) {
@@ -222,6 +274,9 @@ func PadRing(res *elaborate.Resolution) (string, error) {
 	}
 
 	stmts = append(stmts, pioStatements(res)...)
+	// Inverted-pad assignments (pad_reset_n <= not reset) sit between the pio
+	// statements and the pin buffers/direct-wires, matching golden.
+	stmts = append(stmts, invertAssigns(res)...)
 
 	pinStmts, perr := pinStatements(res)
 	if perr != nil {

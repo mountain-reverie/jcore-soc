@@ -182,6 +182,7 @@ type ResolvedPin struct {
 	Out        string
 	OutEn      string
 	OutConst   string // VHDL literal driving a constant output pad (e.g. '1'); "" for normal pins
+	OutInvert  bool   // out: leg drives the pad with the inverted source signal (rule invert: true)
 	Diff       string
 	BufferKind BufferKind
 	PadDir     string // the pad's physical direction: "in"|"out"|"inout" (P5d)

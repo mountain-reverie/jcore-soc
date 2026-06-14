@@ -17,6 +17,10 @@ var (
 	ErrUnknownGeneric     = errors.New("unknown generic")
 	ErrDuplicateName      = errors.New("duplicate device name")
 	ErrRegisterOverlap    = errors.New("register overlap")
+	// ErrUnsupportedInvert: a pin rule sets invert:true on a leg other than out:.
+	// Only the out: leg invert is implemented (the only case any repo board uses);
+	// other legs would be silently mis-emitted, so they are rejected loudly.
+	ErrUnsupportedInvert = errors.New("invert: true is only supported on an out: pin leg")
 	// ErrLeftAddrBitTooSmall: a class's configured left-addr-bit can't cover its
 	// registers (resolveRegs, design-time). Distinct from ErrLeftAddrBit, the
 	// elaboration-time range guard in validateAddresses — so errors.Is can tell

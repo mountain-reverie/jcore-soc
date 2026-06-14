@@ -65,6 +65,11 @@ func outExpr(rp *elaborate.ResolvedPin) vhdl.Expr {
 	if rp.OutConst != "" {
 		return &vhdl.BasicLit{Kind: vhdl.CHARLIT, Value: rp.OutConst}
 	}
+	if rp.OutInvert {
+		// the pad is driven by the inverted-source intermediate (e.g. pad_reset_n);
+		// PadRing declares it and assigns pad_reset_n <= not reset.
+		return &vhdl.Ident{Name: invertSignalName(rp.Out)}
+	}
 	if rp.Out != "" {
 		return &vhdl.Ident{Name: rp.Out}
 	}

@@ -1,6 +1,8 @@
 package elaborate
 
 import (
+	"errors"
+	"fmt"
 	"maps"
 	"regexp"
 	"slices"
@@ -9,6 +11,28 @@ import (
 
 	"github.com/j-core/jcore-soc/tools/socgen/design"
 )
+
+// validatePinInvert rejects invert:true on any leg other than out:. Only the
+// out: leg invert is implemented (faithful to the only repo usage, turtle
+// eth_rst); a signal:/in:/out-en: invert would otherwise be silently dropped and
+// emit wrong VHDL, so it is surfaced as a loud elaboration error instead.
+func validatePinInvert(d *design.Design) error {
+	if d == nil || d.Pins == nil {
+		return nil
+	}
+	var errs []error
+	for _, r := range d.Pins.Rules {
+		check := func(leg string, s *design.SigSpec) {
+			if s != nil && s.Invert {
+				errs = append(errs, fmt.Errorf("%w (on the %s leg)", ErrUnsupportedInvert, leg))
+			}
+		}
+		check("signal", r.Signal)
+		check("in", r.In)
+		check("out-en", r.OutEn)
+	}
+	return errors.Join(errs...)
+}
 
 // matchPin returns the captured symbol->int environment if rule matches pin net.
 // A regex match is full-anchored; a parametric match builds a regex from the
@@ -90,6 +114,7 @@ type folded struct {
 	outRef     string
 	outEnRef   string
 	outConst   *int64 // integer value of a constant out: leg (nil if not const)
+	outInvert  bool   // out: leg has invert: true (drive the pad with the inverted source)
 }
 
 // foldRules applies every matching rule to pin in order: attrs accumulate, and
@@ -117,6 +142,7 @@ func foldRules(rules []*design.PinRule, pin *design.Pin) folded {
 		if r.Out != nil {
 			ref, _, kind := expandSig(r.Out, pin.Net, env)
 			f.outRef = ref
+			f.outInvert = r.Out.Invert
 			if kind == design.SigConst {
 				v := r.Out.Int
 				f.outConst = &v
@@ -255,6 +281,7 @@ func resolvePins(d *design.Design, sigs map[string]*Signal) []*ResolvedPin {
 		if f.outRef != "" {
 			base, elem := splitSignal(f.outRef)
 			rp.Out = f.outRef
+			rp.OutInvert = f.outInvert
 			addPinPort(sigs, pin.Net, "out", base, elem, dirIn, "")
 		}
 		if f.outEnRef != "" {
