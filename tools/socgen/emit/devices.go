@@ -103,6 +103,7 @@ func Devices(res *elaborate.Resolution) (string, error) {
 	if res.DataBus != nil {
 		// Data-bus mux/decode statements precede device instantiations (golden
 		// devices.vhd:88-95); the decls join the signal declarations.
+		decls = append(decls, muxBusDecls(res)...)
 		decls = append(decls, databusDecls(res)...)
 		stmts = append(databusStmts(res), stmts...)
 	}

@@ -429,3 +429,15 @@ func TestDevicesTurtleMuxCommentPlacement(t *testing.T) {
 		t.Errorf("expected order cpus_mux(%d) < comment(%d) < active_dev(%d):\n%s", mux, cmt, act, dev)
 	}
 }
+
+// TestDevicesTurtleDeclOrder verifies the mux output bus signals are declared
+// before the device_t enum (T2/C4; Clojure :decls pbus-mux precedes device_t).
+func TestDevicesTurtleDeclOrder(t *testing.T) {
+	res := loadBoard(t, "turtle_1v0")
+	dev, _ := Devices(res)
+	cpu01 := strings.Index(dev, "signal cpu01_periph_dbus_i")
+	devT := strings.Index(dev, "type device_t")
+	if !(cpu01 >= 0 && devT >= 0 && cpu01 < devT) {
+		t.Errorf("expected cpu01 decl(%d) before device_t(%d):\n%s", cpu01, devT, dev)
+	}
+}

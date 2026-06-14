@@ -292,8 +292,9 @@ func concAssign(target, value vhdl.Expr) *vhdl.ConcurrentSignalAssign {
 
 // databusDecls builds the data-bus declarative items in golden order
 // (generate.clj:559-585; devices.vhd:49-84): the device_t enum, active_dev signal,
-// the data_bus_i_t/data_bus_o_t array types, the devs_bus_i/o signals, any
-// intermediate mux-output bus signals, then the decode_address function.
+// the data_bus_i_t/data_bus_o_t array types, the devs_bus_i/o signals, then the
+// decode_address function. The intermediate mux-output bus signals are declared
+// separately by muxBusDecls (emitted before device_t).
 func databusDecls(res *elaborate.Resolution) []vhdl.Decl {
 	if res.DataBus == nil {
 		return nil
@@ -315,23 +316,33 @@ func databusDecls(res *elaborate.Resolution) []vhdl.Decl {
 		&vhdl.SignalDecl{Names: []string{"devs_bus_o"}, SubtypeMark: "data_bus_o_t"},
 	}
 
-	// Intermediate mux-output bus signals (none for single-master).
+	decls = append(decls, decodeFunction(devs, lits, res.DataBus.DecodeMode == "simple"))
+	return decls
+}
+
+// muxBusDecls returns the intermediate mux-output bus signal declarations
+// (<Out>_periph_dbus_i/o). Current Clojure declares these before device_t
+// (generate.clj :decls pbus-mux), so Devices() emits them ahead of databusDecls.
+// Empty for single-master designs.
+func muxBusDecls(res *elaborate.Resolution) []vhdl.Decl {
+	if res.DataBus == nil {
+		return nil
+	}
+	out := make([]vhdl.Decl, 0, 2*len(res.DataBus.MuxStages))
 	for _, st := range res.DataBus.MuxStages {
-		decls = append(decls,
+		out = append(out,
 			&vhdl.SignalDecl{Names: []string{st.Out + "_periph_dbus_i"}, SubtypeMark: "cpu_data_i_t"},
 			&vhdl.SignalDecl{Names: []string{st.Out + "_periph_dbus_o"}, SubtypeMark: "cpu_data_o_t"},
 		)
 	}
-
-	decls = append(decls, decodeFunction(devs, lits, res.DataBus.DecodeMode == "simple"))
-	return decls
+	return out
 }
 
 // muxChainStmts emits the multi-master arbitration mux instantiations
 // (generate.clj:403-453). Each MuxStage wires two input peripheral buses to an
 // output bus via a multi_master_bus_mux/muxff entity. Single-master designs have
 // no stages and emit nothing. The intermediate <Out>_periph_dbus_i/o signals are
-// declared by databusDecls.
+// declared by muxBusDecls.
 func muxChainStmts(res *elaborate.Resolution) []vhdl.Stmt {
 	if res.DataBus == nil {
 		return nil
