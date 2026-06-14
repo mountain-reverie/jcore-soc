@@ -101,7 +101,7 @@ func TestParsePinNames(t *testing.T) {
 	if err != nil {
 		t.Fatalf("errs: %v", err)
 	}
-	want := []Pin{{"clk_100mhz", "V10"}, {"uart_tx", "A8"}, {"mcb3_dram_a0", "J7"}}
+	want := []Pin{{"clk_100mhz", "v10"}, {"uart_tx", "a8"}, {"mcb3_dram_a0", "j7"}}
 	if len(pins) != len(want) {
 		t.Fatalf("got %d pins: %+v", len(pins), pins)
 	}

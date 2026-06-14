@@ -146,10 +146,10 @@ func (s *SigSpec) UnmarshalYAML(n *yaml.Node) error {
 }
 
 // parsePinNames parses the simple "NAME PAD" .pins format (one pin per line; '#'
-// comments and blank lines skipped; net lower-cased). The pad is optional (a
-// pad-less net yields Pad==""), matching the Clojure parser; any extra fields are
-// ignored. The error result is for symmetry with parsePinList; this parser has
-// no error conditions today.
+// comments and blank lines skipped; net and pad lower-cased). The pad is optional
+// (a pad-less net yields Pad==""), matching the Clojure parser; any extra fields
+// are ignored. The error result is for symmetry with parsePinList; this parser
+// has no error conditions today.
 func parsePinNames(data []byte) ([]*Pin, error) {
 	pins := make([]*Pin, 0, strings.Count(string(data), "\n")+1)
 	for line := range strings.SplitSeq(string(data), "\n") {
@@ -160,7 +160,7 @@ func parsePinNames(data []byte) ([]*Pin, error) {
 		f := strings.Fields(t)
 		p := &Pin{Net: strings.ToLower(f[0])}
 		if len(f) > 1 {
-			p.Pad = f[1]
+			p.Pad = strings.ToLower(f[1]) // simple format: pad lower-cased (Clojure lower-cases the whole line; equivalent here since only net+pad are consumed)
 		}
 		pins = append(pins, p)
 	}
