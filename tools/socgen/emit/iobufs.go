@@ -62,6 +62,9 @@ func driveText(v design.Value) string {
 // outExpr / inExpr resolve a pin's internal-signal expression for a buffer port:
 // the explicit out/in leg when present, else the bare signal.
 func outExpr(rp *elaborate.ResolvedPin) vhdl.Expr {
+	if rp.OutConst != "" {
+		return &vhdl.BasicLit{Kind: vhdl.CHARLIT, Value: rp.OutConst}
+	}
 	if rp.Out != "" {
 		return &vhdl.Ident{Name: rp.Out}
 	}

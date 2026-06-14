@@ -78,12 +78,12 @@ func TestFoldRulesTriStateLegs(t *testing.T) {
 }
 
 func TestFoldRulesConstAndNoMatch(t *testing.T) {
-	// Out: 0 (constant) -> hasConst set, no outRef
+	// Out: 0 (constant) -> outConst captured, no outRef
 	cf := foldRules([]*design.PinRule{
 		{Match: &design.Match{Regex: "eth_mdc"}, Out: &design.SigSpec{Kind: design.SigConst, Int: 0}},
 	}, &design.Pin{Net: "eth_mdc"})
-	if !cf.hasConst || cf.outRef != "" {
-		t.Errorf("const: hasConst=%v outRef=%q", cf.hasConst, cf.outRef)
+	if cf.outConst == nil || *cf.outConst != 0 || cf.outRef != "" {
+		t.Errorf("const: outConst=%v outRef=%q", cf.outConst, cf.outRef)
 	}
 	// no rule matches -> zero folded with a non-nil empty attrs map
 	nf := foldRules([]*design.PinRule{{Match: &design.Match{Regex: "other"}}}, &design.Pin{Net: "lonely"})

@@ -320,3 +320,26 @@ func TestPadRingTurtleDropsDanglingPins(t *testing.T) {
 		}
 	}
 }
+
+// TestPadRingTurtleConstPins verifies constant-driven output pins are emitted as
+// an OBUF with a literal I plus an out pad port (T1/A1):
+//
+//	atmel_rst (out: 1) -> I => '1'; eth_mdc/eth_mdio (out: 0) -> I => '0'.
+func TestPadRingTurtleConstPins(t *testing.T) {
+	res := loadBoard(t, "turtle_1v0")
+	pad, _ := PadRing(res)
+	wants := []string{
+		"pin_atmel_rst : out std_logic;",
+		"obuf_atmel_rst : OBUF",
+		"I => '1',",
+		"O => pin_atmel_rst",
+		"obuf_eth_mdc : OBUF",
+		"I => '0',",
+		"O => pin_eth_mdc",
+	}
+	for _, w := range wants {
+		if !strings.Contains(pad, w) {
+			t.Errorf("pad_ring missing constant-pin fragment %q", w)
+		}
+	}
+}
