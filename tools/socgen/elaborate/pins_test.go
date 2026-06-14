@@ -197,11 +197,13 @@ func TestResolvePinsJoinAndBuffer(t *testing.T) {
 	}
 	// pre-seed sigs: 'ddr_clk' driven by a device (pin consumes it -> output pad
 	// -> OBUFDS); 'clk' a real net consumed by a device (in port) but not driven,
-	// so the pin drives it (-> input pad, IBUF). Both targets must be real nets or
-	// the bare-signal pins would be dropped as :missing.
+	// so the pin drives it (-> input pad, IBUF). 'po' consumed by a device (gpio
+	// output bus). All targets must be real nets or the pins would be dropped as
+	// :missing — the generalized check now covers explicit in/out/out-en legs too.
 	sigs := map[string]*Signal{
 		"ddr_clk": {Name: "ddr_clk", Ports: []*SignalPortRef{{Context: Context{Kind: "device", ID: "ddrc"}, Dir: "out"}}},
 		"clk":     {Name: "clk", Ports: []*SignalPortRef{{Context: Context{Kind: "device", ID: "clkgen"}, Dir: "in"}}},
+		"po":      {Name: "po", Ports: []*SignalPortRef{{Context: Context{Kind: "device", ID: "gpio"}, Dir: "out"}}},
 	}
 	pins := resolvePins(d, sigs)
 	// clk consumed by a device -> pin drives it (out), pin-context, IBUF
@@ -217,9 +219,19 @@ func TestResolvePinsJoinAndBuffer(t *testing.T) {
 	if clkPin.PortName != "pin.clk.signal" {
 		t.Errorf("clk PortName = %q want pin.clk.signal", clkPin.PortName)
 	}
-	// led -> po(0): consumer of base 'po', element recorded
+	// led -> po(0): consumer of base 'po', element recorded; po now has a pre-seeded
+	// device port + the new pin port, so find the pin-context port specifically.
 	po := sigs["po"]
-	if po == nil || len(po.Ports) != 1 || po.Ports[0].Dir != "in" || po.Ports[0].Element != "po(0)" {
+	var poPinRef *SignalPortRef
+	if po != nil {
+		for _, p := range po.Ports {
+			if p.Context.Kind == ctxKindPin {
+				poPinRef = p
+				break // only one pin port expected; break makes the intent explicit
+			}
+		}
+	}
+	if poPinRef == nil || poPinRef.Dir != "in" || poPinRef.Element != "po(0)" {
 		t.Fatalf("po join: %+v", po)
 	}
 	// ddr_ck differential: pin consumes already-driven ddr_clk (dir "in"), diff pos recorded
