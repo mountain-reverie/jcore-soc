@@ -393,7 +393,7 @@ func TestDevicesTurtleMuxPortOrder(t *testing.T) {
 		if idx < 0 {
 			t.Fatalf("cpus_mux missing formal %q in:\n%s", f, blk)
 		}
-		if idx < prev {
+		if idx <= prev {
 			t.Errorf("cpus_mux formal %q out of declared order:\n%s", f, blk)
 		}
 		prev = idx
