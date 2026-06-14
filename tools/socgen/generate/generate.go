@@ -63,6 +63,15 @@ func Build(b *board.Board, res *elaborate.Resolution) ([]File, error) {
 		files = append(files, File{Name: c.name, Content: content, InBuildMK: true})
 	}
 
+	// word_ack_gen.vhd: phase-2 (turtle) — only for boards with #bus_word devices.
+	if len(res.BusWord) > 0 {
+		content, err := emit.WordAckGen(res)
+		if err != nil {
+			errs = append(errs, &GenerateError{Kind: ErrEmit, Name: "word_ack_gen.vhd", Detail: err.Error()})
+		}
+		files = append(files, File{Name: "word_ack_gen.vhd", Content: content, InBuildMK: true})
+	}
+
 	for _, p := range b.Design.Plugins {
 		switch p {
 		case "device_tree":
