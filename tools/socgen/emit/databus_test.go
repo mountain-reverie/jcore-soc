@@ -145,6 +145,9 @@ func TestMuxChainDualMaster(t *testing.T) {
 	if inst.UnitKind != vhdl.ENTITY || inst.Arch != "" {
 		t.Errorf("want ENTITY with no arch qualifier, got kind=%v arch=%q", inst.UnitKind, inst.Arch)
 	}
+	if !inst.KeepPortOrder {
+		t.Errorf("mux inst must set KeepPortOrder so sortInstMaps preserves the declared port order")
+	}
 	pm := map[string]string{}
 	for _, a := range inst.PortMap {
 		pm[a.Formal] = exprText(a.Actual)
@@ -183,6 +186,9 @@ func TestMuxChainThreeMasters(t *testing.T) {
 		inst, ok := stmts[i].(*vhdl.InstantiationStmt)
 		if !ok || inst.Label != w.label || inst.Unit != w.unit {
 			t.Fatalf("stage %d = %+v", i, stmts[i])
+		}
+		if !inst.KeepPortOrder {
+			t.Errorf("stage %d (%s) must set KeepPortOrder", i, w.label)
 		}
 		pm := map[string]string{}
 		for _, a := range inst.PortMap {
