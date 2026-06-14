@@ -469,3 +469,22 @@ func TestDevicesTurtleMuxEntityDivergence(t *testing.T) {
 		t.Errorf("cpus_mux should not use the (stale) muxff variant")
 	}
 }
+
+// TestResolutionBusWordTurtle verifies the bus-word directives migrated into
+// design.yaml reach the elaborated model in directive order (T3a).
+func TestResolutionBusWordTurtle(t *testing.T) {
+	res := loadBoard(t, "turtle_1v0")
+	want := []string{"aic0", "aic1", "emac", "uart0"}
+	if len(res.BusWord) != len(want) {
+		t.Fatalf("BusWord = %v, want %v", res.BusWord, want)
+	}
+	for i, w := range want {
+		if res.BusWord[i] != w {
+			t.Errorf("BusWord[%d] = %q, want %q", i, res.BusWord[i], w)
+		}
+	}
+	// mimas is not a word-ack board.
+	if m := loadMimas(t); len(m.BusWord) != 0 {
+		t.Errorf("mimas BusWord should be empty, got %v", m.BusWord)
+	}
+}

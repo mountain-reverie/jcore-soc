@@ -100,6 +100,9 @@ zero-signals:
   - cpu1_event_i
   - debug_i
 
+bus-word: [aic0, aic1, emac, uart0]
+bus-word-loopback-ack: [cache_ctrl, flash, gpio]
+
 system:
   dram: [0x10000000, 0x8000000]
   pio:

@@ -51,6 +51,7 @@ type Resolution struct {
 	Pio             []PioBit                   // P5d-c: resolved system.pio loopback bits (sorted by Idx)
 	Library         *iface.Library             // the bound interface library (for emit type introspection, P5c-ii-b)
 	IRQ             *IRQModel                  // P5e: AIC1 interrupt wiring (nil if no aic)
+	BusWord         []string                   // phase-2 #bus_word device names (word-ack), in directive order; empty = not a word-ack board
 }
 
 // IRQModel is the resolved AIC1 interrupt wiring (P5e), faithful to irq.clj.

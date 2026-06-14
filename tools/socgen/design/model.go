@@ -9,18 +9,20 @@ import (
 )
 
 type Design struct {
-	Target          string                  `yaml:"target"`
-	DeviceClasses   map[string]*DeviceClass `yaml:"device-classes"`
-	Devices         []*Device               `yaml:"devices"`
-	TopEntities     map[string]*TopEntity   `yaml:"top-entities"`
-	PadringEntities map[string]*TopEntity   `yaml:"padring-entities"`
-	MergeSignals    map[string][]string     `yaml:"merge-signals"`
-	ZeroSignals     []string                `yaml:"zero-signals"`
-	IRQ             map[string]*IRQEntry    `yaml:"irq"`
-	Pins            *PinsSpec               `yaml:"pins"`
-	PeripheralBuses map[string]bool         `yaml:"peripheral-buses"`
-	System          *System                 `yaml:"system"`
-	Plugins         []string                `yaml:"plugins"`
+	Target             string                  `yaml:"target"`
+	DeviceClasses      map[string]*DeviceClass `yaml:"device-classes"`
+	Devices            []*Device               `yaml:"devices"`
+	TopEntities        map[string]*TopEntity   `yaml:"top-entities"`
+	PadringEntities    map[string]*TopEntity   `yaml:"padring-entities"`
+	MergeSignals       map[string][]string     `yaml:"merge-signals"`
+	ZeroSignals        []string                `yaml:"zero-signals"`
+	BusWord            []string                `yaml:"bus-word"`
+	BusWordLoopbackAck []string                `yaml:"bus-word-loopback-ack"`
+	IRQ                map[string]*IRQEntry    `yaml:"irq"`
+	Pins               *PinsSpec               `yaml:"pins"`
+	PeripheralBuses    map[string]bool         `yaml:"peripheral-buses"`
+	System             *System                 `yaml:"system"`
+	Plugins            []string                `yaml:"plugins"`
 }
 
 // System holds the design `system:` block. Only the fields soc_gen consumes are
@@ -311,8 +313,8 @@ func (h *Hex) UnmarshalYAML(n *yaml.Node) error {
 type ValueKind int
 
 const (
-	KindExpr  ValueKind = iota // verbatim VHDL identifier/expression (the default for plain scalars)
-	KindStr                    // VHDL string literal (from !str)
+	KindExpr ValueKind = iota // verbatim VHDL identifier/expression (the default for plain scalars)
+	KindStr                   // VHDL string literal (from !str)
 	KindInt
 	KindFloat
 	KindBool
