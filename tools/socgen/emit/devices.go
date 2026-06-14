@@ -7,6 +7,7 @@ import (
 
 	"github.com/j-core/jcore-soc/tools/socgen/design"
 	"github.com/j-core/jcore-soc/tools/socgen/elaborate"
+	"github.com/j-core/jcore-soc/tools/socgen/iface"
 	"github.com/j-core/jcore-soc/tools/socgen/vhdl"
 )
 
@@ -60,8 +61,10 @@ func Devices(res *elaborate.Resolution) (string, error) {
 	for _, dev := range devs {
 		rc := res.Classes[lc(dev.Class)]
 		var ent, arch string
+		var cfg *iface.Configuration
 		if rc != nil && rc.Entity != nil {
 			ent, arch = rc.Entity.Name, rc.ArchName
+			cfg = rc.Config
 		}
 		if ent == "" {
 			errs = append(errs, &EmitError{Kind: ErrUnboundEntity, Inst: dev.Name})
@@ -79,7 +82,7 @@ func Devices(res *elaborate.Resolution) (string, error) {
 				vecAgg = vectorNumbersAgg(vn)
 			}
 		}
-		insts = append(insts, instStmt(lc(dev.Name), ent, arch, dev.Generics, dev.GenericTypes, dev.Ports, busLit, subst, portOv, vecAgg))
+		insts = append(insts, instStmt(lc(dev.Name), ent, arch, cfg, dev.Generics, dev.GenericTypes, dev.Ports, busLit, subst, portOv, vecAgg))
 	}
 	if len(insts) > 0 {
 		stmts = append(stmts, &vhdl.Comment{Text: "Instantiate devices"})
@@ -118,13 +121,23 @@ func Devices(res *elaborate.Resolution) (string, error) {
 	return withBanner(vhdl.Print(df)), errors.Join(errs...)
 }
 
-// instStmt builds one `label : entity work.<entity>(<arch>) generic map(...) port map(...)`.
+// instStmt builds one device instantiation: `label : configuration work.<cfg>`
+// when cfg is non-nil (entity/arch are then ignored), else
+// `label : entity work.<entity>(<arch>)`, followed by the generic map + port map.
 // busLit is the device's device_t literal (e.g. "DEV_UART0") for a data-bus
 // participant, "" otherwise; it wires the device's KindDataBus ports to the
 // shared devs_bus_i/o arrays. subst remaps a port's global signal to its
 // DevicesExtra alias (sig_<name>) when present.
-func instStmt(label, entity, arch string, generics map[string]design.Value, genTypes map[string]*elaborate.ResolvedType, ports []*elaborate.ResolvedPort, busLit string, subst map[string]string, portOv map[string]string, vecAgg vhdl.Expr) *vhdl.InstantiationStmt {
-	inst := &vhdl.InstantiationStmt{Label: label, UnitKind: vhdl.ENTITY, Unit: "work." + lc(entity), Arch: arch}
+func instStmt(label, entity, arch string, cfg *iface.Configuration, generics map[string]design.Value, genTypes map[string]*elaborate.ResolvedType, ports []*elaborate.ResolvedPort, busLit string, subst map[string]string, portOv map[string]string, vecAgg vhdl.Expr) *vhdl.InstantiationStmt {
+	var inst *vhdl.InstantiationStmt
+	if cfg != nil {
+		// A class that resolved to a configuration (e.g. emac -> eth_mac_rmii_fpga)
+		// is instantiated as `configuration work.<cfg>` (Clojure instantiate-config),
+		// mirroring topInstStmt.
+		inst = &vhdl.InstantiationStmt{Label: label, UnitKind: vhdl.CONFIGURATION, Unit: "work." + lc(cfg.Name)}
+	} else {
+		inst = &vhdl.InstantiationStmt{Label: label, UnitKind: vhdl.ENTITY, Unit: "work." + lc(entity), Arch: arch}
+	}
 	// Build the generic map as (formal, actual) pairs so an injected expression
 	// generic (vector_numbers, a vhdl.Expr rather than a design.Value) can be
 	// sorted into alphabetical formal order alongside the design.Value generics.
