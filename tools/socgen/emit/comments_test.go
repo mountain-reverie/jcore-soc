@@ -470,6 +470,14 @@ func TestDevicesTurtleMuxEntityDivergence(t *testing.T) {
 	}
 }
 
+// TestWordAckGenTurtleComplete asserts the generated word_ack_gen.vhd is
+// byte-identical to the golden (T3b).
+func TestWordAckGenTurtleComplete(t *testing.T) {
+	res := loadBoard(t, "turtle_1v0")
+	got, _ := WordAckGen(res)
+	assertFileEqual(t, got, filepath.Join(os.Getenv("JCORE_SOC_ROOT"), "targets/boards/turtle_1v0/word_ack_gen.vhd"))
+}
+
 // TestResolutionBusWordTurtle verifies the bus-word directives migrated into
 // design.yaml reach the elaborated model in directive order (T3a).
 func TestResolutionBusWordTurtle(t *testing.T) {
