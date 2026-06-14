@@ -339,9 +339,10 @@ func muxChainStmts(res *elaborate.Resolution) []vhdl.Stmt {
 	out := make([]vhdl.Stmt, 0, len(res.DataBus.MuxStages))
 	for _, s := range res.DataBus.MuxStages {
 		inst := &vhdl.InstantiationStmt{
-			Label:    s.Label,
-			UnitKind: vhdl.ENTITY,
-			Unit:     "work." + s.Entity,
+			Label:         s.Label,
+			UnitKind:      vhdl.ENTITY,
+			Unit:          "work." + s.Entity,
+			KeepPortOrder: true,
 			PortMap: []*vhdl.AssocElement{
 				{Formal: "clk", Actual: &vhdl.Ident{Name: "clk_sys"}},
 				{Formal: "rst", Actual: &vhdl.Ident{Name: "reset"}},

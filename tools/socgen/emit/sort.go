@@ -15,7 +15,7 @@ import (
 // order-preserving corpus round-trip is unaffected.
 func sortInstMaps(df *vhdl.DesignFile) {
 	vhdl.Inspect(df, func(n vhdl.Node) bool {
-		if inst, ok := n.(*vhdl.InstantiationStmt); ok && inst.UnitKind != 0 {
+		if inst, ok := n.(*vhdl.InstantiationStmt); ok && inst.UnitKind != 0 && !inst.KeepPortOrder {
 			sortAssoc(inst.GenericMap)
 			sortAssoc(inst.PortMap)
 		}

@@ -362,6 +362,44 @@ func TestDevicesTurtleEmacConfig(t *testing.T) {
 	}
 }
 
+// muxBlock extracts the cpus_mux instantiation substring (from its label up to,
+// but excluding, the first closing ");") for relative-order assertions on the port
+// formals. The trailing ");" is intentionally excluded — callers only compare
+// formal positions within the block.
+func muxBlock(t *testing.T, dev string) string {
+	t.Helper()
+	i := strings.Index(dev, "cpus_mux :")
+	if i < 0 {
+		t.Fatalf("no cpus_mux instance in:\n%s", dev)
+	}
+	j := strings.Index(dev[i:], ");")
+	if j < 0 {
+		t.Fatalf("unterminated cpus_mux instance")
+	}
+	return dev[i : i+j]
+}
+
+// TestDevicesTurtleMuxPortOrder verifies the cpus_mux port map keeps the declared
+// order clk, rst, m1_i, m1_o, m2_i, m2_o, slave_i, slave_o (not alphabetical) —
+// faithful to Clojure instantiate-mux (T2/C2).
+func TestDevicesTurtleMuxPortOrder(t *testing.T) {
+	res := loadBoard(t, "turtle_1v0")
+	dev, _ := Devices(res)
+	blk := muxBlock(t, dev)
+	order := []string{"clk =>", "rst =>", "m1_i =>", "m1_o =>", "m2_i =>", "m2_o =>", "slave_i =>", "slave_o =>"}
+	prev := -1
+	for _, f := range order {
+		idx := strings.Index(blk, f)
+		if idx < 0 {
+			t.Fatalf("cpus_mux missing formal %q in:\n%s", f, blk)
+		}
+		if idx < prev {
+			t.Errorf("cpus_mux formal %q out of declared order:\n%s", f, blk)
+		}
+		prev = idx
+	}
+}
+
 // TestPadRingTurtleComplete asserts turtle pad_ring.vhd is byte-identical to the
 // canonical golden (T1 milestone gate), modulo the one known clock_locked1
 // divergence: turtle's reset_gen ties clock_locked1 to '1' (design.yaml), so the

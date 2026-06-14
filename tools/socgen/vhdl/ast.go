@@ -279,6 +279,11 @@ type InstantiationStmt struct {
 	Arch       string // entity architecture spec: entity work.x(arch)
 	GenericMap []*AssocElement
 	PortMap    []*AssocElement
+	// KeepPortOrder, when set, tells emit's sortInstMaps to leave the generic/port
+	// maps in their built order (e.g. the bus mux, whose port order is significant
+	// and faithful to Clojure instantiate-mux). Emit-only: the parser never sets it
+	// and the printer ignores it, so round-trip equality is unaffected.
+	KeepPortOrder bool
 }
 
 func (n *InstantiationStmt) Pos() Pos { return n.P }
