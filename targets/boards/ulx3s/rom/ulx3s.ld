@@ -7,6 +7,8 @@ SECTIONS {
   .text   : { *(.text) *(.text.*) } > BOOT
   .rodata : { *(.rodata) *(.rodata.*) } > BOOT
   .data   : { *(.data) *(.data.*) } > BOOT
+  . = ALIGN(4); __bss_start = .;
   .bss    : { *(.bss) *(.bss.*) *(COMMON) } > BOOT
+  . = ALIGN(4); __bss_end = .;
   /DISCARD/ : { *(.comment) *(.note*) }
 }

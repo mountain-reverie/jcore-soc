@@ -3,6 +3,7 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use work.cpu2j0_pack.all;
 use work.data_bus_pack.all;
+use work.config.all;
 
 entity ulx3s_top is
   port (
@@ -30,14 +31,18 @@ architecture rtl of ulx3s_top is
   signal uart_tx : std_logic;
   signal heartbeat : unsigned(23 downto 0) := (others => '0');
 
-  -- clkgen as a component so a configuration can pick sim (tb) vs ecp5 (synth);
-  -- default binding is the last-analyzed architecture (ecp5) for synthesis.
+  -- clkgen as a component: no configuration is used; the sim and synth flows
+  -- analyze different clkgen source files so the last-analyzed architecture
+  -- (sim for tb, ecp5 for synth) wins default binding.
   component clkgen
     port (clk_in : in std_logic; rst_in : in std_logic;
           clk : out std_logic; locked : out std_logic);
   end component;
 begin
-  ext_rst <= btn(0);  -- ULX3S btn(0) (PWR/FIRE1) as external reset
+  -- ULX3S btn(0) (FIRE1) as external reset: active-high when pressed, idle low
+  -- (PULLMODE=DOWN in ulx3s.lpf), so the board leaves reset automatically at
+  -- power-on with no button interaction.
+  ext_rst <= btn(0);
 
   clk : clkgen
     port map (clk_in => clk_25mhz, rst_in => ext_rst, clk => clk_cpu, locked => pll_locked);
@@ -79,8 +84,10 @@ begin
   cpu0_ddr_dbus_i <= loopback_bus(cpu0_ddr_dbus_o);
   cpu0_ddr_ibus_i <= (d => (others => '0'), ack => cpu0_ddr_ibus_o.en);
 
+  -- fclk derived from the board config so the baud divisor tracks the CPU
+  -- clock if the PLL setting changes (single source of truth: config.vhd).
   uart0 : entity work.uartlitedb(arch)
-    generic map (bps => 115200.0, fclk => 25.0e6, intcfg => 1)
+    generic map (bps => 115200.0, fclk => real(CFG_CLK_CPU_FREQ_HZ), intcfg => 1)
     port map (clk => clk_cpu, rst => rst,
               db_i => cpu0_periph_dbus_o, db_o => cpu0_periph_dbus_i,
               int => open, rx => ftdi_rxd, tx => uart_tx);
