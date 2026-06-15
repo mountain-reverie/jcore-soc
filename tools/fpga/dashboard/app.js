@@ -14,6 +14,14 @@ var BUDGET = {
 };
 var BOARD_COLOR = ["#1f77b4", "#2ca02c", "#e6b800", "#d62728"]; // assigned per board
 
+// Unit (MHz/cells) per full metric name, captured from the canonical `unit`
+// field as data is read (so we don't infer it from the name).
+var METRIC_UNIT = {};
+
+function htmlEsc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 function loadData(src) {
   return new Promise(function (resolve, reject) {
     var s = document.createElement("script");
@@ -55,6 +63,7 @@ function seriesByName(data) {
     data.entries[suite].forEach(function (run) {
       run.benches.forEach(function (b) {
         var board = boardOf(b.extra, b.name);
+        if (b.unit) METRIC_UNIT[b.name] = b.unit;
         if (!out[b.name]) out[b.name] = {};
         if (!out[b.name][board]) out[b.name][board] = [];
         out[b.name][board].push({ x: run.date, y: b.value });
@@ -91,7 +100,7 @@ function lineCard(parent, name, boardMap) {
         borderColor: "#999", borderDash: [6, 4], pointRadius: 0, fill: false, tension: 0 });
     }
   }
-  var unit = name.indexOf("Fmax") >= 0 ? "MHz" : "cells";
+  var unit = METRIC_UNIT[name] || (name.indexOf("Fmax") >= 0 ? "MHz" : "cells");
   new Chart(cv, {
     type: "line", data: { datasets: datasets },
     options: {
@@ -126,16 +135,17 @@ function renderLatest(all) {
     Object.keys(all[name]).forEach(function (board) {
       var pts = all[name][board];
       if (!pts || !pts.length) return;
-      var last = pts.slice().sort(function (a, b) { return a.x - b.x; })[pts.length - 1];
+      var sorted = pts.slice().sort(function (a, b) { return a.x - b.x; });
+      var last = sorted[sorted.length - 1];
       boards[board] = true;
       (rows[name] = rows[name] || {})[board] = last.y;
     });
   });
   var blist = Object.keys(boards).sort();
   var html = "<table border=1 cellpadding=4 style='border-collapse:collapse'><tr><th>metric</th>" +
-    blist.map(function (b) { return "<th>" + b + "</th>"; }).join("") + "</tr>";
+    blist.map(function (b) { return "<th>" + htmlEsc(b) + "</th>"; }).join("") + "</tr>";
   Object.keys(rows).sort().forEach(function (name) {
-    html += "<tr><td>" + name + "</td>" +
+    html += "<tr><td>" + htmlEsc(name) + "</td>" +
       blist.map(function (b) { return "<td>" + (rows[name][b] != null ? rows[name][b] : "—") + "</td>"; }).join("") +
       "</tr>";
   });

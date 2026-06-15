@@ -85,16 +85,22 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: false
+      # download-artifact@v4 with pattern exits 0 (downloads nothing) when no
+      # artifact matches, so the true first-run case needs no continue-on-error;
+      # a real download failure (permissions/network) should surface, not chart
+      # an empty run. The empty-array guard in the next step covers no-artifacts.
       - name: Download all board metrics
         uses: actions/download-artifact@v4
         with:
           pattern: metrics-*
           path: metrics-in
-        continue-on-error: true
       - name: Build action inputs
         run: |
           set -euo pipefail

@@ -17,8 +17,12 @@ def convert(canon_paths):
     for path in canon_paths:
         with open(path) as f:
             doc = json.load(f)
-        target, board = doc["target"], doc.get("board", "")
-        for m in doc["metrics"]:
+        try:
+            target, board = doc["target"], doc.get("board", "")
+            metrics = doc["metrics"]
+        except KeyError as e:
+            raise ValueError("malformed canonical doc in %s: missing key %s" % (path, e)) from e
+        for m in metrics:
             entry = {
                 "name": "%s · %s" % (target, m["name"]),
                 "unit": m["unit"],

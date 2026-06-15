@@ -47,6 +47,9 @@ python3 tools/fpga/emit_metrics.py --board ulx3s --commit "$COMMIT" \
 #    constrained clock (declared-clock closure). The bitstream + metrics above are
 #    already written, so local inspection still works; CI marks the commit red and
 #    the benchmark job (needs: bitstream) skips it (failing commits don't chart).
+#    Relies on nextpnr always printing "(PASS at N MHz)"/"(FAIL at N MHz)" under
+#    --timing-allow-fail; a nextpnr crash (not a timing miss) fails the pipeline
+#    earlier via pipefail (the `| tee` above) / ecppack, so it cannot false-green.
 if grep -qE '\(FAIL at [0-9.]+ *MHz\)' "$OUT/nextpnr.log"; then
   echo "TIMING GATE: nextpnr reports a timing violation (see $OUT/nextpnr.log):" >&2
   grep -E '\(FAIL at [0-9.]+ *MHz\)' "$OUT/nextpnr.log" >&2
