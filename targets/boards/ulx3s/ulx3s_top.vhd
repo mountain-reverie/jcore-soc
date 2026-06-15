@@ -29,10 +29,17 @@ architecture rtl of ulx3s_top is
 
   signal uart_tx : std_logic;
   signal heartbeat : unsigned(23 downto 0) := (others => '0');
+
+  -- clkgen as a component so a configuration can pick sim (tb) vs ecp5 (synth);
+  -- default binding is the last-analyzed architecture (ecp5) for synthesis.
+  component clkgen
+    port (clk_in : in std_logic; rst_in : in std_logic;
+          clk : out std_logic; locked : out std_logic);
+  end component;
 begin
   ext_rst <= btn(0);  -- ULX3S btn(0) (PWR/FIRE1) as external reset
 
-  clk : entity work.clkgen
+  clk : clkgen
     port map (clk_in => clk_25mhz, rst_in => ext_rst, clk => clk_cpu, locked => pll_locked);
 
   -- reset synchronizer: assert while PLL unlocked, release after sync
