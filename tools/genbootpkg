@@ -1,0 +1,38 @@
+#!/usr/bin/env perl
+# genbootpkg <main.bin> <depth_words> > boot_image_pkg.vhd
+# Emits a VHDL package with a DEPTH-entry array of 32-bit words, big-endian
+# packed from the input binary, zero-filled past the binary's end.
+use strict;
+use warnings;
+
+my ($binfile, $depth) = @ARGV;
+die "usage: genbootpkg <main.bin> <depth_words>\n" unless defined $binfile && defined $depth;
+
+open(my $fh, '<:raw', $binfile) or die "cannot open $binfile: $!";
+local $/;
+my $bytes = <$fh>;
+close($fh);
+my @b = unpack('C*', $bytes);
+
+die "boot image too large: " . (scalar @b) . " bytes > " . ($depth*4) . "\n"
+  if scalar(@b) > $depth * 4;
+
+print "library ieee;\n";
+print "use ieee.std_logic_1164.all;\n\n";
+my $hi = $depth - 1;
+print "package boot_image_pkg is\n";
+print "  constant BOOT_DEPTH : integer := $depth;\n";
+print "  type boot_image_t is array (0 to $hi) of std_logic_vector(31 downto 0);\n";
+print "  constant BOOT_IMAGE : boot_image_t := (\n";
+my @lines;
+for (my $w = 0; $w < $depth; $w++) {
+  my $i = $w * 4;
+  my $b0 = $b[$i]   // 0;
+  my $b1 = $b[$i+1] // 0;
+  my $b2 = $b[$i+2] // 0;
+  my $b3 = $b[$i+3] // 0;
+  push @lines, sprintf('    %d => x"%02x%02x%02x%02x"', $w, $b0, $b1, $b2, $b3);
+}
+print join(",\n", @lines), "\n";
+print "  );\n";
+print "end package boot_image_pkg;\n";
