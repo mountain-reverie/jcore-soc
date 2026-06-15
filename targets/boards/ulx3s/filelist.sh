@@ -26,6 +26,36 @@ FILES=(
   components/misc/misc_pkg.vhd
   targets/boards/ulx3s/config.vhd
   targets/data_bus_pkg.vhd
+  # M1b: cache + ddr_ram_mux + dma (depend on cpu2j0_pack + data_bus_pack)
+  components/ddr2/ddrc_cnt_pkg.vhd
+  components/cpu/cache/cache_pkg.vhd
+  lib/reg_file_struct/bist_pkg.vhd
+  components/dma/dma_pkg.vhd
+  lib/memory_tech_lib/memory_pkg.vhd
+  lib/memory_tech_lib/ram_1rw.vhd
+  lib/memory_tech_lib/ram_2rw.vhd
+  lib/memory_tech_lib/tech/inferred/ram_1rw_infer.vhd
+  lib/memory_tech_lib/tech/inferred/ram_2rw_infer.vhd
+  components/misc/bus_mux_pkg.vhd
+  components/misc/bus_mux_ff_pkg.vhd
+  components/misc/bus_mux_lock_pkg.vhd
+  components/misc/bus_mux_typec_pkg.vhd
+  components/cpu/cache/dcache_adapter.vhd
+  components/cpu/cache/icache_adapter.vhd
+  components/cpu/cache/dcache_ram.vhd
+  components/cpu/cache/icache_ram.vhd
+  components/cpu/cache/dcache_ccl.vhd
+  components/cpu/cache/dcache_mcl.vhd
+  components/cpu/cache/icache_ccl.vhd
+  components/cpu/cache/icache_mcl.vhd
+  components/cpu/cache/dcache.vhd
+  components/cpu/cache/icache.vhd
+  components/cpu/cache/cache_config_fpga.vhd
+  components/misc/bus_mux_typecsub.vhd
+  components/misc/bus_mux_typec.vhd
+  targets/ddr_ram_mux/ddr_ram_mux.vhd
+  targets/ddr_ram_mux/one_cpu_idcache.vhd
+  targets/ddr_ram_mux/one_cpu_idcache_fpga.vhd
   targets/cpu_core_pkg.vhd
   targets/cpu_core.vhd
   targets/cpus.vhd
