@@ -61,6 +61,31 @@ begin
   end process;
 
   stim : process
+    -- hold the request asserted until the controller acks (held-bus requester,
+    -- robust to controller-not-ready), then drop it.
+    procedure do_write(addr, data : std_logic_vector(31 downto 0);
+                       we : std_logic_vector(3 downto 0)) is
+    begin
+      req.en <= '1'; req.a <= addr; req.wr <= '1'; req.rd <= '0';
+      req.we <= we; req.d <= data; bst <= '0';
+      wait until resp.ack = '1' for 10 us;
+      assert resp.ack = '1' report "write ack timeout" severity failure;
+      req.en <= '0'; req.wr <= '0'; req.we <= "0000"; req.d <= (others => '0');
+      wait until rising_edge(clk);
+    end procedure;
+
+    procedure do_read(addr : std_logic_vector(31 downto 0);
+                      data : out std_logic_vector(31 downto 0)) is
+    begin
+      req.en <= '1'; req.a <= addr; req.rd <= '1'; req.wr <= '0'; bst <= '0';
+      wait until resp.ack = '1' for 10 us;
+      assert resp.ack = '1' report "read ack timeout" severity failure;
+      data := resp.d;
+      req.en <= '0'; req.rd <= '0';
+      wait until rising_edge(clk);
+    end procedure;
+
+    variable rdata : std_logic_vector(31 downto 0);
   begin
     wait until rising_edge(clk);
     rst <= '0';
@@ -71,6 +96,12 @@ begin
     assert pre_all_before_lmr report "LMR without a preceding PRECHARGE-ALL" severity failure;
     assert refs_before_lmr_ok report "LMR without >=2 AUTO-REFRESH" severity failure;
     report "ctrl init OK" severity note;
+
+    -- Scenario 2: single 32-bit write then read back.
+    do_write(x"00000020", x"CAFEBABE", "1111");
+    do_read (x"00000020", rdata);
+    assert rdata = x"CAFEBABE" report "single rw failed" severity failure;
+    report "single rw OK" severity note;
 
     done <= true;
     wait;
