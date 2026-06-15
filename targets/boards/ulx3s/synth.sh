@@ -16,6 +16,12 @@ make -C components/cpu/decode generate
 ( cd components/cpu && for f in core/mult core/datapath decode/decode_core; do
     LD_LIBRARY_PATH='' perl ../../tools/v2p < "$f.vhm" > "$f.vhd"; done )
 LD_LIBRARY_PATH='' perl tools/v2p < components/uartlite/uart.vhm > components/uartlite/uart.vhd
+# M1b: v2p the cache + bus-mux cores
+for f in components/cpu/cache/dcache_ccl components/cpu/cache/dcache_mcl \
+         components/cpu/cache/icache_ccl components/cpu/cache/icache_mcl \
+         components/misc/bus_mux_typecsub components/misc/bus_mux_typec; do
+  LD_LIBRARY_PATH='' perl tools/v2p < "$f.vhm" > "$f.vhd"
+done
 
 # 3. file list: the sim list plus the ecp5 clkgen arch (analyzed last so default
 #    binding selects clkgen(ecp5) over clkgen(sim)).

@@ -5,4 +5,7 @@
 package config is
   constant CFG_CLK_CPU_PERIOD_NS : integer := 40;  -- 25 MHz CPU clock
   constant CFG_CLK_CPU_FREQ_HZ   : integer := 25000000;
+  -- M1b: ddrc_cnt_pkg (imported by cache_pkg for ddr_status_o_t) needs this.
+  -- We use sdram_ctrl, not the ddr2 fsm, so the exact value is inert here.
+  constant CFG_DDR_CK_CYCLE      : integer := 20;
 end package config;
