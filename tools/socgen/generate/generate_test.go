@@ -317,3 +317,60 @@ func TestBoardDTSTurtleIPIVector(t *testing.T) {
 		t.Errorf("turtle ipi interrupt not vector 0x14:\n%s", dts)
 	}
 }
+
+// TestBoardDTSTurtleComplete asserts turtle board.dts is byte-identical to the
+// golden — the T4a milestone gate (SMP + dual-AIC reg + ipi vector).
+func TestBoardDTSTurtleComplete(t *testing.T) {
+	root := os.Getenv("JCORE_SOC_ROOT")
+	if root == "" {
+		t.Skip("JCORE_SOC_ROOT not set")
+	}
+	b, _ := board.Load(root, "turtle_1v0")
+	res, _ := elaborate.Elaborate(b)
+	got, err := devicetree.BoardDTS(b, res)
+	if err != nil {
+		t.Fatalf("BoardDTS: %v", err)
+	}
+	golden, gerr := os.ReadFile(filepath.Join(root, "targets/boards/turtle_1v0/board.dts"))
+	if gerr != nil {
+		t.Fatalf("read golden: %v", gerr)
+	}
+	if got != string(golden) {
+		gl, wl := strings.Split(got, "\n"), strings.Split(string(golden), "\n")
+		for i := 0; i < len(gl) || i < len(wl); i++ {
+			var a, w string
+			if i < len(gl) {
+				a = gl[i]
+			}
+			if i < len(wl) {
+				w = wl[i]
+			}
+			if a != w {
+				t.Fatalf("board.dts differs at line %d:\n got:  %q\n want: %q", i+1, a, w)
+			}
+		}
+		t.Fatalf("board.dts differs (length %d vs %d)", len(got), len(golden))
+	}
+}
+
+// TestBoardDTSMimasUnchanged guards that the single-aic, non-SMP mimas board.dts
+// stays byte-exact (the dual-AIC interleave must be a no-op for one aic).
+func TestBoardDTSMimasUnchanged(t *testing.T) {
+	root := os.Getenv("JCORE_SOC_ROOT")
+	if root == "" {
+		t.Skip("JCORE_SOC_ROOT not set")
+	}
+	b, _ := board.Load(root, "mimas_v2")
+	res, _ := elaborate.Elaborate(b)
+	got, err := devicetree.BoardDTS(b, res)
+	if err != nil {
+		t.Fatalf("BoardDTS: %v", err)
+	}
+	golden, gerr := os.ReadFile(filepath.Join(root, "targets/boards/mimas_v2/board.dts"))
+	if gerr != nil {
+		t.Fatalf("read golden: %v", gerr)
+	}
+	if got != string(golden) {
+		t.Errorf("mimas board.dts changed (must stay byte-exact)")
+	}
+}
