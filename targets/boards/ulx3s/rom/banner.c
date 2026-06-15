@@ -7,6 +7,8 @@ static void putc_uart(char c)
 {
 	while (UART_STATUS & TX_FULL)
 		;
+	/* Must be a 32-bit store: uartlitedb reads d(7:0); a byte store on the
+	   big-endian SH2 would land the char in d(31:24) and transmit 0x00. */
 	UART_DATA = (unsigned int)(unsigned char)c;
 }
 

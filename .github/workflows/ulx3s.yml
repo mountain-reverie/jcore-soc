@@ -1,7 +1,7 @@
 name: ulx3s-m0
 on:
   push:
-    branches: [ feat/ulx3s-m0-bram-uart ]
+    branches: [ main, master, feat/ulx3s-m0-bram-uart ]
     paths:
       - 'targets/boards/ulx3s/**'
       - 'components/memory/**'

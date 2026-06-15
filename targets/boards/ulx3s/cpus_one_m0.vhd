@@ -1,3 +1,9 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use work.cpu2j0_pack.all;
+use work.data_bus_pack.all;
+use work.cpu_core_pack.all;
+
 -- M0 single-CPU cpus architecture: identical to targets/cpus_one.vhd's
 -- one_cpu except the boot memory binds bootram_infer (inferred ECP5 EBR)
 -- instead of the Xilinx memory_fpga.

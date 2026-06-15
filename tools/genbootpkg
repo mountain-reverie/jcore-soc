@@ -14,6 +14,7 @@ my $bytes = <$fh>;
 close($fh);
 my @b = unpack('C*', $bytes);
 
+die "boot image is empty ($binfile)\n" if scalar(@b) == 0;
 die "boot image too large: " . (scalar @b) . " bytes > " . ($depth*4) . "\n"
   if scalar(@b) > $depth * 4;
 
