@@ -1,0 +1,12 @@
+Info: Logic utilisation before packing:
+Info:     TRELLIS_COMB:  5111/83640    6%
+Info:     TRELLIS_FF:     975/83640    1%
+Info:     TRELLIS_IO:       21/  365    5%
+Info: Heap analysis...
+Info: Device utilisation:
+Info:           TRELLIS_IO:    21/  365     5%
+Info:                DP16KD:    16/  208     7%
+Info:            MULT18X18D:     2/  156     1%
+Info:               EHXPLLL:     1/    4    25%
+Info: Max frequency for clock '$glbnet$clk_cpu': 78.20 MHz (PASS at 25.00 MHz)
+Info: Max frequency for clock '$glbnet$clk_25mhz': 412.00 MHz (PASS at 25.00 MHz)

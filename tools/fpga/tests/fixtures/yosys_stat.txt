@@ -1,0 +1,9 @@
+=== ulx3s_top ===
+
+   Number of cells:               8179
+     DP16KD                         16
+     EHXPLLL                         1
+     L6MUX21                        16
+     LUT4                          148
+     MULT18X18D                      2
+     TRELLIS_FF                    975
