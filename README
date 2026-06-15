@@ -21,8 +21,8 @@ descriptions and generated VHDL. The generated VHDL stitches together
 the hand-written VHDL from the components directories to build the SoC
 and connects the external inputs and output lines to pins.
 
-targets/soc_gen/
-Tool for generating top-level VHDL for boards from design descriptions.
+tools/socgen/
+Go tool for generating top-level VHDL for boards from design descriptions.
 
 tests/
 Simulation test benches for blocks, sets of blocks, subsystems and
@@ -68,10 +68,10 @@ Building
 --------
 
 The top-level Makefile has targets for each module/mother board
-combination. To build a bitstream for the Jx board 1v1
+combination. To build a bitstream for the Jx board 1v0
 board run
 
-  soc_top$ make turtle_1v1
+  soc_top$ make turtle_1v0
 
 The output of the build is placed in a newly created directory under
 output/. The name of the directory contains the current date and time.
@@ -80,12 +80,12 @@ output directory is also created.
 
 For example, it might create a directory called
 
-  soc_top/output/2019-02-15_21-44-19_turtle_1v1
+  soc_top/output/2019-02-15_21-44-19_turtle_1v0
 
 and there will be a symbolic link pointing to the above directory called
 
   soc_top$ ls -l last_output
-  lrwxrwxrwx 1 geoff geoff 42 Feb  15 21:44 last_output -> output/2019-02-15_21-44-19_turtle_1v1
+  lrwxrwxrwx 1 geoff geoff 42 Feb  15 21:44 last_output -> output/2019-02-15_21-44-19_turtle_1v0
 
 
 Prerequisites
@@ -109,19 +109,17 @@ soc_gen
 The Makefile targets like "turtle_1v0" come from directory names in targets/boards
 
   soc_top$ ls targets/boards/
-  turtle_1v0 turtle_1v1 mimas_v2 ...
+  microboard mimas_v2 turtle_1v0
 
 Each of these directories contains the board-specific files including
-a Makefile, constraints file, generated VHDL files and a design.edn
-file. The design.edn file is one of the inputs to the soc_gen tool
-which generates the VHDL files. The file format edn is defined here
-https://github.com/edn-format/edn, but there are no docs about writing
-a design.edn file yet. Refer to the existing ones for examples.
+a Makefile, constraints file, generated VHDL files and a design.yaml
+file. The design.yaml file is the input to the soc_gen tool which
+generates the VHDL files. Refer to the existing ones for examples.
 
-To run soc_gen, and regenerated the VHDL files in one of the
-targets/boards/turtle_1v1 directory run
+To run soc_gen and regenerate the VHDL files in the
+targets/boards/turtle_1v0 directory run
 
-  soc_top$ make turtle_1v1 TARGET=soc_gen
+  soc_top$ make turtle_1v0 TARGET=soc_gen
 
 Run soc_gen against all boards by running
 
@@ -132,22 +130,6 @@ to run with the BOARDS parameter
 
   soc_top$ make soc_gen BOARDS="turtle"
 
-However, to run above command you'll need to do one of two things:
-
-1) Install a JDK and the tool leiningen (http://leiningen.org/).
-leiningen exists in many linux distributions software repos, but is
-often an old 1.x version. You will have better luck copying the lein
-file from the webpage and putting it in your user's ~/bin directory
-and ensuring that directory is in your PATH.
-
-2) or get the soc_gen.jar file and place it in your soc_top directory.
-With this file, you will only need a JRE installed. You likely already
-have a JRE. Try running "java" to see you have java installed.
-
-If you have the JDK and lein installed and want to create soc_gen.jar,
-cd to the targets/soc_gen directory and run
-
-  soc_top/targets/soc_gen$ ./create_jar.sh
-
-and it will create soc_gen.jar in that directory. The soc_top Makefile
-won't use the jar file unless it's placed in soc_top/.
+The soc_gen tool is written in Go and lives at tools/socgen. No JDK,
+leiningen, or soc_gen.jar is needed. Install Go from https://go.dev/dl/
+and ensure it is on your PATH.
