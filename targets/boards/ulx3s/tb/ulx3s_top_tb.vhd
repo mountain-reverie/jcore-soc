@@ -69,8 +69,10 @@ begin
         n := n + 1;
         buf(n) := character'val(to_integer(unsigned(b)));
       end if;
-      if contains(buf, n, "J2 on ULX3S") then
-        report "ulx3s_top_tb PASSED: banner decoded" severity note;
+      assert not contains(buf, n, "SDRAM TEST FAIL")
+        report "ulx3s_top_tb FAILED: SDRAM memory test reported FAIL" severity failure;
+      if contains(buf, n, "J2 on ULX3S") and contains(buf, n, "SDRAM TEST PASS") then
+        report "ulx3s_top_tb PASSED: banner + SDRAM TEST PASS decoded" severity note;
         done <= true;
         wait;
       end if;
@@ -78,7 +80,7 @@ begin
   end process;
 
   watchdog : process begin
-    wait for 2 ms;
+    wait for 18 ms;
     assert done report "TIMEOUT: required UART output not seen" severity failure;
     wait;
   end process;

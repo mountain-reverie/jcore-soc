@@ -40,7 +40,7 @@ $GHDL "${FILES[@]}"
 $GHDL components/sdram/sdram_model.vhd
 $GHDL targets/boards/ulx3s/tb/ulx3s_top_tb.vhd
 ghdl -e --std=93 -fexplicit -fsynopsys --syn-binding --workdir="$WORK" ulx3s_top_tb
-ghdl -r --std=93 -fexplicit -fsynopsys --syn-binding --workdir="$WORK" ulx3s_top_tb --stop-time=5ms --assert-level=error
+ghdl -r --std=93 -fexplicit -fsynopsys --syn-binding --workdir="$WORK" ulx3s_top_tb --stop-time=20ms --assert-level=error
 
 # 4. bootram unit testbench (separate work lib: uses the deadbeef test image)
 echo "=== bootram_infer_tb ==="
