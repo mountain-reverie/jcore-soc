@@ -456,17 +456,16 @@ func TestDevicesTurtleRtcDivergence(t *testing.T) {
 	}
 }
 
-// TestDevicesTurtleMuxEntityDivergence documents + guards C6: cpus_mux binds the
-// combinational multi_master_bus_mux (current Clojure, generate.clj:434); the
-// golden's multi_master_bus_muxff(a) is removed/stale registered hardware.
-func TestDevicesTurtleMuxEntityDivergence(t *testing.T) {
+// TestDevicesTurtleMuxEntityPostPhase2 guards that the phase-2 post-pass (T3c)
+// converts cpus_mux to multi_master_bus_muxff(a), matching the golden
+// (awk_p02_02_devices transform 2 — "improve delay" no-dma conversion).
+// Prior to T3c this was documented as a divergence (C6); after T3c the golden and
+// our output agree.
+func TestDevicesTurtleMuxEntityPostPhase2(t *testing.T) {
 	res := loadBoard(t, "turtle_1v0")
 	dev, _ := Devices(res)
-	if !strings.Contains(dev, "cpus_mux : entity work.multi_master_bus_mux") {
-		t.Errorf("cpus_mux not bound to multi_master_bus_mux:\n%s", dev)
-	}
-	if strings.Contains(dev, "muxff") {
-		t.Errorf("cpus_mux should not use the (stale) muxff variant")
+	if !strings.Contains(dev, "cpus_mux : entity work.multi_master_bus_muxff(a)") {
+		t.Errorf("cpus_mux not bound to multi_master_bus_muxff(a) after phase-2:\n%s", dev)
 	}
 }
 
@@ -476,6 +475,26 @@ func TestWordAckGenTurtleComplete(t *testing.T) {
 	res := loadBoard(t, "turtle_1v0")
 	got, _ := WordAckGen(res)
 	assertFileEqual(t, got, filepath.Join(os.Getenv("JCORE_SOC_ROOT"), "targets/boards/turtle_1v0/word_ack_gen.vhd"))
+}
+
+// TestDevicesTurtleComplete asserts the final (post-phase-2) devices.vhd is
+// byte-identical to golden, modulo the one documented stale-rtc divergence (T3c):
+// the golden declares + wires the write-only rtc_sec/rtc_nsec; current Clojure
+// (and we) prune them to `=> open`. Normalize the golden's rtc to our pruned form
+// before compare (drop the 2 signal decls; rewrite the aic0 wiring to => open).
+func TestDevicesTurtleComplete(t *testing.T) {
+	res := loadBoard(t, "turtle_1v0")
+	got, _ := Devices(res)
+	goldenB, err := os.ReadFile(filepath.Join(os.Getenv("JCORE_SOC_ROOT"), "targets/boards/turtle_1v0/devices.vhd"))
+	if err != nil {
+		t.Fatalf("read golden: %v", err)
+	}
+	g := string(goldenB)
+	g = strings.Replace(g, "    signal rtc_nsec : std_logic_vector(31 downto 0);\n", "", 1)
+	g = strings.Replace(g, "    signal rtc_sec : std_logic_vector(63 downto 0);\n", "", 1)
+	g = strings.Replace(g, "            rtc_nsec => rtc_nsec,", "            rtc_nsec => open,", 1)
+	g = strings.Replace(g, "            rtc_sec => rtc_sec", "            rtc_sec => open", 1)
+	assertEqualStr(t, got, g, "turtle devices.vhd (modulo stale rtc)")
 }
 
 // TestResolutionBusWordTurtle verifies the bus-word directives migrated into

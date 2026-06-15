@@ -119,7 +119,11 @@ func Devices(res *elaborate.Resolution) (string, error) {
 		},
 	}
 	sortInstMaps(df)
-	return withBanner(vhdl.Print(df)), errors.Join(errs...)
+	out := withBanner(vhdl.Print(df))
+	if len(res.BusWord) > 0 {
+		out = phase2Devices(out, res)
+	}
+	return out, errors.Join(errs...)
 }
 
 // instStmt builds one device instantiation: `label : configuration work.<cfg>`

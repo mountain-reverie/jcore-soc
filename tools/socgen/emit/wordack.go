@@ -111,3 +111,42 @@ func WordAckGen(res *elaborate.Resolution) (string, error) {
 	b.WriteString("end impl;\n")
 	return b.String(), nil
 }
+
+// phase2Devices applies the turtle phase-2 transforms (awk_p02_02_devices) to the
+// rendered devices.vhd as a faithful text post-pass: (1) insert the byte-bus
+// banner line after the "running soc_gen." line; (2) convert the no-dma cpus_mux
+// from multi_master_bus_mux to multi_master_bus_muxff(a); (3) splice the
+// word_ack_gen instance over the master read-back assignment. Only called for a
+// board with #bus_word devices (res.BusWord non-empty).
+func phase2Devices(s string, res *elaborate.Resolution) string {
+	if res.DataBus == nil {
+		// A word-ack board with no data-bus devices has no master read-back to splice
+		// (and no mux). Not produced by any board; guard mirrors WordAckGen so a
+		// future mis-spec degrades to a no-op rather than a nil dereference.
+		return s
+	}
+	astLine, _, _ := strings.Cut(fileBanner, "\n") // "-- ****…****"
+	socGenLine := "-- the tool is run. See soc_top/README for information on running soc_gen.\n"
+	// (1) banner: after the soc_gen line, insert an asterisk line + the byte-bus note.
+	s = strings.Replace(s, socGenLine,
+		socGenLine+astLine+"\n-- byte bus post-processing script (script Apr/2017) --\n", 1)
+	// (2) mux -> muxff(a) (no-dma). Match the no-arch line (trailing newline guards
+	// against matching an already-"muxff" name).
+	s = strings.Replace(s, "work.multi_master_bus_mux\n", "work.multi_master_bus_muxff(a)\n", 1)
+	// (3) word_ack splice over `<master>_periph_dbus_i <= devs_bus_i(active_dev);`.
+	master := res.DataBus.MasterBus
+	target := "    " + master + "_periph_dbus_i <= devs_bus_i(active_dev);\n"
+	var b strings.Builder
+	fmt.Fprintf(&b, "    %s_periph_dbus_i.d <= devs_bus_i(active_dev).d;\n", master)
+	b.WriteString("\n")
+	b.WriteString("    word_ack_gen : entity work.word_ack_gen ( impl )\n")
+	b.WriteString("      port map (\n")
+	fmt.Fprintf(&b, "        %-20s => %s_periph_dbus_o.a,\n", "adr", master)
+	fmt.Fprintf(&b, "        %-20s => %s_periph_dbus_o.en,\n", "word_bus_en", master)
+	for _, name := range res.BusWord {
+		fmt.Fprintf(&b, "        %-20s => devs_bus_i(%s).ack,\n", "ack_thru_in_"+name, devLit(name))
+	}
+	fmt.Fprintf(&b, "        %-20s => %s_periph_dbus_i.ack\n", "word_ack", master)
+	b.WriteString("    );\n")
+	return strings.Replace(s, target, b.String(), 1)
+}
