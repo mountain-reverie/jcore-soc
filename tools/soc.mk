@@ -103,32 +103,15 @@ vhdl_list.txt: config/config.vhd $(addprefix ../../,$(VHDL_FILES))
 # Run soc_gen
 ################################################################################
 
-ifeq ($(wildcard $(TOP_DIR)/soc_gen.jar),)
-
 soc_gen:
-	@command -v lein || (printf "***************************************************************************\n****** Cannot find lein tool (http://leiningen.org/) nor soc_gen.jar ******\n****** One is required to run the soc_gen tool.                      ******\n***************************************************************************\n" && false)
-	(cd $(TOP_DIR)/targets/soc_gen; lein run $(BOARD_NAME))
+	@command -v go >/dev/null 2>&1 || (printf "***************************************************************************\n****** Go (https://go.dev/dl/) is required to run the soc_gen tool.   ******\n***************************************************************************\n" && false)
+	(cd $(TOP_DIR)/tools/socgen && go run ./cmd/socgen -root "$(TOP_DIR)" "$(BOARD_NAME)")
 	@echo "Done"
 
+# soc_regen watches the board's yaml inputs and regenerates on change (Ctrl-C to stop).
 soc_regen:
-	@command -v lein || (printf "***************************************************************************\n****** Cannot find lein tool (http://leiningen.org/) nor soc_gen.jar ******\n****** One is required to run the soc_gen tool.                      ******\n***************************************************************************\n" && false)
-	(cd $(TOP_DIR)/targets/soc_gen; lein run -r $(BOARD_NAME))
-	@echo "Done"
-
-else
-
-# use packaged soc_gen.jar
-soc_gen:
-	@echo "Running soc_gen.jar"
-	(cd $(TOP_DIR)/targets/soc_gen; java -jar ../../soc_gen.jar $(BOARD_NAME))
-	@echo "Done"
-
-soc_regen:
-	@echo "Running soc_gen.jar"
-	(cd $(TOP_DIR)/targets/soc_gen; java -jar ../../soc_gen.jar -r $(BOARD_NAME))
-	@echo "Done"
-
-endif
+	@command -v go >/dev/null 2>&1 || (printf "***************************************************************************\n****** Go (https://go.dev/dl/) is required to run the soc_gen tool.   ******\n***************************************************************************\n" && false)
+	(cd $(TOP_DIR)/tools/socgen && go run ./cmd/socgen -watch -root "$(TOP_DIR)" "$(BOARD_NAME)")
 
 ################################################################################
 # Build device tree dtb
