@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>jcore-soc — Board Synthesis Metrics</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 1.5rem; color: #1b1b1b; }
+    h1 { font-size: 1.4rem; } h2 { font-size: 1.1rem; margin-top: 2rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1rem; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 0.75rem; }
+    .muted { color: #666; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <h1>jcore-soc board synthesis metrics</h1>
+  <p class="muted">Per-commit ECP5 (LFE5U-85F) utilisation &amp; Fmax from yosys + nextpnr-ecp5.
+    Dashed lines are the 85F resource budgets. Raw data:
+    <a href="./bench-size/benchmark-data.json">size</a> ·
+    <a href="./bench-speed/benchmark-data.json">speed</a>.</p>
+
+  <section id="fpga-section" hidden>
+    <h2>FPGA — ECP5 (LFE5U-85F)</h2>
+    <div id="trends-ecp5" class="grid"></div>
+  </section>
+
+  <h2>Latest values</h2>
+  <div id="latest"></div>
+
+  <script src="./app.js" defer></script>
+</body>
+</html>
