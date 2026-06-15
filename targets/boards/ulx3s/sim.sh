@@ -18,10 +18,11 @@ rm -rf "$WORK" "$UNITWORK"; mkdir -p "$WORK" "$UNITWORK"
 make -C targets/boards/ulx3s/rom
 perl tools/genbootpkg targets/boards/ulx3s/rom/main.bin 4096 > targets/boards/ulx3s/boot_image_pkg.vhd
 
-# 2. cpu sources (decode generate + v2p)
+# 2. generated sources: cpu (decode generate + v2p) and uartlite uart.vhd
 make -C components/cpu/decode generate
 ( cd components/cpu && for f in core/mult core/datapath decode/decode_core; do
     LD_LIBRARY_PATH='' perl ../../tools/v2p < "$f.vhm" > "$f.vhd"; done )
+LD_LIBRARY_PATH='' perl tools/v2p < components/uartlite/uart.vhm > components/uartlite/uart.vhd
 
 # 3. full design analyze (real banner boot_image_pkg) + banner testbench
 echo "=== ulx3s_top_tb ==="
