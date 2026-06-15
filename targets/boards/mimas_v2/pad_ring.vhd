@@ -190,7 +190,6 @@ architecture impl of pad_ring is
     signal clk_sys_90 : std_logic;
     signal clkgen_i : std_logic;
     signal clock_locked0 : std_logic;
-    signal clock_locked1 : std_logic;
     signal ddr_clk : std_logic;
     signal ddr_sd_ctrl : sd_ctrl_t;
     signal ddr_sd_data_i : sd_data_i_t;

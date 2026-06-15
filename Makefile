@@ -161,7 +161,7 @@ soc_gen:
 	@command -v go >/dev/null 2>&1 || (printf "***************************************************************************\n****** Go (https://go.dev/dl/) is required to run the soc_gen tool.   ******\n***************************************************************************\n" && false)
 	@for b in $(if $(BOARDS),$(BOARDS),$(SOCGEN_BOARDS)); do \
 		echo "soc_gen $$b"; \
-		(cd tools/socgen && go run ./cmd/socgen -root .. "$$b") || exit 1; \
+		(cd tools/socgen && go run ./cmd/socgen -root "$(CURDIR)" "$$b") || exit 1; \
 	done
 	@echo "Done"
 

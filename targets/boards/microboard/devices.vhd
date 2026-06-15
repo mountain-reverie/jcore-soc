@@ -32,8 +32,6 @@ entity devices is
         emac_phy_rxd : in std_logic_vector(3 downto 0);
         emac_phy_tx_en : out std_logic;
         emac_phy_txd : out std_logic_vector(3 downto 0);
-        eth_rx_clk : in std_logic;
-        eth_tx_clk : in std_logic;
         flash_clk : out std_logic;
         flash_cs : out std_logic_vector(1 downto 0);
         flash_miso : in std_logic;
@@ -46,8 +44,8 @@ entity devices is
     );
 end;
 architecture impl of devices is
-    signal rtc_nsec : std_logic_vector(31 downto 0);
-    signal rtc_sec : std_logic_vector(63 downto 0);
+    signal eth_rx_clk : std_logic;
+    signal eth_tx_clk : std_logic;
     type device_t is (NONE, DEV_AIC0, DEV_EMAC, DEV_FLASH, DEV_GPIO, DEV_UART0);
     signal active_dev : device_t;
     type data_bus_i_t is array (device_t'left to device_t'right) of cpu_data_i_t;
@@ -114,8 +112,8 @@ begin
             irq_i => irqs0,
             reboot => open,
             rst_i => reset,
-            rtc_nsec => rtc_nsec,
-            rtc_sec => rtc_sec
+            rtc_nsec => open,
+            rtc_sec => open
         );
     emac : entity work.eth_mac(rtl)
         generic map (
