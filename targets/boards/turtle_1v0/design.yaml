@@ -101,6 +101,7 @@ zero-signals:
   - debug_i
 
 bus-word: [aic0, aic1, emac, uart0]
+# bus-word-loopback-ack: byte-bus-only (out of scope; was design.ph2_c #bus_wordloopbackack)
 bus-word-loopback-ack: [cache_ctrl, flash, gpio]
 
 system:

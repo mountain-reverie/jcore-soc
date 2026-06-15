@@ -64,12 +64,17 @@ func Build(b *board.Board, res *elaborate.Resolution) ([]File, error) {
 	}
 
 	// word_ack_gen.vhd: phase-2 (turtle) — only for boards with #bus_word devices.
+	// NOT added to build.mk: the legacy build.mk is phase-1 (Clojure) output and
+	// never lists the phase-2 word_ack_gen.vhd; the board Makefile's *.vhd wildcard
+	// compiles it. InBuildMK:false keeps our build.mk byte-exact to the golden.
 	if len(res.BusWord) > 0 {
 		content, err := emit.WordAckGen(res)
 		if err != nil {
 			errs = append(errs, &GenerateError{Kind: ErrEmit, Name: "word_ack_gen.vhd", Detail: err.Error()})
+		} else if content == "" {
+			errs = append(errs, &GenerateError{Kind: ErrEmptyContent, Name: "word_ack_gen.vhd"})
 		}
-		files = append(files, File{Name: "word_ack_gen.vhd", Content: content, InBuildMK: true})
+		files = append(files, File{Name: "word_ack_gen.vhd", Content: content, InBuildMK: false})
 	}
 
 	for _, p := range b.Design.Plugins {
