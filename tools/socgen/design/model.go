@@ -17,7 +17,11 @@ type Design struct {
 	MergeSignals       map[string][]string     `yaml:"merge-signals"`
 	ZeroSignals        []string                `yaml:"zero-signals"`
 	BusWord            []string                `yaml:"bus-word"`
-	BusWordLoopbackAck []string                `yaml:"bus-word-loopback-ack"`
+	// BusWordLoopbackAck is captured from design.yaml (was design.ph2_c
+	// #bus_wordloopbackack) but not yet consumed: it only matters for the byte-bus
+	// boards (soc1_*), which are out of scope until byte-bus support lands.
+	// TODO(byte-bus): carry into Resolution + consume when byte-bus boards are in scope.
+	BusWordLoopbackAck []string `yaml:"bus-word-loopback-ack"`
 	IRQ                map[string]*IRQEntry    `yaml:"irq"`
 	Pins               *PinsSpec               `yaml:"pins"`
 	PeripheralBuses    map[string]bool         `yaml:"peripheral-buses"`

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/j-core/jcore-soc/tools/socgen/board"
@@ -198,5 +199,55 @@ func TestBuildMimasV2(t *testing.T) {
 	}
 	if byName["board.h"] != string(bh) {
 		t.Errorf("board.h not byte-exact vs golden")
+	}
+}
+
+// TestBuildTurtle locks the turtle file set (which includes the phase-2
+// word_ack_gen.vhd) and asserts build.mk stays byte-exact to the golden — i.e.
+// word_ack_gen.vhd is emitted but deliberately NOT listed in build.mk (T3).
+func TestBuildTurtle(t *testing.T) {
+	root := os.Getenv("JCORE_SOC_ROOT")
+	if root == "" {
+		t.Skip("JCORE_SOC_ROOT not set")
+	}
+	b, lerr := board.Load(root, "turtle_1v0")
+	if b == nil || b.Design == nil {
+		t.Fatalf("board.Load: %v", lerr)
+	}
+	res, rerr := elaborate.Elaborate(b)
+	if rerr != nil {
+		t.Logf("elaborate notes: %v", rerr)
+	}
+	files, err := Build(b, res)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	got := make([]string, 0, len(files))
+	byName := map[string]string{}
+	for _, f := range files {
+		got = append(got, f.Name)
+		byName[f.Name] = f.Content
+	}
+	sort.Strings(got)
+	// word_ack_gen.vhd is in the file set (it gets written), unlike mimas.
+	want := []string{"board.dts", "board.h", "build.mk", "devices.vhd", "pad_ring.vhd", "soc.vhd", "word_ack_gen.vhd"}
+	if len(got) != len(want) {
+		t.Fatalf("file set = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("file set[%d] = %q, want %q (full: %v)", i, got[i], want[i], got)
+		}
+	}
+	// build.mk byte-exact vs golden — must NOT list word_ack_gen.vhd.
+	golden, gerr := os.ReadFile(filepath.Join(root, "targets/boards/turtle_1v0/build.mk"))
+	if gerr != nil {
+		t.Fatalf("read golden build.mk: %v", gerr)
+	}
+	if byName["build.mk"] != string(golden) {
+		t.Errorf("build.mk not byte-exact:\n got %q\nwant %q", byName["build.mk"], string(golden))
+	}
+	if strings.Contains(byName["build.mk"], "word_ack_gen") {
+		t.Errorf("build.mk must not list word_ack_gen.vhd")
 	}
 }

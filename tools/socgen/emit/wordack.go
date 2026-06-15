@@ -84,6 +84,9 @@ func WordAckGen(res *elaborate.Resolution) (string, error) {
 	b.WriteString("\n")
 	b.WriteString("begin\n")
 	b.WriteString("    ack_gen : process (\n")
+	// Sensitivity list: ack_thru_in_* signals, three per line. The trailing comma on
+	// the last item (before the word_bus_en, adr line) is deliberate — awk-faithful
+	// and VHDL-legal — not an off-by-one.
 	for i, name := range res.BusWord {
 		if i%3 == 0 {
 			b.WriteString("      ")
