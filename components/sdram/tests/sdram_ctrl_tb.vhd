@@ -23,6 +23,8 @@ architecture sim of sdram_ctrl_tb is
   signal dq : std_logic_vector(15 downto 0);
   signal done : boolean := false;
 
+  type line_t is array (0 to 7) of std_logic_vector(31 downto 0);
+
   -- snoop flags
   signal saw_pre_all, saw_lmr : boolean := false;
   signal ref_count : integer := 0;
@@ -85,7 +87,35 @@ begin
       wait until rising_edge(clk);
     end procedure;
 
+    procedure do_burst_write(addr : std_logic_vector(31 downto 0); w : line_t) is
+    begin
+      req.en <= '1'; req.a <= addr; req.wr <= '1'; req.rd <= '0';
+      req.we <= "1111"; bst <= '1'; req.d <= w(0);
+      for k in 0 to 7 loop
+        wait until resp.ack = '1' for 10 us;
+        assert resp.ack = '1' report "burst write ack timeout" severity failure;
+        if k < 7 then req.d <= w(k + 1); end if;
+        wait until rising_edge(clk);
+      end loop;
+      req.en <= '0'; req.wr <= '0'; req.we <= "0000"; bst <= '0';
+      wait until rising_edge(clk);
+    end procedure;
+
+    procedure do_burst_read(addr : std_logic_vector(31 downto 0); w : out line_t) is
+    begin
+      req.en <= '1'; req.a <= addr; req.rd <= '1'; req.wr <= '0'; bst <= '1';
+      for k in 0 to 7 loop
+        wait until resp.ack = '1' for 10 us;
+        assert resp.ack = '1' report "burst read ack timeout" severity failure;
+        w(k) := resp.d;
+        wait until rising_edge(clk);
+      end loop;
+      req.en <= '0'; req.rd <= '0'; bst <= '0';
+      wait until rising_edge(clk);
+    end procedure;
+
     variable rdata : std_logic_vector(31 downto 0);
+    variable gold, rline : line_t;
   begin
     wait until rising_edge(clk);
     rst <= '0';
@@ -102,6 +132,17 @@ begin
     do_read (x"00000020", rdata);
     assert rdata = x"CAFEBABE" report "single rw failed" severity failure;
     report "single rw OK" severity note;
+
+    -- Scenario 3: cache-line burst (8 words) write then read back.
+    for k in 0 to 7 loop
+      gold(k) := x"A0000000" or std_logic_vector(to_unsigned(k, 32));
+    end loop;
+    do_burst_write(x"00000040", gold);
+    do_burst_read (x"00000040", rline);
+    for k in 0 to 7 loop
+      assert rline(k) = gold(k) report "burst word mismatch" severity failure;
+    end loop;
+    report "burst rw OK" severity note;
 
     done <= true;
     wait;

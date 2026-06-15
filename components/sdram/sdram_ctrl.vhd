@@ -34,8 +34,8 @@ end entity;
 
 architecture rtl of sdram_ctrl is
   type state_t is (S_WAIT, S_PRE_ALL, S_REF1, S_REF2, S_LMR, S_IDLE,
-                   S_RCDW, S_WR0, S_WR1, S_WACK,
-                   S_RD0, S_RD0W, S_RD1, S_RD1W, S_RACK, S_PRE);
+                   S_RCDW, S_WR0, S_WR1, S_WACK, S_WNEXT,
+                   S_RD0, S_RD0W, S_RD1, S_RD1W, S_PRE);
   signal state, after_st : state_t := S_WAIT;
   signal tmr : integer range 0 to 65535 := T_INIT;
   -- read-data capture latency: data is stable CAS_LATENCY+2 edges after a READ
@@ -44,12 +44,16 @@ architecture rtl of sdram_ctrl is
   constant RD_WAIT : integer := CAS_LATENCY + 2;
   signal dwait : integer range 0 to 31 := 0;
 
-  -- latched request
+  -- latched request (geometry); write data/byte-enables are read live from req,
+  -- which the requester holds until ack (single) / updates per word on each ack
+  -- (burst), per the ddr_ram_mux contract.
   signal lbank : std_logic_vector(SDR_BANK_BITS - 1 downto 0) := (others => '0');
   signal lrow  : std_logic_vector(SDR_ROW_BITS - 1 downto 0) := (others => '0');
   signal lcol  : std_logic_vector(SDR_COL_BITS - 1 downto 0) := (others => '0');
-  signal lwe   : std_logic_vector(3 downto 0) := (others => '0');
-  signal ld    : std_logic_vector(31 downto 0) := (others => '0');
+  signal lbst  : std_logic := '0';
+  signal lwr   : std_logic := '0';
+  signal wcnt  : integer range 0 to 7 := 0;     -- 32-bit word index within a line
+  signal wcol  : std_logic_vector(SDR_COL_BITS - 1 downto 0) := (others => '0');
   signal rd_lo : std_logic_vector(15 downto 0) := (others => '0');
 
   signal r_cmd : sdram_cmd_t := (cke=>'1', cs_n=>'1', ras_n=>'1', cas_n=>'1',
@@ -99,7 +103,8 @@ begin
             if req.en = '1' then
               sa := sdram_addr(req.a);
               lbank <= sa.bank; lrow <= sa.row; lcol <= sa.col;
-              lwe <= req.we; ld <= req.d;
+              lbst <= bst; lwr <= req.wr;
+              wcnt <= 0; wcol <= sa.col;
               setcmd(CMD_ACT); r_cmd.ba <= sa.bank; r_cmd.a <= sa.row;
               tmr <= T_RCD;
               if req.wr = '1' then after_st <= S_WR0; else after_st <= S_RD0; end if;
@@ -108,25 +113,32 @@ begin
           when S_RCDW =>
             if tmr <= 1 then state <= after_st; else tmr <= tmr - 1; end if;
 
-          -- single write: 2 halfword beats
+          -- write a 32-bit word as 2 halfword beats (single or one burst beat)
           when S_WR0 =>
-            setcmd(CMD_WRITE); r_cmd.ba <= lbank; r_cmd.a <= colpad(lcol);
-            dq_o <= ld(15 downto 0); dq_oe <= '1';
-            r_cmd.dqm <= (not lwe(1)) & (not lwe(0));
+            setcmd(CMD_WRITE); r_cmd.ba <= lbank; r_cmd.a <= colpad(wcol);
+            dq_o <= req.d(15 downto 0); dq_oe <= '1';
+            r_cmd.dqm <= (not req.we(1)) & (not req.we(0));
             state <= S_WR1;
           when S_WR1 =>
             setcmd(CMD_WRITE); r_cmd.ba <= lbank;
-            r_cmd.a <= colpad(std_logic_vector(unsigned(lcol) + 1));
-            dq_o <= ld(31 downto 16); dq_oe <= '1';
-            r_cmd.dqm <= (not lwe(3)) & (not lwe(2));
+            r_cmd.a <= colpad(std_logic_vector(unsigned(wcol) + 1));
+            dq_o <= req.d(31 downto 16); dq_oe <= '1';
+            r_cmd.dqm <= (not req.we(3)) & (not req.we(2));
             state <= S_WACK;
           when S_WACK =>
-            resp.ack <= '1';                      -- single-write ack (no ack_r)
-            state <= S_PRE;
+            resp.ack <= '1';                      -- write ack (no ack_r), per word
+            if lbst = '1' and wcnt < 7 then
+              wcnt <= wcnt + 1; wcol <= std_logic_vector(unsigned(wcol) + 2);
+              state <= S_WNEXT;
+            else
+              state <= S_PRE;
+            end if;
+          when S_WNEXT =>
+            state <= S_WR0;                        -- 1 cycle for requester to present next word
 
-          -- single read: 2 halfword beats, capture at CAS latency
+          -- read a 32-bit word as 2 halfword beats, capture at CAS latency
           when S_RD0 =>
-            setcmd(CMD_READ); r_cmd.ba <= lbank; r_cmd.a <= colpad(lcol);
+            setcmd(CMD_READ); r_cmd.ba <= lbank; r_cmd.a <= colpad(wcol);
             r_cmd.dqm <= "00";
             dwait <= RD_WAIT; state <= S_RD0W;
           when S_RD0W =>
@@ -134,14 +146,19 @@ begin
             else dwait <= dwait - 1; end if;
           when S_RD1 =>
             setcmd(CMD_READ); r_cmd.ba <= lbank;
-            r_cmd.a <= colpad(std_logic_vector(unsigned(lcol) + 1));
+            r_cmd.a <= colpad(std_logic_vector(unsigned(wcol) + 1));
             r_cmd.dqm <= "00";
             dwait <= RD_WAIT; state <= S_RD1W;
           when S_RD1W =>
             if dwait <= 1 then
               resp.d <= dq_i & rd_lo;             -- high & low
-              resp.ack <= '1'; ack_r <= '1';      -- single-read ack + ack_r
-              state <= S_PRE;
+              resp.ack <= '1'; ack_r <= '1';      -- read ack + ack_r, per word
+              if lbst = '1' and wcnt < 7 then
+                wcnt <= wcnt + 1; wcol <= std_logic_vector(unsigned(wcol) + 2);
+                state <= S_RD0;
+              else
+                state <= S_PRE;
+              end if;
             else dwait <= dwait - 1; end if;
 
           when S_PRE =>
