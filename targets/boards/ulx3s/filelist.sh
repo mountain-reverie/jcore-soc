@@ -66,6 +66,9 @@ FILES=(
   components/uartlite/uartlitedb.vhd
   targets/boards/ulx3s/boot_image_pkg.vhd
   components/memory/bootram_infer.vhd
+  components/sdram/sdram_pkg.vhd
+  components/sdram/sdram_ctrl.vhd
+  components/sdram/sdram_iocells.vhd
   targets/boards/ulx3s/ulx3s_clkgen.vhd
   targets/boards/ulx3s/cpus_one_m0.vhd
   targets/boards/ulx3s/ulx3s_top.vhd

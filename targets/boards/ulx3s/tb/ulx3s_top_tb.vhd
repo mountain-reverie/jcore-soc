@@ -1,6 +1,7 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
+use work.sdram_pkg.all;
 
 entity ulx3s_top_tb is end entity;
 
@@ -13,52 +14,72 @@ architecture sim of ulx3s_top_tb is
   signal btn : std_logic_vector(6 downto 0) := (0 => '1', others => '0'); -- reset asserted
   signal led : std_logic_vector(7 downto 0);
   signal done : boolean := false;
+
+  -- SDRAM pins (top <-> behavioral model)
+  signal s_clk, s_cke, s_csn, s_rasn, s_casn, s_wen : std_logic;
+  signal s_dqm : std_logic_vector(1 downto 0);
+  signal s_a   : std_logic_vector(12 downto 0);
+  signal s_ba  : std_logic_vector(1 downto 0);
+  signal s_d   : std_logic_vector(15 downto 0);
+
+  -- substring search over the decoded UART stream
+  function contains(buf : string; n : integer; sub : string) return boolean is
+  begin
+    if n < sub'length then return false; end if;
+    for i in 1 to n - sub'length + 1 loop
+      if buf(i to i + sub'length - 1) = sub then return true; end if;
+    end loop;
+    return false;
+  end function;
 begin
-  -- Direct entity instantiation: default binding selects clkgen(sim) (the only
-  -- clkgen arch the sim flow analyzes) and binds the nested uart, with no
-  -- configuration (configurations suppress default binding for unconfigured
-  -- nested instances, leaving uart unbound).
   uut : entity work.ulx3s_top(rtl)
     port map (clk_25mhz => clk_25mhz, ftdi_txd => ftdi_txd, ftdi_rxd => ftdi_rxd,
-              btn => btn, led => led);
+              btn => btn, led => led,
+              sdram_clk => s_clk, sdram_cke => s_cke, sdram_csn => s_csn,
+              sdram_rasn => s_rasn, sdram_casn => s_casn, sdram_wen => s_wen,
+              sdram_dqm => s_dqm, sdram_a => s_a, sdram_ba => s_ba, sdram_d => s_d);
+
+  mem : entity work.sdram_model(behave)
+    generic map (CAS_LATENCY => 2, MEM_WORDS => 8192)
+    port map (clk => s_clk, cke => s_cke, cs_n => s_csn, ras_n => s_rasn,
+              cas_n => s_casn, we_n => s_wen, ba => s_ba, a => s_a, dqm => s_dqm, dq => s_d);
 
   clk_25mhz <= not clk_25mhz after CLK_PER/2 when not done else '0';
 
-  -- release reset after a few cycles
   rel : process begin
     wait for 10 * CLK_PER; btn(0) <= '0'; wait;
   end process;
 
-  -- UART receiver: sample ftdi_txd, decode bytes, check the banner prefix
+  -- UART receiver: decode ftdi_txd into a string; succeed once the required
+  -- substring(s) have all appeared. (M1b Stages add SDRAM TEST PASS / FROM SDRAM.)
   rx : process
-    constant EXPECT : string := "J2 on ULX3S";
+    variable buf : string(1 to 1024);
+    variable n : integer := 0;
     variable b : std_logic_vector(7 downto 0);
-    variable c : character;
   begin
-    for i in EXPECT'range loop
-      -- wait for start bit (falling edge of idle-high line)
-      wait until ftdi_txd = '0';
-      wait for BIT_PER/2;            -- center of start bit
+    loop
+      wait until ftdi_txd = '0';        -- start bit
+      wait for BIT_PER/2;
       for k in 0 to 7 loop
         wait for BIT_PER;
-        b(k) := ftdi_txd;            -- LSB first
+        b(k) := ftdi_txd;               -- LSB first
       end loop;
-      wait for BIT_PER;             -- stop bit
-      c := character'val(to_integer(unsigned(b)));
-      assert c = EXPECT(i)
-        report "banner mismatch at " & integer'image(i) & ": got '" & c &
-               "' want '" & EXPECT(i) & "'" severity failure;
+      wait for BIT_PER;                 -- stop bit
+      if n < buf'length then
+        n := n + 1;
+        buf(n) := character'val(to_integer(unsigned(b)));
+      end if;
+      if contains(buf, n, "J2 on ULX3S") then
+        report "ulx3s_top_tb PASSED: banner decoded" severity note;
+        done <= true;
+        wait;
+      end if;
     end loop;
-    report "ulx3s_top_tb PASSED: banner prefix decoded" severity note;
-    done <= true;
-    wait;
   end process;
 
-  -- Fail loudly if no banner ever transmits (otherwise the rx process just
-  -- waits and the run ends silently at --stop-time, a false pass).
   watchdog : process begin
     wait for 2 ms;
-    assert done report "TIMEOUT: no banner decoded within 2 ms" severity failure;
+    assert done report "TIMEOUT: required UART output not seen" severity failure;
     wait;
   end process;
 end architecture;

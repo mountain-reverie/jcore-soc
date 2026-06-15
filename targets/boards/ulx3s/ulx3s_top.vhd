@@ -3,6 +3,8 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use work.cpu2j0_pack.all;
 use work.data_bus_pack.all;
+use work.dma_pack.all;
+use work.sdram_pkg.all;
 use work.config.all;
 
 entity ulx3s_top is
@@ -11,7 +13,18 @@ entity ulx3s_top is
     ftdi_txd  : out std_logic;   -- FPGA -> host (our TX)
     ftdi_rxd  : in  std_logic;   -- host -> FPGA (our RX)
     btn       : in  std_logic_vector(6 downto 0);
-    led       : out std_logic_vector(7 downto 0));
+    led       : out std_logic_vector(7 downto 0);
+    -- SDRAM (16-bit SDR; the J2's DEV_DDR main memory)
+    sdram_clk  : out   std_logic;
+    sdram_cke  : out   std_logic;
+    sdram_csn  : out   std_logic;
+    sdram_rasn : out   std_logic;
+    sdram_casn : out   std_logic;
+    sdram_wen  : out   std_logic;
+    sdram_dqm  : out   std_logic_vector(1 downto 0);
+    sdram_a    : out   std_logic_vector(12 downto 0);
+    sdram_ba   : out   std_logic_vector(1 downto 0);
+    sdram_d    : inout std_logic_vector(15 downto 0));
 end entity;
 
 architecture rtl of ulx3s_top is
@@ -27,6 +40,17 @@ architecture rtl of ulx3s_top is
   signal cpu0_ddr_dbus_i : cpu_data_i_t;
   signal cpu0_ddr_ibus_o : cpu_instruction_o_t;
   signal cpu0_ddr_ibus_i : cpu_instruction_i_t;
+
+  signal cpu0_mem_lock : std_logic;
+  -- DDR subsystem (mux -> sdram_ctrl -> iocells)
+  signal ddr_bus_o : cpu_data_o_t;
+  signal ddr_bus_i : cpu_data_i_t;
+  signal ddr_burst : std_logic;
+  signal ddr_bus_ack_r : std_logic;
+  signal dma_dbus_o : bus_ddr_o_t;
+  signal sd_cmd : sdram_cmd_t;
+  signal sd_dq_o, sd_dq_i : std_logic_vector(15 downto 0);
+  signal sd_dq_oe : std_logic;
 
   signal uart_tx : std_logic;
   signal heartbeat : unsigned(23 downto 0) := (others => '0');
@@ -69,7 +93,7 @@ begin
       cpu0_ddr_dbus_i => cpu0_ddr_dbus_i, cpu0_ddr_dbus_o => cpu0_ddr_dbus_o,
       cpu0_ddr_ibus_i => cpu0_ddr_ibus_i, cpu0_ddr_ibus_o => cpu0_ddr_ibus_o,
       cpu0_event_i => NULL_CPU_EVENT_I, cpu0_event_o => open,
-      cpu0_mem_lock => open,
+      cpu0_mem_lock => cpu0_mem_lock,
       cpu0_periph_dbus_i => cpu0_periph_dbus_i, cpu0_periph_dbus_o => cpu0_periph_dbus_o,
       cpu1_copro_i => NULL_COPR_I, cpu1_copro_o => open,
       cpu1_data_master_ack => open, cpu1_data_master_en => open,
@@ -80,9 +104,46 @@ begin
       cpu1_periph_dbus_i => (d => (others => '0'), ack => '0'), cpu1_periph_dbus_o => open,
       cpu1eni => '0', debug_i => CPU_DEBUG_NOP, debug_o => open);
 
-  -- M0 has no DDR: idle-respond so a stray access acks without hanging.
-  cpu0_ddr_dbus_i <= loopback_bus(cpu0_ddr_dbus_o);
-  cpu0_ddr_ibus_i <= (d => (others => '0'), ack => cpu0_ddr_ibus_o.en);
+  -- DDR subsystem: ddr_ram_mux (icache enabled, dcache bypassed) -> sdram_ctrl
+  -- -> sdram_iocells -> SDRAM pins. The J2 reaches DEV_DDR (0x10000000) here.
+  dma_dbus_o <= (en => '0', a => (others => '0'), d => (others => '0'),
+                wr => '0', we => (others => '0'),
+                burst32 => '0', burst16 => '0', bgrp => '0');
+
+  ddr_mux : configuration work.ddr_ram_mux_one_cpu_idcache_fpga
+    port map (
+      clk => clk_cpu, clk_ddr => clk_cpu, rst => rst,
+      cpu0_ibus_o => cpu0_ddr_ibus_o, cpu0_ibus_i => cpu0_ddr_ibus_i,
+      cpu0_dbus_o => cpu0_ddr_dbus_o, cpu0_dbus_i => cpu0_ddr_dbus_i,
+      cpu0_mem_lock => cpu0_mem_lock,
+      cpu1_ibus_o => NULL_INST_O, cpu1_ibus_i => open,
+      cpu1_dbus_o => NULL_DATA_O, cpu1_dbus_i => open,
+      cpu1_mem_lock => '0',
+      dma_dbus_o => dma_dbus_o, dma_dbus_i => open,
+      icache0_ctrl => (en => '1', inv => '0'), dcache0_ctrl => (en => '0', inv => '0'),
+      icache1_ctrl => (en => '0', inv => '0'), dcache1_ctrl => (en => '0', inv => '0'),
+      cache01sel_ctrl_temp => '0',
+      ddr_bus_o => ddr_bus_o, ddr_bus_i => ddr_bus_i,
+      ddr_burst => ddr_burst, ddr_bus_ack_r => ddr_bus_ack_r);
+
+  sdram : entity work.sdram_ctrl(rtl)
+    port map (
+      clk => clk_cpu, rst => rst,
+      req => ddr_bus_o, bst => ddr_burst, resp => ddr_bus_i, ack_r => ddr_bus_ack_r,
+      cmd => sd_cmd, dq_o => sd_dq_o, dq_oe => sd_dq_oe, dq_i => sd_dq_i);
+
+  sd_io : entity work.sdram_iocells(rtl)
+    port map (dq_o => sd_dq_o, dq_oe => sd_dq_oe, dq_i => sd_dq_i, dq => sdram_d);
+
+  sdram_clk  <= clk_cpu;          -- in-phase (M1b); ODDR/phase-shift is a hw follow-on
+  sdram_cke  <= sd_cmd.cke;
+  sdram_csn  <= sd_cmd.cs_n;
+  sdram_rasn <= sd_cmd.ras_n;
+  sdram_casn <= sd_cmd.cas_n;
+  sdram_wen  <= sd_cmd.we_n;
+  sdram_dqm  <= sd_cmd.dqm;
+  sdram_a    <= sd_cmd.a;
+  sdram_ba   <= sd_cmd.ba;
 
   -- fclk derived from the board config so the baud divisor tracks the CPU
   -- clock if the PLL setting changes (single source of truth: config.vhd).
