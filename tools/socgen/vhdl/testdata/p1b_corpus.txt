@@ -210,10 +210,6 @@ targets/boards/turtle_1v0/devices.vhd
 targets/boards/turtle_1v0/pad_ring.vhd
 targets/boards/turtle_1v0/soc.vhd
 targets/boards/turtle_1v0/word_ack_gen.vhd
-targets/boards/turtle_1v1/devices.vhd
-targets/boards/turtle_1v1/pad_ring.vhd
-targets/boards/turtle_1v1/soc.vhd
-targets/boards/turtle_1v1/word_ack_gen.vhd
 targets/byte_bus/aic2_slave_process.vhd
 targets/byte_bus/aic_slave_process.vhd
 targets/byte_bus/dma_db_slave_process.vhd
