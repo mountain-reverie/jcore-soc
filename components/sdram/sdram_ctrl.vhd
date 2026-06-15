@@ -13,12 +13,12 @@ entity sdram_ctrl is
   generic (
     CAS_LATENCY : integer := 2;
     T_INIT : integer := 20;    -- power-up wait (sim-short; ~100us in M1b)
-    T_RC   : integer := 8;
-    T_RCD  : integer := 2;
-    T_RP   : integer := 2;
-    T_RFC  : integer := 8;
-    T_MRD  : integer := 2;
-    T_REFI : integer := 1024);
+    T_RCD  : integer := 2;     -- ACTIVE -> READ/WRITE
+    T_RP   : integer := 2;     -- PRECHARGE -> ACTIVE
+    T_WR   : integer := 2;     -- last WRITE -> PRECHARGE (write recovery)
+    T_RFC  : integer := 8;     -- AUTO-REFRESH duration
+    T_MRD  : integer := 2;     -- LOAD-MODE recovery
+    T_REFI : integer := 1024); -- refresh interval (sim-short)
   port (
     clk  : in  std_logic;
     rst  : in  std_logic;
@@ -140,7 +140,7 @@ begin
               wcnt <= wcnt + 1; wcol <= std_logic_vector(unsigned(wcol) + 2);
               state <= S_WNEXT;
             else
-              state <= S_PRE;
+              tmr <= T_WR; after_st <= S_PRE; state <= S_WAIT;  -- write recovery (tWR)
             end if;
           when S_WNEXT =>
             state <= S_WR0;                        -- 1 cycle for requester to present next word

@@ -36,8 +36,8 @@ architecture sim of sdram_ctrl_tb is
   signal want_first_col : boolean := false;
 begin
   uut : entity work.sdram_ctrl(rtl)
-    generic map (CAS_LATENCY => CL, T_INIT => 20, T_RC => 8, T_RCD => 2,
-                 T_RP => 2, T_RFC => 8, T_MRD => 2, T_REFI => 1024)
+    generic map (CAS_LATENCY => CL, T_INIT => 20, T_RCD => 2, T_RP => 2,
+                 T_WR => 2, T_RFC => 8, T_MRD => 2, T_REFI => 1024)
     port map (clk=>clk, rst=>rst, req=>req, bst=>bst, resp=>resp, ack_r=>ack_r,
               cmd=>c, dq_o=>dq_o, dq_oe=>dq_oe, dq_i=>dq_i);
 
@@ -83,6 +83,7 @@ begin
       req.we <= we; req.d <= data; bst <= '0';
       wait until resp.ack = '1' for 10 us;
       assert resp.ack = '1' report "write ack timeout" severity failure;
+      assert ack_r = '0' report "ack_r spuriously high on write" severity failure;
       req.en <= '0'; req.wr <= '0'; req.we <= "0000"; req.d <= (others => '0');
       wait until rising_edge(clk);
     end procedure;
@@ -127,7 +128,6 @@ begin
 
     variable rdata : std_logic_vector(31 downto 0);
     variable gold, rline : line_t;
-    variable sa : sdram_addr_t;
     variable ref_before : integer;
   begin
     wait until rising_edge(clk);
@@ -168,11 +168,16 @@ begin
 
     -- Scenario 6: address cross-check (FSM-driven ba/row/col vs independent decode).
     -- 6b high-row address exercises the row slice non-trivially.
-    do_write(x"00010040", x"5A5A1234", "1111");   -- row=16, bank=0, col=32
-    sa := sdram_addr(x"00010040");
-    assert last_act_ba = sa.bank report "cross-check: ACTIVE bank wrong" severity failure;
-    assert last_act_row = sa.row report "cross-check: ACTIVE row wrong" severity failure;
-    assert first_col = sa.col report "cross-check: column wrong" severity failure;
+    -- Independent (literal) expected decode of 0x00010040, NOT via sdram_addr,
+    -- so a bug in sdram_addr itself would be caught: byte 0x10040, word addr
+    -- 0x8020 -> col=a(9:1)=0x20=32, bank=a(11:10)=0, row=a(24:12)=0x10=16.
+    do_write(x"00010040", x"5A5A1234", "1111");
+    assert last_act_ba = std_logic_vector(to_unsigned(0, SDR_BANK_BITS))
+      report "cross-check: ACTIVE bank wrong" severity failure;
+    assert last_act_row = std_logic_vector(to_unsigned(16, SDR_ROW_BITS))
+      report "cross-check: ACTIVE row wrong" severity failure;
+    assert first_col = std_logic_vector(to_unsigned(32, SDR_COL_BITS))
+      report "cross-check: column wrong" severity failure;
     do_read (x"00010040", rdata);
     assert rdata = x"5A5A1234" report "high-row rw failed" severity failure;
     report "addr cross-check OK" severity note;
