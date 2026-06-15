@@ -93,12 +93,10 @@ func DeviceTree(b *board.Board, res *elaborate.Resolution) (*dts.Node, error) {
 	}
 	children := make([]child, 0, len(sel))
 
-	// aic base offset (for the synthetic timer reg + aic reg override).
-	var aicBase uint64
+	// detect presence of an aic (for the synthetic timer + pit trap).
 	var haveAic bool
 	for _, s := range sel {
 		if lc(s.dev.Class) == aicClass {
-			aicBase = s.base
 			haveAic = true
 			break
 		}
@@ -119,10 +117,13 @@ func DeviceTree(b *board.Board, res *elaborate.Resolution) (*dts.Node, error) {
 
 	socChildren := make([]*dts.Node, 0, len(sel)+1)
 	if haveAic {
-		aicOff := aicBase - busBase
+		var timerCells []uint64
+		for _, off := range aicOffsets(b, busBase) {
+			timerCells = append(timerCells, off, 0x30)
+		}
 		timer := &dts.Node{Name: "timer", Props: []*dts.Prop{
 			{Name: "compatible", Values: []dts.Value{dts.Str("jcore,pit")}},
-			{Name: "reg", Values: []dts.Value{dts.Cells{Nums: []uint64{aicOff, 0x30}, Hex: true}}},
+			{Name: "reg", Values: []dts.Value{dts.Cells{Nums: timerCells, Hex: true}}},
 			{Name: "interrupts", Values: []dts.Value{dts.Cells{Nums: []uint64{uint64(trap)}, Hex: true}}},
 		}}
 		socChildren = append(socChildren, timer)
@@ -138,10 +139,17 @@ func DeviceTree(b *board.Board, res *elaborate.Resolution) (*dts.Node, error) {
 		if lc(s.dev.Class) == aicClass {
 			// the aic is built as a device node but with its reg overridden to
 			// the combined aic+pit region <aicOff regWidth>, and it carries no
-			// interrupts (it is the controller).
+			// interrupts (it is the controller). In SMP both AICs are one
+			// logical controller with two register windows.
 			node := devToDT(s.dev, s.cls, nn, busBase, 0, false)
-			aicOff := s.base - busBase
-			overrideReg(node, aicOff, s.regWidth, fmt.Sprintf("%08X-%08X", s.base, s.base+s.regWidth-1))
+			var aicCells []uint64
+			var ranges []string
+			for _, off := range aicOffsets(b, busBase) {
+				abs := off + busBase
+				aicCells = append(aicCells, off, s.regWidth)
+				ranges = append(ranges, fmt.Sprintf("%08X-%08X", abs, abs+s.regWidth-1))
+			}
+			overrideReg(node, aicCells, strings.Join(ranges, ", "))
 			children = append(children, child{key: nn, node: node})
 			continue
 		}
@@ -327,6 +335,20 @@ func buildRoot(model string, freq int, dram [2]uint64, busBase, busWidth uint64,
 	}, Children: rootChildren}
 }
 
+// aicOffsets returns the busBase-relative offset of every AIC-class device
+// (including a dt-node:false aic1, which selectDevices excludes), in device
+// order. In SMP these become the multiple register windows of the timer/aic
+// nodes (AIC1 plugin update-dt). One offset for a single-aic board.
+func aicOffsets(b *board.Board, busBase uint64) []uint64 {
+	var offs []uint64
+	for _, dev := range b.Design.Devices {
+		if lc(dev.Class) == aicClass && dev.BaseAddr != nil {
+			offs = append(offs, uint64(*dev.BaseAddr)-busBase)
+		}
+	}
+	return offs
+}
+
 // selectDevices filters b.Design.Devices to data-bus devices that want a dt
 // node, index-aligned with res.Devices (the P5e invariant), and computes each
 // one's effective name/dt-name/label/geometry.
@@ -414,12 +436,12 @@ func pitTrap(b *board.Board) (int, error) {
 	return 0, &DTError{Kind: ErrPitTrap}
 }
 
-// overrideReg replaces a node's reg property with <base width> (hex) + cmt,
-// used for the aic+pit combined region.
-func overrideReg(n *dts.Node, base, width uint64, cmt string) {
+// overrideReg replaces a node's reg property with the given cells (hex) + cmt,
+// used for the aic combined region (single or multiple register windows).
+func overrideReg(n *dts.Node, cells []uint64, cmt string) {
 	reg := &dts.Prop{
 		Name:   "reg",
-		Values: []dts.Value{dts.Cells{Nums: []uint64{base, width}, Hex: true}},
+		Values: []dts.Value{dts.Cells{Nums: cells, Hex: true}},
 		Cmt:    cmt,
 	}
 	for i, p := range n.Props {
