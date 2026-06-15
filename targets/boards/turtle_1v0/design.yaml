@@ -89,6 +89,9 @@ merge-signals:
 
 # Supply a zero value for a list of global signals that aren't
 # output by devices in the design
+peripheral-buses:
+  cpu1: true
+
 zero-signals:
   - icache0_ctrl
   - icache1_ctrl

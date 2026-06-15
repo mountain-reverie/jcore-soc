@@ -251,3 +251,27 @@ func TestBuildTurtle(t *testing.T) {
 		t.Errorf("build.mk must not list word_ack_gen.vhd")
 	}
 }
+
+// TestBoardDTSTurtleSMP verifies the SMP device-tree structure is emitted for
+// turtle (the second CPU + ipi node), gated by the peripheral-buses cpu1 marker
+// (T4a). Full byte-parity is asserted by TestBoardDTSTurtleComplete.
+func TestBoardDTSTurtleSMP(t *testing.T) {
+	root := os.Getenv("JCORE_SOC_ROOT")
+	if root == "" {
+		t.Skip("JCORE_SOC_ROOT not set")
+	}
+	b, lerr := board.Load(root, "turtle_1v0")
+	if b == nil || b.Design == nil {
+		t.Fatalf("board.Load: %v", lerr)
+	}
+	res, _ := elaborate.Elaborate(b)
+	dts, err := devicetree.BoardDTS(b, res)
+	if err != nil {
+		t.Fatalf("BoardDTS: %v", err)
+	}
+	for _, frag := range []string{"cpu@1 {", `enable-method = "jcore,spin-table";`, "ipi {"} {
+		if !strings.Contains(dts, frag) {
+			t.Errorf("turtle board.dts missing SMP fragment %q", frag)
+		}
+	}
+}
