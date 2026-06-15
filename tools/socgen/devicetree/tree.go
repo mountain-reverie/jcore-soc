@@ -144,6 +144,8 @@ func DeviceTree(b *board.Board, res *elaborate.Resolution) (*dts.Node, error) {
 			node := devToDT(s.dev, s.cls, nn, busBase, 0, false)
 			var aicCells []uint64
 			var ranges []string
+			// every window uses this aic's regWidth; both AICs share a class
+			// (and thus regWidth) by the device_tree.clj invariant.
 			for _, off := range aicOffsets(b, busBase) {
 				abs := off + busBase
 				aicCells = append(aicCells, off, s.regWidth)
@@ -196,9 +198,11 @@ func DeviceTree(b *board.Board, res *elaborate.Resolution) (*dts.Node, error) {
 // to-dt ~335-341). The ipi memory region + irq come from the cache device
 // (irq.clj ipi-info, aic1 path): the cache_ctrl/cache_ctrl_wsbu device's
 // base-addr (ipi reg addr) and the distinct raw irq numbers of its irq map. The
-// interrupts cell is the first (only) raw irq number — NOT 0x11+irq — faithful
-// to the Clojure `(or (:dt-irq x) (:irq x))` collection (cache irqs carry no
-// :dt-irq, so this is the raw :irq) and `(first (:irqs ipi-info))`.
+// interrupts cell is the AIC vector number (vectorBase + irq, i.e. 0x11+irq),
+// not the raw irq: the ipi node hangs off the aic interrupt-parent like every
+// other device, so its interrupt must be the vector the aic exposes. The cache's
+// single distinct raw irq (3 on turtle) thus renders as 0x14, verified against
+// the byte-exact golden board.dts.
 //
 // Returns nil (no node) when no cache device is present (Clojure emits the ipi
 // node only `(when (and is-smp ipi-info))`). Errors (DTError{ErrIPI}) when the
@@ -337,8 +341,10 @@ func buildRoot(model string, freq int, dram [2]uint64, busBase, busWidth uint64,
 
 // aicOffsets returns the busBase-relative offset of every AIC-class device
 // (including a dt-node:false aic1, which selectDevices excludes), in device
-// order. In SMP these become the multiple register windows of the timer/aic
-// nodes (AIC1 plugin update-dt). One offset for a single-aic board.
+// order. In SMP the second AIC carries dt-node:false so selectDevices skips it,
+// but both register windows are required in the timer/aic node regs — so we
+// gather offsets straight from b.Design.Devices here (faithful to the AIC1
+// plugin's update-dt). One offset for a single-aic board.
 func aicOffsets(b *board.Board, busBase uint64) []uint64 {
 	var offs []uint64
 	for _, dev := range b.Design.Devices {
