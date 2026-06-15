@@ -97,7 +97,7 @@ func TestCorpusRoundTrip(t *testing.T) {
 	if len(rels) == 0 {
 		t.Fatal("empty p1b_corpus.txt")
 	}
-	t.Logf("corpus: %d of 236 files round-trip", len(rels))
+	t.Logf("corpus: %d files round-trip", len(rels))
 	for _, rel := range rels {
 		t.Run(rel, func(t *testing.T) {
 			absPath := filepath.Join(root, rel)
