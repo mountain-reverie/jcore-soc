@@ -3,7 +3,7 @@
 	url = ../bootrom
 [submodule "components/cpu"]
 	path = components/cpu
-	url = git@github.com:mountain-reverie/jcore-cpu.git
+	url = https://github.com/mountain-reverie/jcore-cpu.git
 [submodule "components/gps_if2"]
 	path = components/gps_if2
 	url = ../gnss-baseband

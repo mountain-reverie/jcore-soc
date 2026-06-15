@@ -1,0 +1,46 @@
+name: ulx3s-m0
+on:
+  push:
+    branches: [ feat/ulx3s-m0-bram-uart ]
+    paths:
+      - 'targets/boards/ulx3s/**'
+      - 'components/memory/**'
+      - 'tools/genbootpkg'
+      - '.github/workflows/ulx3s.yml'
+  workflow_dispatch:
+
+jobs:
+  sim:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/jcore-cpu-ci:latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Run M0 banner + bootram testbenches
+        run: ./targets/boards/ulx3s/sim.sh
+
+  bitstream:
+    runs-on: ubuntu-latest
+    needs: sim
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/jcore-cpu-ci:latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build ulx3s.bit
+        run: ./targets/boards/ulx3s/synth.sh
+      - name: Upload bitstream
+        uses: actions/upload-artifact@v4
+        with:
+          name: ulx3s-m0-bitstream
+          path: targets/boards/ulx3s/build/ulx3s.bit
+          if-no-files-found: error
