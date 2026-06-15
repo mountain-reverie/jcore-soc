@@ -275,3 +275,27 @@ func TestBoardDTSTurtleSMP(t *testing.T) {
 		}
 	}
 }
+
+// TestBoardDTSTurtleAicReg verifies the timer (pit) and aic nodes carry BOTH
+// AIC register windows in SMP (T4a): timer <0x200 0x30 0x500 0x30>, aic
+// <0x200 0x40 0x500 0x40>.
+func TestBoardDTSTurtleAicReg(t *testing.T) {
+	root := os.Getenv("JCORE_SOC_ROOT")
+	if root == "" {
+		t.Skip("JCORE_SOC_ROOT not set")
+	}
+	b, _ := board.Load(root, "turtle_1v0")
+	res, _ := elaborate.Elaborate(b)
+	dts, err := devicetree.BoardDTS(b, res)
+	if err != nil {
+		t.Fatalf("BoardDTS: %v", err)
+	}
+	for _, frag := range []string{
+		"reg = <0x200 0x30 0x500 0x30>;",
+		"reg = <0x200 0x40 0x500 0x40>; // ABCD0200-ABCD023F, ABCD0500-ABCD053F",
+	} {
+		if !strings.Contains(dts, frag) {
+			t.Errorf("turtle board.dts missing dual-AIC reg %q", frag)
+		}
+	}
+}
