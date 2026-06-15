@@ -150,26 +150,20 @@ tools: tools/tests/runtests
 tools/tests/runtests: force
 	make -C tools/tests
 
-ifeq ($(wildcard $(TOP_DIR)/soc_gen.jar),)
+# soc_gen generates each board's SoC files (devices.vhd, soc.vhd, pad_ring.vhd,
+# board.dts, board.h, build.mk, and word_ack_gen.vhd where applicable) with the
+# Go tool under tools/socgen. It replaced the retired Clojure phase-1 + csh
+# phase-2. Boards default to every targets/boards/*/ that has a design.yaml;
+# override with `make soc_gen BOARDS="turtle_1v0 ..."`.
+SOCGEN_BOARDS := $(notdir $(patsubst %/,%,$(dir $(wildcard targets/boards/*/design.yaml))))
 
 soc_gen:
-	@command -v lein || (printf "***************************************************************************\n****** Cannot find lein tool (http://leiningen.org/) nor soc_gen.jar ******\n****** One is required to run the soc_gen tool.                      ******\n***************************************************************************\n" && false)
-	(cd targets/soc_gen; lein run --all "$(BOARDS)")
-	@echo "Done (ph1)"
-	(cd targets/soc_gen/phase2; ./soc_gen_postprocess_ph2 "$(BOARDS)")
-	@echo "Done (ph2)"
-
-else
-
-# use packaged soc_gen.jar
-soc_gen:
-	@echo "Running soc_gen.jar"
-	(cd targets/soc_gen; java -jar ../../soc_gen.jar --all "$(BOARDS)")
-	@echo "Done (ph1)"
-	(cd targets/soc_gen/phase2; ./soc_gen_postprocess_ph2 "$(BOARDS)")
-	@echo "Done (ph2)"
-
-endif
+	@command -v go >/dev/null 2>&1 || (printf "***************************************************************************\n****** Go (https://go.dev/dl/) is required to run the soc_gen tool.   ******\n***************************************************************************\n" && false)
+	@for b in $(if $(BOARDS),$(BOARDS),$(SOCGEN_BOARDS)); do \
+		echo "soc_gen $$b"; \
+		(cd tools/socgen && go run ./cmd/socgen -root .. "$$b") || exit 1; \
+	done
+	@echo "Done"
 
 help:
 	@echo "To build a bitstream for a specific board, run 'make <BOARDNAME>' where <BOARDNAME> is one of"
