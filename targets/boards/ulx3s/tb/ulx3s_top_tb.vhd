@@ -71,8 +71,10 @@ begin
       end if;
       assert not contains(buf, n, "SDRAM TEST FAIL")
         report "ulx3s_top_tb FAILED: SDRAM memory test reported FAIL" severity failure;
-      if contains(buf, n, "J2 on ULX3S") and contains(buf, n, "SDRAM TEST PASS") then
-        report "ulx3s_top_tb PASSED: banner + SDRAM TEST PASS decoded" severity note;
+      if contains(buf, n, "J2 on ULX3S") and contains(buf, n, "SDRAM TEST PASS")
+         and contains(buf, n, "FROM SDRAM") then
+        report "ulx3s_top_tb PASSED: banner + SDRAM TEST PASS + FROM SDRAM decoded"
+          severity note;
         done <= true;
         wait;
       end if;

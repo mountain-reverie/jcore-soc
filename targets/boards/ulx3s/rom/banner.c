@@ -36,6 +36,28 @@ static int sdram_test(void)
 	return 1;
 }
 
+/* Linked at VMA 0x10000000 (SDRAM) but stored (LMA) in BRAM; run_from_sdram
+   copies it up, then calls it. `used` keeps it despite being reached only after
+   the copy. It may call back into BRAM .text (puts_uart) normally. */
+__attribute__((section(".sdram"), noinline, used))
+static void sdram_routine(void)
+{
+	puts_uart("FROM SDRAM\r\n");
+}
+
+extern unsigned int sdram_start[], sdram_end[], sdram_load[];
+
+static void run_from_sdram(void)
+{
+	unsigned int *dst = sdram_start;
+	unsigned int *src = sdram_load;
+	/* compare as integers: sdram_start/sdram_end are distinct linker symbols, so
+	   pointer-< between them is UB in C even though the addresses are flat. */
+	while ((unsigned int)dst < (unsigned int)sdram_end)  /* write-through -> SDRAM */
+		*dst++ = *src++;
+	sdram_routine();          /* cold icache fetches it from SDRAM */
+}
+
 void main(void)
 {
 	puts_uart("J2 on ULX3S: hello\r\n");
@@ -43,6 +65,8 @@ void main(void)
 		puts_uart("SDRAM TEST PASS\r\n");
 	else
 		puts_uart("SDRAM TEST FAIL\r\n");
+	run_from_sdram();
+	puts_uart("DONE\r\n");
 	for (;;)
 		;
 }
