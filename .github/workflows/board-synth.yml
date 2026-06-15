@@ -1,0 +1,185 @@
+name: board-synth
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'targets/boards/**'
+      - 'components/**'
+      - 'lib/**'
+      - 'tools/fpga/**'
+      - 'tools/genbootpkg'
+      - 'tools/v2p'
+      - '.github/workflows/board-synth.yml'
+  pull_request:
+    paths:
+      - 'targets/boards/**'
+      - 'components/**'
+      - 'lib/**'
+      - 'tools/fpga/**'
+      - 'tools/genbootpkg'
+      - 'tools/v2p'
+      - '.github/workflows/board-synth.yml'
+  workflow_dispatch:
+
+jobs:
+  metrics-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Unit-test the metrics scripts
+        run: python3 -m unittest discover -s tools/fpga/tests -v
+
+  sim:
+    needs: metrics-tests
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/jcore-cpu-ci:latest
+    strategy:
+      matrix:
+        board: [ulx3s]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Board testbenches
+        run: ./targets/boards/${{ matrix.board }}/sim.sh
+
+  bitstream:
+    needs: sim
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/jcore-cpu-ci:latest
+    strategy:
+      matrix:
+        board: [ulx3s]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build bitstream + metrics (gates timing)
+        run: ./targets/boards/${{ matrix.board }}/synth.sh
+      - name: Upload bitstream
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.board }}-bitstream
+          path: targets/boards/${{ matrix.board }}/build/${{ matrix.board }}.bit
+          if-no-files-found: error
+      - name: Upload metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: metrics-${{ matrix.board }}
+          path: targets/boards/${{ matrix.board }}/build/metrics.json
+          if-no-files-found: error
+
+  benchmark:
+    needs: bitstream
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Download all board metrics
+        uses: actions/download-artifact@v4
+        with:
+          pattern: metrics-*
+          path: metrics-in
+        continue-on-error: true
+      - name: Build action inputs
+        run: |
+          set -euo pipefail
+          mkdir -p site/bench-size site/bench-speed metrics-in
+          shopt -s nullglob globstar
+          inputs=(metrics-in/**/*.json)
+          if [ ${#inputs[@]} -eq 0 ]; then
+            echo "WARN: no metric artifacts found — emitting empty suites" >&2
+            echo "[]" > build-size.json; echo "[]" > build-speed.json
+          else
+            python3 tools/fpga/to_gha_bench.py "${inputs[@]}" \
+              --size-out build-size.json --speed-out build-speed.json
+          fi
+          ls -l build-size.json build-speed.json
+      - name: Bootstrap prior history from the live site
+        run: |
+          set -euo pipefail
+          base="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY##*/}"
+          for kind in size speed; do
+            url="$base/bench-$kind/benchmark-data.json"
+            if curl -fsSL "$url" -o "site/bench-$kind/benchmark-data.json" 2>/dev/null; then
+              echo "fetched prior $kind history"
+            else
+              : > "site/bench-$kind/benchmark-data.json"
+              echo "no prior $kind history (first run)"
+            fi
+          done
+      - name: Append size suite
+        uses: benchmark-action/github-action-benchmark@v1
+        continue-on-error: true
+        with:
+          name: synth-size
+          tool: customSmallerIsBetter
+          output-file-path: build-size.json
+          external-data-json-path: site/bench-size/benchmark-data.json
+          benchmark-data-dir-path: site/bench-size
+          alert-threshold: "110%"
+          comment-on-alert: true
+          fail-on-alert: false
+          auto-push: false
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Append speed suite
+        uses: benchmark-action/github-action-benchmark@v1
+        continue-on-error: true
+        with:
+          name: synth-speed
+          tool: customBiggerIsBetter
+          output-file-path: build-speed.json
+          external-data-json-path: site/bench-speed/benchmark-data.json
+          benchmark-data-dir-path: site/bench-speed
+          alert-threshold: "110%"
+          comment-on-alert: true
+          fail-on-alert: false
+          auto-push: false
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Assemble site
+        run: |
+          set -euo pipefail
+          for kind in size speed; do
+            f="site/bench-$kind/benchmark-data.json"
+            if [ ! -s "$f" ]; then
+              echo '{"lastUpdate":0,"repoUrl":"","entries":{}}' > "$f"
+            fi
+            echo "window.BENCHMARK_DATA = $(cat "$f")" > "site/bench-$kind/data.js"
+          done
+          cp tools/fpga/dashboard/index.html tools/fpga/dashboard/app.js site/
+          mkdir -p site/fixtures && cp tools/fpga/dashboard/fixtures/data.js site/fixtures/
+      - name: Upload Pages artifact
+        if: github.event_name == 'push'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy-pages:
+    needs: benchmark
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
