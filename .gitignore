@@ -2,4 +2,7 @@
 targets/boards/ulx3s/boot_image_pkg.vhd
 targets/boards/ulx3s/rom/main.elf
 targets/boards/ulx3s/rom/main.bin
-targets/boards/ulx3s/build/
+targets/boards/*/build/
+
+# Python bytecode (metrics scripts)
+__pycache__/
