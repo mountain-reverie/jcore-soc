@@ -35,6 +35,9 @@ echo "=== ulx3s_top_tb ==="
 source targets/boards/ulx3s/filelist.sh   # defines FILES=( ... )
 GHDL="ghdl -a --std=93 -fexplicit -fsynopsys --workdir=$WORK"
 $GHDL "${FILES[@]}"
+# sim-only SDRAM behavioral model (deliberately excluded from FILES so synth
+# never sees it); must be analyzed before the tb that instantiates it.
+$GHDL components/sdram/sdram_model.vhd
 $GHDL targets/boards/ulx3s/tb/ulx3s_top_tb.vhd
 ghdl -e --std=93 -fexplicit -fsynopsys --syn-binding --workdir="$WORK" ulx3s_top_tb
 ghdl -r --std=93 -fexplicit -fsynopsys --syn-binding --workdir="$WORK" ulx3s_top_tb --stop-time=5ms --assert-level=error
