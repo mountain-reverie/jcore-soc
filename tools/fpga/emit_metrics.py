@@ -24,8 +24,9 @@ def parse_nextpnr_log(text):
 
     Utilisation rows look like "  TRELLIS_COMB:  5111/83640  6%"; keep `used`.
     Fmax rows: "Max frequency for clock '<name>': 78.20 MHz". Clock names are
-    cleaned ($glbnet$clk_cpu -> clk_cpu) and we keep the LOWEST Fmax per cleaned
-    name (the binding post-route constraint).
+    cleaned ($glbnet$clk:6 -> clk:6) and we keep the LAST Fmax per cleaned name
+    (nextpnr prints an early estimate then the final post-route value; the last
+    line is the final one).
     """
     util, fmax = {}, {}
     for line in text.splitlines():
@@ -36,9 +37,7 @@ def parse_nextpnr_log(text):
         m = re.search(r"Max frequency for clock '([^']+)':\s+([\d.]+)\s*MHz", line)
         if m:
             name = m.group(1).split("$")[-1]
-            val = float(m.group(2))
-            if name not in fmax or val < fmax[name]:
-                fmax[name] = val
+            fmax[name] = float(m.group(2))  # last (final post-route) wins
     return {"util": util, "fmax": fmax}
 
 
@@ -53,21 +52,22 @@ def _metric(name, unit, value, direction):
     return {"name": name, "unit": unit, "value": value, "dir": direction}
 
 
-# Which cleaned clock domain is the CPU clock (the one whose Fmax we surface).
-CPU_CLOCK = "clk_cpu"
-
-
 def build_ecp5(parsed, board, commit):
     """Canonical doc for the ECP5 board flow. `parsed` is parse_nextpnr_log output.
-    Metric names are board-prefixed so each board is its own dashboard series."""
+    Metric names are board-prefixed so each board is its own dashboard series.
+
+    Fmax is the LOWEST (binding) constrained clock's final value, surfaced under a
+    stable "<board>/Fmax" series. We don't key on a specific clock name: nextpnr
+    names the post-PLL CPU domain with an unstable yosys net id (e.g. '$glbnet$clk:6'),
+    so the slowest reported domain is the robust, meaningful single figure."""
     util, fmax = parsed.get("util", {}), parsed.get("fmax", {})
     metrics_ = []
     for blk, label in NEXTPNR_BLOCKS:
         if blk in util:
             metrics_.append(_metric("%s/%s" % (board, label), "cells", util[blk], "smaller"))
-    if CPU_CLOCK in fmax:
-        metrics_.append(_metric("%s/Fmax %s" % (board, CPU_CLOCK), "MHz",
-                                round(fmax[CPU_CLOCK], 2), "bigger"))
+    if fmax:
+        metrics_.append(_metric("%s/Fmax" % board, "MHz",
+                                round(min(fmax.values()), 2), "bigger"))
     return {"target": "ecp5-lfe5u-85f", "board": board, "commit": commit,
             "metrics": metrics_}
 

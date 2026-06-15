@@ -8,7 +8,7 @@ window.BENCHMARK_DATA = {
     ],
     "synth-speed": [
       { "commit": { "id": "demo" }, "date": 1718409600000, "benches": [
-        { "name": "ecp5-lfe5u-85f · ulx3s/Fmax clk_cpu", "unit": "MHz", "value": 78.2, "extra": "ulx3s" }
+        { "name": "ecp5-lfe5u-85f · ulx3s/Fmax", "unit": "MHz", "value": 34.64, "extra": "ulx3s" }
       ] }
     ]
   }

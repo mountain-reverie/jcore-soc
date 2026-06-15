@@ -21,14 +21,14 @@ class TestConvert(unittest.TestCase):
     def test_splits_by_direction_and_prefixes_target(self):
         m = [
             {"name": "ulx3s/LUT4", "unit": "cells", "value": 5111, "dir": "smaller"},
-            {"name": "ulx3s/Fmax clk_cpu", "unit": "MHz", "value": 78.2, "dir": "bigger"},
+            {"name": "ulx3s/Fmax", "unit": "MHz", "value": 78.2, "dir": "bigger"},
         ]
         with tempfile.TemporaryDirectory() as d:
             size, speed = to_gha_bench.convert([_write(d, "ulx3s", m)])
         size_names = {e["name"]: e for e in size}
         speed_names = {e["name"]: e for e in speed}
         self.assertIn("ecp5-lfe5u-85f · ulx3s/LUT4", size_names)
-        self.assertIn("ecp5-lfe5u-85f · ulx3s/Fmax clk_cpu", speed_names)
+        self.assertIn("ecp5-lfe5u-85f · ulx3s/Fmax", speed_names)
         self.assertEqual(size_names["ecp5-lfe5u-85f · ulx3s/LUT4"]["unit"], "cells")
         self.assertEqual(size_names["ecp5-lfe5u-85f · ulx3s/LUT4"]["value"], 5111)
         self.assertEqual(size_names["ecp5-lfe5u-85f · ulx3s/LUT4"]["extra"], "ulx3s")
