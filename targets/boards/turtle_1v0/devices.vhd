@@ -58,8 +58,6 @@ entity devices is
     );
 end;
 architecture impl of devices is
-    signal rtc_nsec : std_logic_vector(31 downto 0);
-    signal rtc_sec : std_logic_vector(63 downto 0);
     signal cpu01_periph_dbus_i : cpu_data_i_t;
     signal cpu01_periph_dbus_o : cpu_data_o_t;
     type device_t is (NONE, DEV_AIC0, DEV_AIC1, DEV_CACHE_CTRL, DEV_EMAC, DEV_FLASH, DEV_GPIO, DEV_UART0);
@@ -159,8 +157,8 @@ begin
             irq_i => irqs0,
             reboot => open,
             rst_i => reset,
-            rtc_nsec => rtc_nsec,
-            rtc_sec => rtc_sec
+            rtc_nsec => open,
+            rtc_sec => open
         );
     aic1 : entity work.aic(behav)
         generic map (

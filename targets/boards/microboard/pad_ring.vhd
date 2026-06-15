@@ -23,14 +23,12 @@ entity pad_ring is
         pin_eth_col : in std_logic;
         pin_eth_crs : in std_logic;
         pin_eth_reset_n : out std_logic;
-        pin_eth_rx_clk : in std_logic;
         pin_eth_rx_d0 : in std_logic;
         pin_eth_rx_d1 : in std_logic;
         pin_eth_rx_d2 : in std_logic;
         pin_eth_rx_d3 : in std_logic;
         pin_eth_rx_dv : in std_logic;
         pin_eth_rx_er : in std_logic;
-        pin_eth_tx_clk : in std_logic;
         pin_eth_tx_d0 : out std_logic;
         pin_eth_tx_d1 : out std_logic;
         pin_eth_tx_d2 : out std_logic;
@@ -101,7 +99,6 @@ architecture impl of pad_ring is
     attribute loc      of pin_eth_crs     : signal is "n17";
     attribute pulldown of pin_eth_crs     : signal is "true";
     attribute loc      of pin_eth_reset_n : signal is "t18";
-    attribute loc      of pin_eth_rx_clk  : signal is "l15";
     attribute loc      of pin_eth_rx_d0   : signal is "t17";
     attribute pullup   of pin_eth_rx_d0   : signal is "true";
     attribute loc      of pin_eth_rx_d1   : signal is "n16";
@@ -112,7 +109,6 @@ architecture impl of pad_ring is
     attribute pullup   of pin_eth_rx_d3   : signal is "true";
     attribute loc      of pin_eth_rx_dv   : signal is "p17";
     attribute loc      of pin_eth_rx_er   : signal is "n18";
-    attribute loc      of pin_eth_tx_clk  : signal is "h17";
     attribute loc      of pin_eth_tx_d0   : signal is "k18";
     attribute loc      of pin_eth_tx_d1   : signal is "k17";
     attribute loc      of pin_eth_tx_d2   : signal is "j18";
@@ -176,7 +172,6 @@ architecture impl of pad_ring is
     signal clk_sys_90 : std_logic;
     signal clkgen_i : std_logic;
     signal clock_locked0 : std_logic;
-    signal clock_locked1 : std_logic;
     signal clock_y3 : std_logic;
     signal ddr_clk : std_logic;
     signal ddr_sd_ctrl : sd_ctrl_t;
@@ -192,10 +187,6 @@ architecture impl of pad_ring is
     signal emac_phy_rxd : std_logic_vector(3 downto 0);
     signal emac_phy_tx_en : std_logic;
     signal emac_phy_txd : std_logic_vector(3 downto 0);
-    signal eth_rx_clk : std_logic;
-    signal eth_rx_clk_i : std_logic;
-    signal eth_tx_clk : std_logic;
-    signal eth_tx_clk_i : std_logic;
     signal flash_clk : std_logic;
     signal flash_cs : std_logic_vector(1 downto 0);
     signal flash_miso : std_logic;
@@ -223,8 +214,6 @@ begin
             emac_phy_rxd => emac_phy_rxd,
             emac_phy_tx_en => emac_phy_tx_en,
             emac_phy_txd => emac_phy_txd,
-            eth_rx_clk => eth_rx_clk,
-            eth_tx_clk => eth_tx_clk,
             flash_clk => flash_clk,
             flash_cs => flash_cs,
             flash_miso => flash_miso,
@@ -259,13 +248,6 @@ begin
             reset => reset,
             sd_data_i => ddr_sd_data_i,
             sd_data_o => ddr_sd_data_o
-        );
-    eth_clk_bufs : entity work.eth_clk_bufs(arch)
-        port map (
-            eth_rx_clk => eth_rx_clk,
-            eth_rx_clk_i => eth_rx_clk_i,
-            eth_tx_clk => eth_tx_clk,
-            eth_tx_clk_i => eth_tx_clk_i
         );
     pll_250 : entity work.pll_250(xilinx)
         port map (
@@ -343,7 +325,6 @@ begin
             I => emac_phy_resetn,
             O => pin_eth_reset_n
         );
-    eth_rx_clk_i <= pin_eth_rx_clk;
     ibuf_eth_rx_d0 : IBUF
         generic map (
             IOSTANDARD => "LVCMOS25"
@@ -392,7 +373,6 @@ begin
             I => pin_eth_rx_er,
             O => emac_phy_rx_er
         );
-    eth_tx_clk_i <= pin_eth_tx_clk;
     obuf_eth_tx_d0 : OBUF
         generic map (
             IOSTANDARD => "LVCMOS25"

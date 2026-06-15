@@ -31,8 +31,6 @@ entity soc is
         emac_phy_rxd : in std_logic_vector(3 downto 0);
         emac_phy_tx_en : out std_logic;
         emac_phy_txd : out std_logic_vector(3 downto 0);
-        eth_rx_clk : in std_logic;
-        eth_tx_clk : in std_logic;
         flash_clk : out std_logic;
         flash_cs : out std_logic_vector(1 downto 0);
         flash_miso : in std_logic;
@@ -70,7 +68,6 @@ architecture impl of soc is
     signal ddr_bus_ack_r : std_logic;
     signal ddr_bus_i : cpu_data_i_t;
     signal ddr_bus_o : cpu_data_o_t;
-    signal debug_i : cpu_debug_i_t;
     signal dma_dbus_o : bus_ddr_o_t;
     signal icache0_ctrl : cache_ctrl_t;
     signal icache1_ctrl : cache_ctrl_t;
@@ -179,8 +176,6 @@ begin
             emac_phy_rxd => emac_phy_rxd,
             emac_phy_tx_en => emac_phy_tx_en,
             emac_phy_txd => emac_phy_txd,
-            eth_rx_clk => eth_rx_clk,
-            eth_tx_clk => eth_tx_clk,
             flash_clk => flash_clk,
             flash_cs => flash_cs,
             flash_miso => flash_miso,
@@ -192,11 +187,11 @@ begin
             uart0_tx => uart0_tx
         );
     -- Zero out unused signals
-    icache0_ctrl <= (en => '0', inv => '0');
-    dcache0_ctrl <= (en => '0', inv => '0');
     cache01sel_ctrl_temp <= '0';
     cpu1_event_i <= (en => '0', cmd => INTERRUPT, vec => (others => '0'), msk => '0', lvl => (others => '0'));
-    dma_dbus_o <= (en => '0', a => (others => '0'), d => (others => '0'), wr => '0', we => (others => '0'), burst32 => '0', burst16 => '0', bgrp => '0');
+    dcache0_ctrl <= (en => '0', inv => '0');
     dcache1_ctrl <= (en => '0', inv => '0');
+    dma_dbus_o <= (en => '0', a => (others => '0'), d => (others => '0'), wr => '0', we => (others => '0'), burst32 => '0', burst16 => '0', bgrp => '0');
+    icache0_ctrl <= (en => '0', inv => '0');
     icache1_ctrl <= (en => '0', inv => '0');
 end;
