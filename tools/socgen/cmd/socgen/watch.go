@@ -19,6 +19,9 @@ func watchedFiles(root, name string) []string {
 	set := map[string]bool{
 		filepath.Join(root, "targets/boards", name, "design.yaml"): true,
 	}
+	// The glob is targets/boards/*.yaml — the shared includes only (top-level,
+	// not recursive); each board's own design.yaml lives in a subdirectory and is
+	// added explicitly above.
 	shared, _ := filepath.Glob(filepath.Join(root, "targets/boards", "*.yaml"))
 	for _, p := range shared {
 		set[p] = true
@@ -68,6 +71,7 @@ func runWatch(root, name, outDir string) error {
 	prev := snapshot(paths)
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt)
+	defer signal.Stop(sig)
 	fmt.Fprintf(os.Stderr, "socgen: watching %s (Ctrl-C to stop)\n", name)
 	ticker := time.NewTicker(watchInterval)
 	defer ticker.Stop()
