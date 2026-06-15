@@ -243,7 +243,7 @@ func ipiNode2(b *board.Board, _ *elaborate.Resolution) (*dts.Node, error) {
 		{Name: "reg", Values: []dts.Value{dts.Cells{Nums: []uint64{uint64(*cache.BaseAddr), 8}, Hex: true}}},
 	}
 	for i := range irqSet { // at most one entry here.
-		props = append(props, &dts.Prop{Name: "interrupts", Values: []dts.Value{dts.Cells{Nums: []uint64{uint64(i)}, Hex: true}}})
+		props = append(props, &dts.Prop{Name: "interrupts", Values: []dts.Value{dts.Cells{Nums: []uint64{uint64(vectorBase + i)}, Hex: true}}})
 	}
 	return &dts.Node{Name: "ipi", Props: props}, nil
 }

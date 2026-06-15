@@ -225,7 +225,7 @@ func TestDeviceTreeSMP(t *testing.T) {
 		"ipi {",
 		`compatible = "jcore,ipi-controller";`,
 		"reg = <0xabcd0400 0x8>;",
-		"interrupts = <0x3>;",
+		"interrupts = <0x14>;", // AIC vector = 0x11 + raw irq 3
 	} {
 		if !strings.Contains(out, w) {
 			t.Errorf("SMP DeviceTree output missing %q:\n%s", w, out)

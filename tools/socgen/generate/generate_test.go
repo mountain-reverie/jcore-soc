@@ -299,3 +299,21 @@ func TestBoardDTSTurtleAicReg(t *testing.T) {
 		}
 	}
 }
+
+// TestBoardDTSTurtleIPIVector verifies the ipi node's interrupt is the AIC
+// vector (0x11+irq = 0x14), not the raw irq (0x3) (T4a).
+func TestBoardDTSTurtleIPIVector(t *testing.T) {
+	root := os.Getenv("JCORE_SOC_ROOT")
+	if root == "" {
+		t.Skip("JCORE_SOC_ROOT not set")
+	}
+	b, _ := board.Load(root, "turtle_1v0")
+	res, _ := elaborate.Elaborate(b)
+	dts, err := devicetree.BoardDTS(b, res)
+	if err != nil {
+		t.Fatalf("BoardDTS: %v", err)
+	}
+	if !strings.Contains(dts, "interrupts = <0x14>;") {
+		t.Errorf("turtle ipi interrupt not vector 0x14:\n%s", dts)
+	}
+}
