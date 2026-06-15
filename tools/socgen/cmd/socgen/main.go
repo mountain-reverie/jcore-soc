@@ -1,7 +1,7 @@
 // Command socgen generates a board's SoC file set (devices.vhd, soc.vhd,
 // pad_ring.vhd, optional board.dts/board.h, build.mk).
 //
-// Usage: socgen [-root DIR] [-o OUTDIR] <board>
+// Usage: socgen [-root DIR] [-o OUTDIR] [-watch] <board>
 package main
 
 import (
@@ -29,6 +29,7 @@ func run(args []string) error {
 	fs := flag.NewFlagSet("socgen", flag.ContinueOnError)
 	root := fs.String("root", ".", "repository root (contains targets/boards)")
 	outDir := fs.String("o", "", "output directory (default: the board's dir)")
+	watch := fs.Bool("watch", false, "watch the board's yaml inputs and regenerate on change (Ctrl-C to stop)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil // usage already printed by flag; exit 0
@@ -39,8 +40,17 @@ func run(args []string) error {
 		return errors.New("expected exactly one board name")
 	}
 	name := fs.Arg(0)
+	if *watch {
+		return runWatch(*root, name, *outDir)
+	}
+	return generateBoard(*root, name, *outDir)
+}
 
-	b, lerr := board.Load(*root, name)
+// generateBoard loads, elaborates, builds and writes one board's file set.
+// Best-effort: load/elaborate/generate warnings print to stderr; only hard
+// errors (unknown/duplicate plugin) and write failures are returned.
+func generateBoard(root, name, outDir string) error {
+	b, lerr := board.Load(root, name)
 	if b == nil || b.Design == nil {
 		return fmt.Errorf("load board %q: %w", name, lerr)
 	}
@@ -60,9 +70,9 @@ func run(args []string) error {
 		fmt.Fprintln(os.Stderr, "socgen: generate warnings:", berr)
 	}
 
-	dst := *outDir
+	dst := outDir
 	if dst == "" {
-		dst = filepath.Join(*root, "targets/boards", name)
+		dst = filepath.Join(root, "targets/boards", name)
 	}
 	return generate.Write(files, dst)
 }
