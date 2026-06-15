@@ -56,6 +56,8 @@ architecture rtl of sdram_ctrl is
   signal wcol  : std_logic_vector(SDR_COL_BITS - 1 downto 0) := (others => '0');
   signal rd_lo : std_logic_vector(15 downto 0) := (others => '0');
 
+  signal refi : integer range 0 to 65535 := 0;   -- cycles since last refresh
+
   signal r_cmd : sdram_cmd_t := (cke=>'1', cs_n=>'1', ras_n=>'1', cas_n=>'1',
                                  we_n=>'1', ba=>(others=>'0'), a=>(others=>'0'), dqm=>"11");
 
@@ -81,8 +83,10 @@ begin
       resp.d <= (others => '0'); resp.ack <= '0'; ack_r <= '0';
       dq_o <= (others => '0'); dq_oe <= '0';
 
+      refi <= refi + 1;   -- refresh interval counter (reset when a REF issues)
+
       if rst = '1' then
-        tmr <= T_INIT; after_st <= S_PRE_ALL; state <= S_WAIT;
+        tmr <= T_INIT; after_st <= S_PRE_ALL; state <= S_WAIT; refi <= 0;
       else
         case state is
           when S_WAIT =>
@@ -100,7 +104,12 @@ begin
             tmr <= T_MRD; after_st <= S_IDLE; state <= S_WAIT;
 
           when S_IDLE =>
-            if req.en = '1' then
+            -- closed-row policy: in IDLE no row is open, so AUTO-REFRESH is safe
+            -- and takes priority over a new request when the interval elapses.
+            if refi >= T_REFI then
+              setcmd(CMD_REF); tmr <= T_RFC; after_st <= S_IDLE;
+              refi <= 0; state <= S_WAIT;
+            elsif req.en = '1' then
               sa := sdram_addr(req.a);
               lbank <= sa.bank; lrow <= sa.row; lcol <= sa.col;
               lbst <= bst; lwr <= req.wr;

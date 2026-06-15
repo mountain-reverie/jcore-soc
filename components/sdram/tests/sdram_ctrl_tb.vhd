@@ -29,6 +29,11 @@ architecture sim of sdram_ctrl_tb is
   signal saw_pre_all, saw_lmr : boolean := false;
   signal ref_count : integer := 0;
   signal pre_all_before_lmr, refs_before_lmr_ok : boolean := false;
+  -- last ACTIVE / column-access addresses driven by the controller (cross-check)
+  signal last_act_ba  : std_logic_vector(SDR_BANK_BITS - 1 downto 0) := (others => '0');
+  signal last_act_row : std_logic_vector(SDR_ROW_BITS - 1 downto 0) := (others => '0');
+  signal first_col    : std_logic_vector(SDR_COL_BITS - 1 downto 0) := (others => '0');
+  signal want_first_col : boolean := false;
 begin
   uut : entity work.sdram_ctrl(rtl)
     generic map (CAS_LATENCY => CL, T_INIT => 20, T_RC => 8, T_RCD => 2,
@@ -58,6 +63,12 @@ begin
         saw_lmr <= true;
         if saw_pre_all then pre_all_before_lmr <= true; end if;
         if ref_count >= 2 then refs_before_lmr_ok <= true; end if;
+      end if;
+      if cmd4 = CMD_ACT then
+        last_act_ba <= c.ba; last_act_row <= c.a; want_first_col <= true;
+      end if;
+      if (cmd4 = CMD_READ or cmd4 = CMD_WRITE) and want_first_col then
+        first_col <= c.a(SDR_COL_BITS - 1 downto 0); want_first_col <= false;
       end if;
     end if;
   end process;
@@ -116,6 +127,8 @@ begin
 
     variable rdata : std_logic_vector(31 downto 0);
     variable gold, rline : line_t;
+    variable sa : sdram_addr_t;
+    variable ref_before : integer;
   begin
     wait until rising_edge(clk);
     rst <= '0';
@@ -144,6 +157,35 @@ begin
     end loop;
     report "burst rw OK" severity note;
 
+    -- Scenario 4: row/bank miss (different bank, then different row).
+    do_write(x"00000400", x"B0B0B0B0", "1111");   -- bank 1 (a(10)=1)
+    do_read (x"00000400", rdata);
+    assert rdata = x"B0B0B0B0" report "bank-miss rw failed" severity failure;
+    do_write(x"00001000", x"C0C0C0C0", "1111");   -- row 1 (a(12)=1)
+    do_read (x"00001000", rdata);
+    assert rdata = x"C0C0C0C0" report "row-miss rw failed" severity failure;
+    report "row/bank-miss OK" severity note;
+
+    -- Scenario 6: address cross-check (FSM-driven ba/row/col vs independent decode).
+    -- 6b high-row address exercises the row slice non-trivially.
+    do_write(x"00010040", x"5A5A1234", "1111");   -- row=16, bank=0, col=32
+    sa := sdram_addr(x"00010040");
+    assert last_act_ba = sa.bank report "cross-check: ACTIVE bank wrong" severity failure;
+    assert last_act_row = sa.row report "cross-check: ACTIVE row wrong" severity failure;
+    assert first_col = sa.col report "cross-check: column wrong" severity failure;
+    do_read (x"00010040", rdata);
+    assert rdata = x"5A5A1234" report "high-row rw failed" severity failure;
+    report "addr cross-check OK" severity note;
+
+    -- Scenario 5: AUTO-REFRESH fires when idle past T_REFI, then access still works.
+    ref_before := ref_count;
+    for i in 0 to 1100 loop wait until rising_edge(clk); end loop;
+    assert ref_count > ref_before report "no AUTO-REFRESH within T_REFI" severity failure;
+    do_read (x"00000020", rdata);
+    assert rdata = x"CAFEBABE" report "post-refresh read failed" severity failure;
+    report "refresh OK" severity note;
+
+    report "all sdram_ctrl scenarios PASSED" severity note;
     done <= true;
     wait;
   end process;
