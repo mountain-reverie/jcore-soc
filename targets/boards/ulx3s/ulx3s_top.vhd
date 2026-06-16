@@ -53,7 +53,6 @@ architecture rtl of ulx3s_top is
   signal sd_dq_oe : std_logic;
 
   signal uart_tx : std_logic;
-  signal heartbeat : unsigned(23 downto 0) := (others => '0');
 
   -- M2: peripheral bus split (periph_mux) + AIC v1 (irq controller + RTC + PIT)
   signal uart_dbus_o, aic_dbus_o, gpio_dbus_o : cpu_data_o_t;
@@ -63,6 +62,7 @@ architecture rtl of ulx3s_top is
   signal aic_irq : std_logic_vector(7 downto 0);
   signal aic_rtc_sec : std_logic_vector(63 downto 0);
   signal aic_rtc_nsec : std_logic_vector(31 downto 0);
+  signal gpio_d_i, gpio_d_o, gpio_d_t : std_logic_vector(31 downto 0);
 
   -- clkgen as a component: no configuration is used; the sim and synth flows
   -- analyze different clkgen source files so the last-analyzed architecture
@@ -162,8 +162,18 @@ begin
               aic_o  => aic_dbus_o,  aic_i  => aic_dbus_i,
               gpio_o => gpio_dbus_o, gpio_i => gpio_dbus_i);
 
-  gpio_dbus_i <= (d => (others => '0'), ack => gpio_dbus_o.en);  -- M2b: real gpio2
-  aic_irq <= (others => '0');                                    -- M2b: gpio2.irq -> bit 0
+  aic_irq <= (others => '0');   -- M2b Task 5: a button drives aic.irq_i(0)
+
+  -- GPIO: d_o -> LEDs, d_i <- buttons. gpio2 has no IRQ output (irq tied '0'
+  -- in the entity); the button interrupt uses the AIC's own edge detector
+  -- (Task 5), so gpio2 here is the memory-mapped LED/button data path.
+  gpio0 : entity work.gpio2(arch)
+    port map (clk => clk_cpu, rst => rst,
+              db_i => gpio_dbus_o, db_o => gpio_dbus_i,
+              irq => open,
+              d_i => gpio_d_i, d_o => gpio_d_o, d_t => gpio_d_t);
+
+  gpio_d_i <= x"000000" & '0' & btn;   -- buttons in d_i(6:0)
 
   aic0 : entity work.aic(behav)
     generic map (c_busperiod => CFG_CLK_CPU_PERIOD_NS)
@@ -185,9 +195,6 @@ begin
 
   ftdi_txd <= uart_tx;
 
-  -- liveness heartbeat (not part of the M0 gate; handy on hardware)
-  process(clk_cpu) begin
-    if rising_edge(clk_cpu) then heartbeat <= heartbeat + 1; end if;
-  end process;
-  led <= (0 => pll_locked, 1 => not rst, 7 => heartbeat(23), others => '0');
+  -- LEDs are GPIO-controlled (software drives gpio2 d_o)
+  led <= gpio_d_o(7 downto 0);
 end architecture;
