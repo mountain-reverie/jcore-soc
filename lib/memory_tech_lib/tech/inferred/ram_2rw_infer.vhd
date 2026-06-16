@@ -73,4 +73,15 @@ begin
       end if;
     end process;
   end generate;
+
+  -- Misuse guard (simulation only; synth strips assert cells): this single-clock
+  -- form ignores clk1, so clk0 and clk1 must be the same net. If a future
+  -- consumer ever drives them with distinct clocks, this fires instead of
+  -- silently producing a wrong single-clock RAM.
+  process(clk1)
+  begin
+    assert clk0 = clk1
+      report "ram_2rw(inferred): clk1 must be the same net as clk0"
+      severity failure;
+  end process;
 end architecture;
