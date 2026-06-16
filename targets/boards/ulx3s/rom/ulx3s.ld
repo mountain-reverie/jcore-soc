@@ -8,6 +8,7 @@ MEMORY {
 SECTIONS {
   .vectors 0x0 : { KEEP(*(.vectors)) } > BOOT
   .text   : { *(.text) *(.text.*) } > BOOT
+  .ivt    : ALIGN(4) { KEEP(*(.ivt)) } > BOOT   /* VBR interrupt vector table */
   .rodata : { *(.rodata) *(.rodata.*) } > BOOT
   .data   : { *(.data) *(.data.*) } > BOOT
   . = ALIGN(4); __bss_start = .;

@@ -5,6 +5,33 @@
 
 #define SDRAM ((volatile unsigned int *)0x10000000u)  /* DEV_DDR base */
 
+/* AIC v1 @ 0xABCD0040: interrupt controller + RTC + PIT (jcore,aic1). */
+#define AIC_BASE  0xABCD0040u
+#define AIC_CTRL  (*(volatile unsigned int *)(AIC_BASE + 0x00u)) /* pit_enable/testvect */
+#define AIC_PIT   (*(volatile unsigned int *)(AIC_BASE + 0x10u)) /* PIT throttle (period) */
+#define AIC_RTCNS (*(volatile unsigned int *)(AIC_BASE + 0x28u)) /* RTC nanoseconds */
+#define PIT_VECNUM 0x40u    /* vector-table slot for the PIT interrupt */
+#define PIT_LEVEL  0xFu     /* event level; SR I-bits (0) are below it -> accepted */
+
+volatile unsigned int g_ticks;        /* incremented by the PIT interrupt */
+
+/* Called by the _irq_entry trampoline (start.S). M2a: the PIT is the only
+   enabled source, so every interrupt is a timer tick. */
+void irq_dispatch(void)
+{
+	g_ticks++;
+}
+
+static void aic_init_pit(void)
+{
+	/* Throttle (period in 40ns ticks) must be written while pit_enable=0.
+	   2500 ticks = 100us = ~10 kHz (fast so a few ticks pass quickly in sim). */
+	AIC_PIT  = 2500u;
+	/* control: pit_enable(d26)=1, testvect(d23:12) = (level<<8)|vecnum
+	   (event_info: bits 11:8 = level, 7:0 = vector). */
+	AIC_CTRL = (1u << 26) | (((PIT_LEVEL << 8) | PIT_VECNUM) << 12);
+}
+
 static void putc_uart(char c)
 {
 	while (UART_STATUS & TX_FULL)
@@ -66,7 +93,19 @@ void main(void)
 	else
 		puts_uart("SDRAM TEST FAIL\r\n");
 	run_from_sdram();
-	puts_uart("DONE\r\n");
+
+	/* arm the PIT and wait for a few periodic interrupts (proves the AIC
+	   delivers a vectored interrupt to the J2) */
+	aic_init_pit();
+	{
+		unsigned int t0 = g_ticks;
+		while (g_ticks < t0 + 3)
+			;
+		puts_uart("TICK\r\n");
+	}
+	if (AIC_RTCNS != 0u)        /* RTC is counting -> clocksource alive */
+		puts_uart("RTC\r\n");
+
 	for (;;)
 		;
 }
