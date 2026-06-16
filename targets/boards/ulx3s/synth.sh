@@ -45,8 +45,12 @@ yosys -m ghdl -p "$GHDL_BASE -e ulx3s_top; synth_ecp5 -top ulx3s_top; check -ass
 # 5. place & route + pack. --timing-allow-fail keeps producing a bitstream + Fmax
 #    even on a timing miss (so metrics still parse); the gate (step 7) fails the
 #    build afterwards. nextpnr logs to stderr, so tee 2>&1.
+#    The full M2 SoC (CPU+caches+SDRAM+AIC+GPIO) is congestion-limited on the
+#    -6 85F: bias placement toward timing (--placer-heap-timingweight, default
+#    23) to recover Fmax on the CPU cache-load critical path.
 nextpnr-ecp5 --85k --package CABGA381 \
   --json "$OUT/ulx3s.json" --lpf targets/boards/ulx3s/ulx3s.lpf \
+  --placer-heap-timingweight 35 \
   --timing-allow-fail --textcfg "$OUT/ulx3s.config" 2>&1 | tee "$OUT/nextpnr.log"
 ecppack "$OUT/ulx3s.config" "$OUT/ulx3s.bit"
 echo "built $OUT/ulx3s.bit"

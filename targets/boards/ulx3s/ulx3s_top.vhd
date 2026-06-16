@@ -63,6 +63,7 @@ architecture rtl of ulx3s_top is
   signal aic_rtc_sec : std_logic_vector(63 downto 0);
   signal aic_rtc_nsec : std_logic_vector(31 downto 0);
   signal gpio_d_i, gpio_d_o, gpio_d_t : std_logic_vector(31 downto 0);
+  signal btn1_sync : std_logic_vector(1 downto 0) := "00";  -- async button synchronizer
 
   -- clkgen as a component: no configuration is used; the sim and synth flows
   -- analyze different clkgen source files so the last-analyzed architecture
@@ -164,7 +165,12 @@ begin
 
   -- btn(1) drives aic.irq_i(0): the AIC's per-line edge detector turns a button
   -- press into a vectored interrupt (vector_numbers(0)=0x11). btn(0) stays reset.
-  aic_irq <= (0 => btn(1), others => '0');
+  -- Synchronize the async button to clk_cpu first (2 FFs) so it is not a raw
+  -- unconstrained cross-chip input into the fabric (and for metastability).
+  process(clk_cpu) begin
+    if rising_edge(clk_cpu) then btn1_sync <= btn1_sync(0) & btn(1); end if;
+  end process;
+  aic_irq <= (0 => btn1_sync(1), others => '0');
 
   -- GPIO: d_o -> LEDs, d_i <- buttons. gpio2 has no IRQ output (irq tied '0'
   -- in the entity); the button interrupt uses the AIC's own edge detector
