@@ -4,8 +4,9 @@ targets/boards/ulx3s/rom/main.elf
 targets/boards/ulx3s/rom/main.bin
 targets/boards/*/build/
 
-# ULX3S M1b: synth-clean ddr_ram_mux (soc_gen metadata stripped for ghdl --synth)
-targets/ddr_ram_mux/ddr_ram_mux_synth.vhd
+# ULX3S M1b: synth-clean VHDL copies generated for the ghdl-yosys flow
+# (ddr_ram_mux soc_gen metadata stripped; cache transparent latches -> negedge FFs)
+targets/boards/ulx3s/generated/
 
 # Python bytecode (metrics scripts)
 __pycache__/

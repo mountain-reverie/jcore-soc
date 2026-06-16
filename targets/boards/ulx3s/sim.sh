@@ -29,14 +29,8 @@ for f in components/cpu/cache/dcache_ccl components/cpu/cache/dcache_mcl \
          components/misc/bus_mux_typecsub components/misc/bus_mux_typec; do
   LD_LIBRARY_PATH='' perl tools/v2p < "$f.vhm" > "$f.vhd"
 done
-# M1b: ghdl --synth asserts (synth-vhdl_decls) on the soc_gen-only `group` +
-# `soc_port_global_name` metadata in ddr_ram_mux.vhd. The ULX3S top is
-# hand-written (no soc_gen consumes that metadata), so strip it into a
-# synth-clean copy used by both sim and synth (sim is unaffected; the metadata
-# has no simulation meaning).
-perl -0pe 's/-- synopsys translate_off.*?-- synopsys translate_on\n//s;
-           s/^\s*attribute soc_port_global_name of .*?;\n//mg' \
-  targets/ddr_ram_mux/ddr_ram_mux.vhd > targets/ddr_ram_mux/ddr_ram_mux_synth.vhd
+# M1b: generate the synth-clean ddr_ram_mux + cache copies (see the script).
+source targets/boards/ulx3s/gen_synth_sources.sh
 
 # 3. full design analyze (real banner boot_image_pkg) + banner testbench
 echo "=== ulx3s_top_tb ==="

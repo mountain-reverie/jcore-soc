@@ -48,12 +48,12 @@ FILES=(
   components/cpu/cache/dcache_mcl.vhd
   components/cpu/cache/icache_ccl.vhd
   components/cpu/cache/icache_mcl.vhd
-  components/cpu/cache/dcache.vhd
-  components/cpu/cache/icache.vhd
+  targets/boards/ulx3s/generated/dcache.vhd  # transparent latch -> negedge FF
+  targets/boards/ulx3s/generated/icache.vhd  # (see gen_synth_sources.sh)
   components/cpu/cache/cache_config_fpga.vhd
   components/misc/bus_mux_typecsub.vhd
   components/misc/bus_mux_typec.vhd
-  targets/ddr_ram_mux/ddr_ram_mux_synth.vhd
+  targets/boards/ulx3s/generated/ddr_ram_mux.vhd  # soc_gen metadata stripped
   targets/ddr_ram_mux/one_cpu_idcache.vhd
   targets/ddr_ram_mux/one_cpu_idcache_fpga.vhd
   targets/cpu_core_pkg.vhd
