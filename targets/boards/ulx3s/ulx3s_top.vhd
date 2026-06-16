@@ -162,7 +162,9 @@ begin
               aic_o  => aic_dbus_o,  aic_i  => aic_dbus_i,
               gpio_o => gpio_dbus_o, gpio_i => gpio_dbus_i);
 
-  aic_irq <= (others => '0');   -- M2b Task 5: a button drives aic.irq_i(0)
+  -- btn(1) drives aic.irq_i(0): the AIC's per-line edge detector turns a button
+  -- press into a vectored interrupt (vector_numbers(0)=0x11). btn(0) stays reset.
+  aic_irq <= (0 => btn(1), others => '0');
 
   -- GPIO: d_o -> LEDs, d_i <- buttons. gpio2 has no IRQ output (irq tied '0'
   -- in the entity); the button interrupt uses the AIC's own edge detector

@@ -14,6 +14,7 @@ architecture sim of ulx3s_top_tb is
   signal btn : std_logic_vector(6 downto 0) := (0 => '1', others => '0'); -- reset asserted
   signal led : std_logic_vector(7 downto 0);
   signal done : boolean := false;
+  signal gpio_seen : boolean := false;   -- set by rx once "GPIO" is decoded
 
   -- SDRAM pins (top <-> behavioral model)
   signal s_clk, s_cke, s_csn, s_rasn, s_casn, s_wen : std_logic;
@@ -46,8 +47,17 @@ begin
 
   clk_25mhz <= not clk_25mhz after CLK_PER/2 when not done else '0';
 
-  rel : process begin
-    wait for 10 * CLK_PER; btn(0) <= '0'; wait;
+  -- single driver for btn: release reset, then once the program reaches the
+  -- GPIO stage (and has armed the button IRQ) press btn(1) -> rising edge on
+  -- aic.irq_i(0) -> the GPIO interrupt fires.
+  stim : process begin
+    wait for 10 * CLK_PER; btn(0) <= '0';
+    wait until gpio_seen;
+    wait for 5 us;            -- let the program arm AIC_ILEVEL after printing GPIO
+    btn(1) <= '1';
+    wait for 50 us;
+    btn(1) <= '0';
+    wait;
   end process;
 
   -- UART receiver: decode ftdi_txd into a string; succeed once the required
@@ -71,11 +81,12 @@ begin
       end if;
       assert not contains(buf, n, "SDRAM TEST FAIL")
         report "ulx3s_top_tb FAILED: SDRAM memory test reported FAIL" severity failure;
+      if contains(buf, n, "GPIO") then gpio_seen <= true; end if;
       if contains(buf, n, "J2 on ULX3S") and contains(buf, n, "SDRAM TEST PASS")
          and contains(buf, n, "FROM SDRAM")
          and contains(buf, n, "TICK") and contains(buf, n, "RTC")
-         and contains(buf, n, "GPIO") then
-        report "ulx3s_top_tb PASSED: banner + SDRAM + TICK + RTC + GPIO decoded"
+         and contains(buf, n, "GPIO") and contains(buf, n, "BTN") then
+        report "ulx3s_top_tb PASSED: banner + SDRAM + TICK + RTC + GPIO + BTN decoded"
           severity note;
         done <= true;
         wait;

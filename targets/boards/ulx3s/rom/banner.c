@@ -9,21 +9,31 @@
 #define AIC_BASE  0xABCD0040u
 #define AIC_CTRL  (*(volatile unsigned int *)(AIC_BASE + 0x00u)) /* pit_enable/testvect */
 #define AIC_PIT   (*(volatile unsigned int *)(AIC_BASE + 0x10u)) /* PIT throttle (period) */
+#define AIC_ILEVEL (*(volatile unsigned int *)(AIC_BASE + 0x08u)) /* per-irq levels */
 #define AIC_RTCNS (*(volatile unsigned int *)(AIC_BASE + 0x28u)) /* RTC nanoseconds */
 #define PIT_VECNUM 0x40u    /* vector-table slot for the PIT interrupt */
 #define PIT_LEVEL  0xFu     /* event level; SR I-bits (0) are below it -> accepted */
 
 /* gpio2 @ 0xABCD0000: d_o -> LEDs, d_i <- buttons (jcore,gpio2). */
-#define GPIO_BASE 0xABCD0000u
-#define GPIO_DATA (*(volatile unsigned int *)(GPIO_BASE + 0x00u))
+#define GPIO_BASE   0xABCD0000u
+#define GPIO_DATA   (*(volatile unsigned int *)(GPIO_BASE + 0x00u)) /* wr d_o; rd d_i */
+#define GPIO_TOGGLE (*(volatile unsigned int *)(GPIO_BASE + 0x08u)) /* XOR into d_o */
 
 volatile unsigned int g_ticks;        /* incremented by the PIT interrupt */
+volatile unsigned int g_btn;          /* incremented by the GPIO button interrupt */
 
-/* Called by the _irq_entry trampoline (start.S). M2a: the PIT is the only
-   enabled source, so every interrupt is a timer tick. */
+/* PIT timer interrupt (vector 0x40), via _irq_pit_entry. */
 void irq_dispatch(void)
 {
 	g_ticks++;
+}
+
+/* GPIO button interrupt (vector 0x11), via _irq_gpio_entry. The AIC edge
+   detector + ack handshake clears the source; toggle LED1 as a visible effect. */
+void irq_gpio(void)
+{
+	g_btn++;
+	GPIO_TOGGLE = 0x02u;   /* hardware-XOR LED1 (reg 0x00 read returns d_i, not d_o) */
 }
 
 static void aic_init_pit(void)
@@ -112,6 +122,14 @@ void main(void)
 
 	GPIO_DATA = 0x01u;          /* drive LED0 via gpio2 */
 	puts_uart("GPIO\r\n");
+
+	/* enable the button interrupt: ilevel(0)=1 arms aic.irq_i(0) (a button is
+	   wired there); SR I-bits (0) are below level 1 so it is accepted. Wait for
+	   the edge-triggered interrupt to run irq_gpio. */
+	AIC_ILEVEL = 0x1u;
+	while (g_btn == 0u)
+		;
+	puts_uart("BTN\r\n");
 
 	for (;;)
 		;

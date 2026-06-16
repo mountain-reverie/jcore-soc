@@ -39,13 +39,26 @@ bss_start:  .long __bss_start
 bss_end:    .long __bss_end
 vbr_base:   .long _vector_table
 
-	! Interrupt trampoline: on an accepted interrupt the SH-2 has already pushed
-	! SR and PC. Save the caller-saved state the C dispatcher may clobber, call
-	! it, restore, and RTE (which pops PC then SR).
+	! Interrupt trampolines: two sources distinguished by VECTOR (no post-ack
+	! status race) -- PIT (0x40) -> irq_dispatch, GPIO button (0x11) -> irq_gpio.
+	! Each entry saves r0, loads its C handler into r0, and joins the common
+	! save/call/restore/RTE. On entry the SH-2 has already pushed SR and PC; RTE
+	! pops PC then SR.
 	.align 2
-	.global _irq_entry
-_irq_entry:
+	.global _irq_pit_entry
+_irq_pit_entry:
 	mov.l	r0, @-r15
+	mov.l	pit_disp, r0
+	bra	_irq_common
+	nop
+	.align 2
+	.global _irq_gpio_entry
+_irq_gpio_entry:
+	mov.l	r0, @-r15
+	mov.l	gpio_disp, r0
+	bra	_irq_common
+	nop
+_irq_common:                    ! r0 = C handler addr; caller's r0 already saved
 	mov.l	r1, @-r15
 	mov.l	r2, @-r15
 	mov.l	r3, @-r15
@@ -56,7 +69,6 @@ _irq_entry:
 	sts.l	pr, @-r15
 	sts.l	mach, @-r15
 	sts.l	macl, @-r15
-	mov.l	disp_addr, r0
 	jsr	@r0
 	nop
 	lds.l	@r15+, macl
@@ -73,7 +85,8 @@ _irq_entry:
 	rte
 	nop
 	.align 2
-disp_addr:  .long _irq_dispatch
+pit_disp:   .long _irq_dispatch
+gpio_disp:  .long _irq_gpio
 
 	! Fault catch-all for CPU exception vectors (illegal instruction, slot
 	! illegal, address error, ...). Halts visibly instead of letting an
@@ -86,14 +99,18 @@ _fault_entry:
 
 	! VBR-relative vector table (4 bytes/entry, indexed by vector number). VBR is
 	! set to _vector_table so an exception/interrupt with vector N fetches its
-	! handler from _vector_table + N*4. Slots 0x00..0x3F (reset is unused via VBR;
-	! the rest are CPU exceptions) halt at _fault_entry; the PIT interrupt (0x40)
-	! runs _irq_entry. (Reset itself uses the 0x0 .vectors, not VBR.)
+	! handler from _vector_table + N*4. CPU-exception slots halt at _fault_entry;
+	! the GPIO button IRQ (0x11 = vector_numbers(0)) and the PIT (0x40) run their
+	! trampolines. (Reset itself uses the 0x0 .vectors, not VBR.)
 	.section .ivt, "a"
 	.align 2
 	.global _vector_table
 _vector_table:
-	.rept 0x40
-	.long _fault_entry
+	.rept 0x11
+	.long _fault_entry      ! 0x00..0x10
 	.endr
-	.long _irq_entry        ! 0x40: PIT timer interrupt
+	.long _irq_gpio_entry   ! 0x11: GPIO button (aic vector_numbers(0))
+	.rept (0x40 - 0x12)
+	.long _fault_entry      ! 0x12..0x3F
+	.endr
+	.long _irq_pit_entry    ! 0x40: PIT timer interrupt
