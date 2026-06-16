@@ -53,7 +53,7 @@ FILES=(
   components/cpu/cache/cache_config_fpga.vhd
   components/misc/bus_mux_typecsub.vhd
   components/misc/bus_mux_typec.vhd
-  targets/ddr_ram_mux/ddr_ram_mux.vhd
+  targets/ddr_ram_mux/ddr_ram_mux_synth.vhd
   targets/ddr_ram_mux/one_cpu_idcache.vhd
   targets/ddr_ram_mux/one_cpu_idcache_fpga.vhd
   targets/cpu_core_pkg.vhd

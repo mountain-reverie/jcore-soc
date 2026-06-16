@@ -22,6 +22,14 @@ for f in components/cpu/cache/dcache_ccl components/cpu/cache/dcache_mcl \
          components/misc/bus_mux_typecsub components/misc/bus_mux_typec; do
   LD_LIBRARY_PATH='' perl tools/v2p < "$f.vhm" > "$f.vhd"
 done
+# M1b: ghdl --synth asserts (synth-vhdl_decls) on the soc_gen-only `group` +
+# `soc_port_global_name` metadata in ddr_ram_mux.vhd. The ULX3S top is
+# hand-written (no soc_gen consumes that metadata), so strip it into a
+# synth-clean copy used by both sim and synth (sim is unaffected; the metadata
+# has no simulation meaning).
+perl -0pe 's/-- synopsys translate_off.*?-- synopsys translate_on\n//s;
+           s/^\s*attribute soc_port_global_name of .*?;\n//mg' \
+  targets/ddr_ram_mux/ddr_ram_mux.vhd > targets/ddr_ram_mux/ddr_ram_mux_synth.vhd
 
 # 3. file list: the sim list plus the ecp5 clkgen arch (analyzed last so default
 #    binding selects clkgen(ecp5) over clkgen(sim)).
@@ -30,7 +38,12 @@ FILES+=(targets/boards/ulx3s/ulx3s_clkgen_ecp5.vhd)
 
 # 4. synthesize to ECP5 JSON. --syn-binding: component->same-name-entity default
 #    binding (clkgen/uart). chformal/delete strip VHDL assert cells nextpnr rejects.
-GHDL_BASE="ghdl --std=93 -fexplicit -fsynopsys --syn-binding --workdir=$WORK ${FILES[*]}"
+# --latches: the jcore i/d-caches use intentional transparent latches (the
+# "0.5 cycle delay" CDC elements, e.g. icache c2_r3 / dcache equivalents,
+# explicitly commented "transparent latch"); ghdl synth errors on them without
+# this. They are part of the upstream cache design (synthesized as latches on
+# the ASIC/Xilinx flows too), not an accidental inference.
+GHDL_BASE="ghdl --std=93 -fexplicit -fsynopsys --syn-binding --latches --workdir=$WORK ${FILES[*]}"
 yosys -m ghdl -p "$GHDL_BASE -e ulx3s_top; synth_ecp5 -top ulx3s_top; check -assert; \
   chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/ulx3s.json" \
   2>&1 | tee "$OUT/yosys.log"
