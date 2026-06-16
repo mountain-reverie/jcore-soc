@@ -6,7 +6,8 @@ use work.sdram_pkg.all;
 entity ulx3s_top_tb is end entity;
 
 architecture sim of ulx3s_top_tb is
-  constant CLK_PER : time := 40 ns;            -- 25 MHz
+  constant CLK_PER : time := 50 ns;            -- 20 MHz (sim bypasses the PLL;
+                                               -- feed clk_cpu's post-PLL rate)
   constant BIT_PER : time := 1000 ms / 115200; -- one UART bit at 115200 baud
   signal clk_25mhz : std_logic := '0';
   signal ftdi_txd : std_logic;
