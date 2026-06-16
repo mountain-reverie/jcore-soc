@@ -64,6 +64,11 @@ FILES=(
   components/uartlite/uart_pkg.vhd
   components/uartlite/uart.vhd
   components/uartlite/uartlitedb.vhd
+  # M2: AIC v1 (interrupt controller + RTC + PIT) + peripheral bus mux
+  components/misc/aic2_pkg.vhd
+  components/misc/aic_edgedet.vhd
+  components/misc/aic.vhd
+  targets/boards/ulx3s/periph_mux.vhd
   targets/boards/ulx3s/boot_image_pkg.vhd
   components/memory/bootram_infer.vhd
   components/sdram/sdram_pkg.vhd
