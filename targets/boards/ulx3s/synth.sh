@@ -19,7 +19,8 @@ LD_LIBRARY_PATH='' perl tools/v2p < components/uartlite/uart.vhm > components/ua
 # M1b: v2p the cache + bus-mux cores
 for f in components/cpu/cache/dcache_ccl components/cpu/cache/dcache_mcl \
          components/cpu/cache/icache_ccl components/cpu/cache/icache_mcl \
-         components/misc/bus_mux_typecsub components/misc/bus_mux_typec; do
+         components/misc/bus_mux_typecsub components/misc/bus_mux_typec \
+         components/misc/gpio2; do
   LD_LIBRARY_PATH='' perl tools/v2p < "$f.vhm" > "$f.vhd"
 done
 # M1b: generate the synth-clean ddr_ram_mux + cache copies (see the script).
