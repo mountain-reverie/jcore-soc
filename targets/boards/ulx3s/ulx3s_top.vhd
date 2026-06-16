@@ -55,6 +55,15 @@ architecture rtl of ulx3s_top is
   signal uart_tx : std_logic;
   signal heartbeat : unsigned(23 downto 0) := (others => '0');
 
+  -- M2: peripheral bus split (periph_mux) + AIC v1 (irq controller + RTC + PIT)
+  signal uart_dbus_o, aic_dbus_o, gpio_dbus_o : cpu_data_o_t;
+  signal uart_dbus_i, aic_dbus_i, gpio_dbus_i : cpu_data_i_t;
+  signal cpu0_event_i_s : cpu_event_i_t;   -- AIC -> CPU
+  signal cpu0_event_o_s : cpu_event_o_t;   -- CPU -> AIC
+  signal aic_irq : std_logic_vector(7 downto 0);
+  signal aic_rtc_sec : std_logic_vector(63 downto 0);
+  signal aic_rtc_nsec : std_logic_vector(31 downto 0);
+
   -- clkgen as a component: no configuration is used; the sim and synth flows
   -- analyze different clkgen source files so the last-analyzed architecture
   -- (sim for tb, ecp5 for synth) wins default binding.
@@ -92,7 +101,7 @@ begin
       cpu0_data_master_ack => open, cpu0_data_master_en => open,
       cpu0_ddr_dbus_i => cpu0_ddr_dbus_i, cpu0_ddr_dbus_o => cpu0_ddr_dbus_o,
       cpu0_ddr_ibus_i => cpu0_ddr_ibus_i, cpu0_ddr_ibus_o => cpu0_ddr_ibus_o,
-      cpu0_event_i => NULL_CPU_EVENT_I, cpu0_event_o => open,
+      cpu0_event_i => cpu0_event_i_s, cpu0_event_o => cpu0_event_o_s,
       cpu0_mem_lock => cpu0_mem_lock,
       cpu0_periph_dbus_i => cpu0_periph_dbus_i, cpu0_periph_dbus_o => cpu0_periph_dbus_o,
       cpu1_copro_i => NULL_COPR_I, cpu1_copro_o => open,
@@ -145,12 +154,33 @@ begin
   sdram_a    <= sd_cmd.a;
   sdram_ba   <= sd_cmd.ba;
 
+  -- M2 peripheral bus: split DEV_PERIPH into UART/AIC/GPIO. The AIC v1 provides
+  -- the interrupt controller + RTC + PIT and drives the CPU event interface.
+  pmux : entity work.periph_mux(rtl)
+    port map (cpu_o => cpu0_periph_dbus_o, cpu_i => cpu0_periph_dbus_i,
+              uart_o => uart_dbus_o, uart_i => uart_dbus_i,
+              aic_o  => aic_dbus_o,  aic_i  => aic_dbus_i,
+              gpio_o => gpio_dbus_o, gpio_i => gpio_dbus_i);
+
+  gpio_dbus_i <= (d => (others => '0'), ack => gpio_dbus_o.en);  -- M2b: real gpio2
+  aic_irq <= (others => '0');                                    -- M2b: gpio2.irq -> bit 0
+
+  aic0 : entity work.aic(behav)
+    generic map (c_busperiod => CFG_CLK_CPU_PERIOD_NS)
+    port map (clk_bus => clk_cpu, rst_i => rst,
+              db_i => aic_dbus_o, db_o => aic_dbus_i,
+              bstb_i => '0', back_i => '0',
+              rtc_sec => aic_rtc_sec, rtc_nsec => aic_rtc_nsec,
+              irq_i => aic_irq, enmi_i => '1',   -- NMI is active-low; '1' = no NMI
+              event_i => cpu0_event_o_s, event_o => cpu0_event_i_s,
+              reboot => open);
+
   -- fclk derived from the board config so the baud divisor tracks the CPU
   -- clock if the PLL setting changes (single source of truth: config.vhd).
   uart0 : entity work.uartlitedb(arch)
     generic map (bps => 115200.0, fclk => real(CFG_CLK_CPU_FREQ_HZ), intcfg => 1)
     port map (clk => clk_cpu, rst => rst,
-              db_i => cpu0_periph_dbus_o, db_o => cpu0_periph_dbus_i,
+              db_i => uart_dbus_o, db_o => uart_dbus_i,
               int => open, rx => ftdi_rxd, tx => uart_tx);
 
   ftdi_txd <= uart_tx;
