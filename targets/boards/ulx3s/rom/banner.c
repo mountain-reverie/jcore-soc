@@ -13,6 +13,10 @@
 #define PIT_VECNUM 0x40u    /* vector-table slot for the PIT interrupt */
 #define PIT_LEVEL  0xFu     /* event level; SR I-bits (0) are below it -> accepted */
 
+/* gpio2 @ 0xABCD0000: d_o -> LEDs, d_i <- buttons (jcore,gpio2). */
+#define GPIO_BASE 0xABCD0000u
+#define GPIO_DATA (*(volatile unsigned int *)(GPIO_BASE + 0x00u))
+
 volatile unsigned int g_ticks;        /* incremented by the PIT interrupt */
 
 /* Called by the _irq_entry trampoline (start.S). M2a: the PIT is the only
@@ -105,6 +109,9 @@ void main(void)
 	}
 	if (AIC_RTCNS != 0u)        /* RTC is counting -> clocksource alive */
 		puts_uart("RTC\r\n");
+
+	GPIO_DATA = 0x01u;          /* drive LED0 via gpio2 */
+	puts_uart("GPIO\r\n");
 
 	for (;;)
 		;
