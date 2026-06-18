@@ -12,6 +12,7 @@ FILES=(
   $CPU/core/cpu.vhd
   $CPU/core/mult.vhd
   $CPU/core/datapath.vhd
+  $CPU/core/shifter.vhd
   $CPU/core/register_file.vhd
   $CPU/core/register_file_flops.vhd
   $CPU/core/register_file_two_bank.vhd
@@ -28,6 +29,7 @@ FILES=(
   targets/data_bus_pkg.vhd
   # M1b: cache + ddr_ram_mux + dma (depend on cpu2j0_pack + data_bus_pack)
   components/ddr2/ddrc_cnt_pkg.vhd
+  components/cpu/cache/cache_clkmode_sc.vhd  # CACHE_SAME_CLOCK=true -> posedge _sc CDC
   components/cpu/cache/cache_pkg.vhd
   lib/reg_file_struct/bist_pkg.vhd
   components/dma/dma_pkg.vhd
@@ -48,8 +50,8 @@ FILES=(
   components/cpu/cache/dcache_mcl.vhd
   components/cpu/cache/icache_ccl.vhd
   components/cpu/cache/icache_mcl.vhd
-  targets/boards/ulx3s/generated/dcache.vhd  # transparent latch -> negedge FF
-  targets/boards/ulx3s/generated/icache.vhd  # (see gen_synth_sources.sh)
+  components/cpu/cache/dcache.vhd  # posedge _sc CDC (cache_clkmode_sc); Part B
+  components/cpu/cache/icache.vhd
   components/cpu/cache/cache_config_fpga.vhd
   components/misc/bus_mux_typecsub.vhd
   components/misc/bus_mux_typec.vhd
