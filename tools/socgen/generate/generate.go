@@ -94,6 +94,14 @@ func Build(b *board.Board, res *elaborate.Resolution) ([]File, error) {
 		}
 	}
 
+	if res != nil && res.Target == "ecp5" {
+		lpf, lerr := emit.LPF(res)
+		if lerr != nil {
+			errs = append(errs, &GenerateError{Kind: ErrEmit, Name: b.Name + ".lpf", Detail: lerr.Error()})
+		}
+		files = append(files, File{Name: b.Name + ".lpf", Content: lpf, InBuildMK: false})
+	}
+
 	files = append(files, File{Name: "build.mk", Content: buildMK(files)})
 	return files, errors.Join(errs...)
 }
