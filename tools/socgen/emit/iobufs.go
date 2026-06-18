@@ -2,6 +2,7 @@ package emit
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -137,6 +138,9 @@ func signalBase(ref string) string {
 // assign or buffer per single-ended pin (in sortedPins net order), then the
 // differential-pair buffers. Best-effort; accumulates per-pin errors.
 func pinStatements(res *elaborate.Resolution) ([]vhdl.Stmt, error) {
+	if res.Target == "ecp5" {
+		return ecp5PinStatements(res)
+	}
 	pins := sortedPins(res)
 	var stmts []vhdl.Stmt
 	var diffs []*elaborate.ResolvedPin
@@ -219,4 +223,45 @@ func diffPairs(diffs []*elaborate.ResolvedPin) ([]vhdl.Stmt, error) {
 // (UnitKind 0 -> no entity/component keyword; prints `obuf_led0 : OBUF`).
 func instBuf(label, comp string, ports, generics []*vhdl.AssocElement) *vhdl.InstantiationStmt {
 	return &vhdl.InstantiationStmt{Label: label, Unit: comp, GenericMap: generics, PortMap: ports}
+}
+
+// ecp5PinStatements wires each pad straight to its internal net with a direct
+// concurrent assignment — no vendor IO buffer. The ECP5 yosys/nextpnr flow
+// infers IO from plain top-level ports, so pad_ring needs no UNISIM primitives.
+// Inout/differential pins are deferred to Phase 2 (handled via padring entities
+// such as sdram_iocells) and surface here as an explicit error.
+func ecp5PinStatements(res *elaborate.Resolution) ([]vhdl.Stmt, error) {
+	var stmts []vhdl.Stmt
+	var errs []error
+	for _, rp := range sortedPins(res) {
+		st, err := ecp5PinStmt(rp)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		stmts = append(stmts, st)
+	}
+	return stmts, errors.Join(errs...)
+}
+
+// ecp5PinStmt emits the direct concurrent assignment that wires one single-ended
+// pad to its internal net (no vendor buffer). The bare-signal direction mirrors
+// the Xilinx BufDirect convention in pinStmt: PadDir "in" drives the net, any
+// other value (including the empty default) drives the pad. Inout/tristate
+// (OutEn set) and differential pads are deferred to Phase 2 and return an error
+// rather than emitting wrong hardware.
+func ecp5PinStmt(rp *elaborate.ResolvedPin) (vhdl.Stmt, error) {
+	port := "pin_" + rp.Net
+	switch {
+	case rp.Out != "" && rp.In == "" && rp.OutEn == "": // output pad
+		return concAssign(&vhdl.Ident{Name: port}, &vhdl.Ident{Name: rp.Out}), nil
+	case rp.In != "" && rp.Out == "": // input pad
+		return concAssign(&vhdl.Ident{Name: rp.In}, &vhdl.Ident{Name: port}), nil
+	case rp.Signal != "" && rp.PadDir == "in": // bare signal input: net <= pad
+		return concAssign(&vhdl.Ident{Name: rp.Signal}, &vhdl.Ident{Name: port}), nil
+	case rp.Signal != "": // bare signal output (PadDir "out" or unset): pad <= net
+		return concAssign(&vhdl.Ident{Name: port}, &vhdl.Ident{Name: rp.Signal}), nil
+	default:
+		return nil, fmt.Errorf("ecp5 pin %q: inout/tristate/differential pads are deferred to Phase 2", rp.Net)
+	}
 }
