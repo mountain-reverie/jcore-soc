@@ -1,24 +1,14 @@
 name: board-synth
 on:
+  # No path filters: the jobs below (sim/bitstream/benchmark/metrics-tests) are
+  # required status checks in the branch ruleset. Path-filtering them means a PR
+  # that doesn't touch the filtered paths (e.g. tools/socgen — which generates
+  # the VHDL — or docs/boot) never reports those contexts and can never merge.
+  # Run on every push to main/master and every PR so the required checks always
+  # report a conclusion.
   push:
     branches: [ main, master ]
-    paths:
-      - 'targets/boards/**'
-      - 'components/**'
-      - 'lib/**'
-      - 'tools/fpga/**'
-      - 'tools/genbootpkg'
-      - 'tools/v2p'
-      - '.github/workflows/board-synth.yml'
   pull_request:
-    paths:
-      - 'targets/boards/**'
-      - 'components/**'
-      - 'lib/**'
-      - 'tools/fpga/**'
-      - 'tools/genbootpkg'
-      - 'tools/v2p'
-      - '.github/workflows/board-synth.yml'
   workflow_dispatch:
 
 jobs:
