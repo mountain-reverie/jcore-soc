@@ -161,8 +161,14 @@ func topContext(res *elaborate.Resolution) []vhdl.Node {
 }
 
 // padringContext is topContext plus the unisim library/use, appended after the
-// work uses (matching golden pad_ring.vhd).
+// work uses (matching golden pad_ring.vhd). For ecp5 the unisim clause is
+// omitted: the yosys/nextpnr flow infers IO from plain ports and instantiates
+// no UNISIM primitives, so a unisim library/use would be dead (and unanalyzable
+// in the ECP5 flow).
 func padringContext(res *elaborate.Resolution) []vhdl.Node {
+	if res.Target == "ecp5" {
+		return topContext(res)
+	}
 	return append(topContext(res),
 		&vhdl.LibraryClause{Names: []string{"unisim"}},
 		&vhdl.UseClause{Names: []string{"unisim.vcomponents.all"}},

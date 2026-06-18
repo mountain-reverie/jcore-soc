@@ -245,23 +245,36 @@ func ecp5PinStatements(res *elaborate.Resolution) ([]vhdl.Stmt, error) {
 }
 
 // ecp5PinStmt emits the direct concurrent assignment that wires one single-ended
-// pad to its internal net (no vendor buffer). The bare-signal direction mirrors
-// the Xilinx BufDirect convention in pinStmt: PadDir "in" drives the net, any
-// other value (including the empty default) drives the pad. Inout/tristate
-// (OutEn set) and differential pads are deferred to Phase 2 and return an error
-// rather than emitting wrong hardware.
+// pad to its internal net (no vendor buffer). Direction follows the legs, with
+// bare-signal direction mirroring the Xilinx BufDirect convention (PadDir "in"
+// drives the net, otherwise drives the pad). It reuses outExpr/inExpr so the
+// Signal fallback and constant outputs are handled the same way as the Xilinx
+// path. Pin shapes whose ECP5 handling is deferred to Phase 2 — differential,
+// inout/tristate (OutEn), bidirectional (both legs), and inverted outputs (which
+// need the inverted-intermediate machinery PadRing builds only for Xilinx) —
+// return an explicit error rather than emitting wrong hardware.
 func ecp5PinStmt(rp *elaborate.ResolvedPin) (vhdl.Stmt, error) {
-	port := "pin_" + rp.Net
 	switch {
-	case rp.Out != "" && rp.In == "" && rp.OutEn == "": // output pad
-		return concAssign(&vhdl.Ident{Name: port}, &vhdl.Ident{Name: rp.Out}), nil
-	case rp.In != "" && rp.Out == "": // input pad
-		return concAssign(&vhdl.Ident{Name: rp.In}, &vhdl.Ident{Name: port}), nil
+	case rp.Diff != "":
+		return nil, fmt.Errorf("ecp5 pin %q: differential pads are deferred to Phase 2", rp.Net)
+	case rp.OutEn != "":
+		return nil, fmt.Errorf("ecp5 pin %q: inout/tristate pads are deferred to Phase 2", rp.Net)
+	case rp.In != "" && rp.Out != "":
+		return nil, fmt.Errorf("ecp5 pin %q: bidirectional pads are deferred to Phase 2", rp.Net)
+	case rp.OutInvert:
+		return nil, fmt.Errorf("ecp5 pin %q: inverted-output pads are deferred to Phase 2", rp.Net)
+	}
+	pin := &vhdl.Ident{Name: "pin_" + rp.Net}
+	switch {
+	case rp.In != "": // input pad: internal <= pin
+		return concAssign(inExpr(rp), pin), nil
+	case rp.Out != "" || rp.OutConst != "": // output pad: pin <= internal (incl. constant)
+		return concAssign(pin, outExpr(rp)), nil
 	case rp.Signal != "" && rp.PadDir == "in": // bare signal input: net <= pad
-		return concAssign(&vhdl.Ident{Name: rp.Signal}, &vhdl.Ident{Name: port}), nil
+		return concAssign(inExpr(rp), pin), nil
 	case rp.Signal != "": // bare signal output (PadDir "out" or unset): pad <= net
-		return concAssign(&vhdl.Ident{Name: port}, &vhdl.Ident{Name: rp.Signal}), nil
+		return concAssign(pin, outExpr(rp)), nil
 	default:
-		return nil, fmt.Errorf("ecp5 pin %q: inout/tristate/differential pads are deferred to Phase 2", rp.Net)
+		return nil, fmt.Errorf("ecp5 pin %q: unsupported pin shape (no leg or signal)", rp.Net)
 	}
 }
