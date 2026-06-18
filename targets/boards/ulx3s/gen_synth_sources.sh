@@ -7,16 +7,11 @@
 #    metadata that ghdl --synth asserts on (synth-vhdl_decls). The ULX3S top is
 #    hand-written; no soc_gen consumes that metadata, so removing it is inert.
 #
-#  - icache/dcache: rewrite the intentional transparent latches (the "0.5 cycle
-#    delay" CDC elements) as falling-edge flip-flops. Each latch samples a
-#    rising-edge register (thisb*_r), which is stable through the clock-low
-#    phase, so a negedge FF is the exact same half-cycle delay -- but it is not a
-#    combinational loop. The latch form routes to a LUT-with-feedback that
-#    nextpnr's timing analyzer rejects ("combinational loops"). The cache files
-#    live in the cpu submodule; generating copies here keeps the submodule clean.
-#
-# Simulation behaves identically (the latch input only changes on the rising
-# edge), so both flows use these copies.
+# (The icache/dcache latch->negedge-FF rewrite that used to live here is gone:
+# jcore-cpu now ships the single-clock CDC form directly -- cache_clkmode_sc
+# selects POSEDGE _sc phase FFs, comb-loop-free and T/2-free, Part B / PR #36 --
+# and the filelist points at cache/{i,d}cache.vhd directly. Only the ddr_ram_mux
+# strip remains.)
 set -euo pipefail
 GEN=targets/boards/ulx3s/generated
 mkdir -p "$GEN"
@@ -27,9 +22,8 @@ perl -0pe 's/-- synopsys translate_off.*?-- synopsys translate_on\n//s;
            s/^\s*attribute soc_port_global_name of .*?;\n//mg' \
   targets/ddr_ram_mux/ddr_ram_mux.vhd > "$GEN/ddr_ram_mux.vhd"
 
-# icache/dcache: transparent latch -> falling-edge FF. \x27 is a single quote so
-# the whole perl program can stay in bash single quotes.
-for f in icache dcache; do
-  perl -0pe 's/(\w+\s*:\s*)process\((clk\d+),\s*this\w+_r\)\s*--\s*transparent latch 0\.5 cycle delay\s*\n\s*begin\s*\n\s*if\s+\2\s*=\s*\x270\x27\s*then\n(.*?\n)\s*end if;\s*\n\s*end process;/${1}process(${2}) -- 0.5 cycle delay (transparent latch -> negedge FF for synth)\n  begin\n    if falling_edge(${2}) then\n${3}    end if;\n  end process;/sg' \
-    "components/cpu/cache/$f.vhd" > "$GEN/$f.vhd"
-done
+# NOTE: the icache/dcache transparent-latch -> negedge-FF rewrite that used to
+# live here is GONE. jcore-cpu now provides the single-clock CDC form directly
+# (cache/cache_clkmode_sc.vhd selects POSEDGE _sc phase FFs in cache/{i,d}cache.vhd
+# -- comb-loop-free and T/2-free; Part B / PR #36). The filelist points at those
+# files directly, so no rewrite/copy is needed.
