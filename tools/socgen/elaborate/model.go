@@ -40,6 +40,9 @@ type ResolvedPort struct {
 // Resolution is the per-device resolution produced by Devices (P4b), plus the
 // net-list and top/padring entities populated by Elaborate (P4c/P4d).
 type Resolution struct {
+	// Target is the FPGA target from design.yaml (e.g. "spartan6", "ecp5").
+	// Empty/non-ecp5 keeps the original Xilinx emit behavior.
+	Target          string
 	Classes         map[string]*ResolvedClass  // by class name (lower-cased key)
 	Devices         []*ResolvedDevice          // spec order, unique names assigned
 	TopEntities     map[string]*ResolvedEntity // by top-entity name (P4d)

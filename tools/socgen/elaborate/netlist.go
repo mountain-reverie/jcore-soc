@@ -15,6 +15,7 @@ func Elaborate(b *board.Board) (*Resolution, error) {
 	if b == nil || b.Design == nil {
 		return res, err
 	}
+	res.Target = b.Design.Target
 	errs := []error{err}
 	merge := reverseMerge(b.Design.MergeSignals)
 	// resolve each device's ports
