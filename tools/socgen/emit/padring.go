@@ -111,6 +111,10 @@ func padRingPorts(res *elaborate.Resolution) []*vhdl.InterfaceDecl {
 // pad) plus any non-buffer-generic attribute (e.g. tig). Buffer generics
 // (iostandard/drive/slew/diff_term) belong to the I/O buffers (P5d-b).
 func pinAttrs(res *elaborate.Resolution) []vhdl.Decl {
+	if res.Target == "ecp5" {
+		// ECP5 constraints are emitted as a separate .lpf; no inline VHDL attrs.
+		return nil
+	}
 	pins := sortedPins(res)
 	// collect distinct attribute names for the decls. `loc` is declared first
 	// (only when at least one pin carries a pad), then the other attribute
