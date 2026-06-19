@@ -30,6 +30,7 @@ entity soc is
     );
 end;
 architecture impl of soc is
+    signal aic_irq : std_logic_vector(7 downto 0);
     signal cache01sel_ctrl_temp : std_logic;
     signal cpu0_ddr_dbus_i : cpu_data_i_t;
     signal cpu0_ddr_dbus_o : cpu_data_o_t;
@@ -58,6 +59,12 @@ architecture impl of soc is
     signal dma_dbus_o : bus_ddr_o_t;
     signal icache1_ctrl : cache_ctrl_t;
 begin
+    aic_irq_gen : entity work.aic_irq_gen(rtl)
+        port map (
+            clk => clk_sys,
+            irq => aic_irq,
+            pi_in => pi
+        );
     cpus : configuration work.one_cpu_m0_direct_fpga
         generic map (
             insert_inst_delay_boot_mem => FALSE,
@@ -139,6 +146,7 @@ begin
         );
     devices : entity work.devices(impl)
         port map (
+            aic_irq => aic_irq,
             clk_sys => clk_sys,
             cpu0_event_i => cpu0_event_i,
             cpu0_event_o => cpu0_event_o,

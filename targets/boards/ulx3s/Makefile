@@ -24,6 +24,7 @@ include $(TOOLS_DIR)/soc.mk
 VHDL_FILES += targets/boards/ulx3s/cpus_one_m0.vhd
 VHDL_FILES += targets/boards/ulx3s/ulx3s_clkgen.vhd
 VHDL_FILES += targets/boards/ulx3s/reset_sync.vhd
+VHDL_FILES += targets/boards/ulx3s/aic_irq_gen.vhd
 # SDRAM controller + ASIC-portable IO cells (the BufEntity inout pad target).
 VHDL_FILES += components/sdram/sdram_pkg.vhd
 VHDL_FILES += components/sdram/sdram_ctrl.vhd

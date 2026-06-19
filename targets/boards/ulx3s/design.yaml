@@ -21,6 +21,13 @@ top-entities:
       # one_cpu_idcache path needs it to serve SDRAM instruction fetches).
       icache0_ctrl: CACHE_CTRL_ON
 
+  aic_irq_gen:
+    entity: aic_irq_gen
+    ports:
+      clk: clk_sys
+      pi_in: pi
+      irq: aic_irq
+
   sdram_ctrl:
     entity: sdram_ctrl
     ports:
@@ -71,10 +78,14 @@ devices:
     base-addr: 0xabcd0040
     generics:
       c_busperiod: CFG_CLK_CPU_PERIOD_NS
+      # external IRQ line vectors (irq_i(0)=button -> 0x11), matching the
+      # hand-written board's AIC default; socgen otherwise emits all-zero.
+      vector_numbers: '(x"11", x"12", x"13", x"14", x"15", x"16", x"17", x"18")'
     ports:
       bstb_i: 0
       back_i: 0
       enmi_i: 1
+      irq_i: aic_irq
       event_i: cpu0_event_o
       event_o: cpu0_event_i
 

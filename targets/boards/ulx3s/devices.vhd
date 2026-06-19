@@ -15,6 +15,7 @@ use work.cpu2j0_pack.all;
 use work.data_bus_pack.all;
 entity devices is
     port (
+        aic_irq : in std_logic_vector(7 downto 0);
         clk_sys : in std_logic;
         cpu0_event_i : out cpu_event_i_t;
         cpu0_event_o : in cpu_event_o_t;
@@ -71,7 +72,7 @@ begin
     aic0 : entity work.aic(behav)
         generic map (
             c_busperiod => CFG_CLK_CPU_PERIOD_NS,
-            vector_numbers => (x"00", x"00", x"00", x"00", x"00", x"00", x"00", x"00")
+            vector_numbers => (x"11", x"12", x"13", x"14", x"15", x"16", x"17", x"18")
         )
         port map (
             back_i => '0',

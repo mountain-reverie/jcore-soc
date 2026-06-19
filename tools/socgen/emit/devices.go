@@ -157,7 +157,18 @@ func instStmt(label, entity, arch string, cfg *iface.Configuration, generics map
 		key := lc(g)
 		gens = append(gens, genPair{formal: key, actual: numVal(genTypes[key], generics[g])})
 	}
-	if vecAgg != nil {
+	// vecAgg is the IRQ-network-derived vector_numbers. An explicit
+	// vector_numbers generic in the design overrides it (e.g. boards whose IRQ
+	// source is a raw pin, not an irq-declaring device), and avoids emitting the
+	// generic twice.
+	hasExplicitVectors := false
+	for _, g := range sortedKeys(generics) {
+		if lc(g) == "vector_numbers" {
+			hasExplicitVectors = true
+			break
+		}
+	}
+	if vecAgg != nil && !hasExplicitVectors {
 		gens = append(gens, genPair{formal: "vector_numbers", actual: vecAgg})
 	}
 	sort.Slice(gens, func(i, j int) bool { return gens[i].formal < gens[j].formal })
