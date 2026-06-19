@@ -53,6 +53,13 @@ func removeWriteOnlySignals(res *Resolution, d *design.Design) {
 		if zero[name] {
 			continue
 		}
+		// An entity-bound inout pad (BufEntity) is driven/read by the padring
+		// entity through the pad port itself; its pins take the resolvePins
+		// fast-path and register no reader, so it would look write-only here.
+		// Keep it — pruning it would disconnect the entity port (=> open).
+		if res.EntityBoundPads[name] {
+			continue
+		}
 		read := false
 		for _, pr := range sig.Ports {
 			if pr.Dir == dirIn || pr.Context.Kind == ctxKindPin {

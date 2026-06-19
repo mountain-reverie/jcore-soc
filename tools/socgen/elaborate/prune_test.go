@@ -84,3 +84,29 @@ func TestRemoveWriteOnlySignalsClearsEntityPorts(t *testing.T) {
 			topPort.GlobalSignal, padPort.GlobalSignal)
 	}
 }
+
+func TestRemoveWriteOnlySignalsKeepsEntityBoundPads(t *testing.T) {
+	// An entity-bound inout pad (BufEntity) registers no reader (its pins take
+	// the resolvePins fast-path), so it looks write-only — but it is driven
+	// through the pad port and must NOT be pruned, or the padring entity port
+	// mapping to it would be cleared to `open`.
+	padPort := &ResolvedPort{Name: "dq", Kind: KindSignal, GlobalSignal: "sdram_d"}
+	res := &Resolution{
+		EntityBoundPads: map[string]bool{"sdram_d": true},
+		PadringEntities: map[string]*ResolvedEntity{
+			"sdram_iocells": {Name: "sdram_iocells", Ports: []*ResolvedPort{padPort}},
+		},
+		Signals: map[string]*Signal{
+			"sdram_d": {Name: "sdram_d", Ports: []*SignalPortRef{
+				{Context: Context{Kind: "padring", ID: "sdram_iocells"}, PortName: "dq", Dir: dirOut},
+			}},
+		},
+	}
+	removeWriteOnlySignals(res, &design.Design{})
+	if _, ok := res.Signals["sdram_d"]; !ok {
+		t.Errorf("entity-bound pad sdram_d must be kept, not pruned")
+	}
+	if padPort.GlobalSignal != "sdram_d" {
+		t.Errorf("entity-bound port GlobalSignal must be preserved, got %q", padPort.GlobalSignal)
+	}
+}
