@@ -277,7 +277,7 @@ func PadRing(res *elaborate.Resolution) (string, error) {
 			errs = append(errs, &EmitError{Kind: ErrUnboundEntity, Inst: re.Name})
 			continue
 		}
-		stmts = append(stmts, topInstStmt(re))
+		stmts = append(stmts, topInstStmt(re, res))
 	}
 
 	stmts = append(stmts, pioStatements(res)...)

@@ -3,6 +3,8 @@ package emit
 import (
 	"errors"
 	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/j-core/jcore-soc/tools/socgen/elaborate"
 	"github.com/j-core/jcore-soc/tools/socgen/vhdl"
@@ -48,7 +50,7 @@ func SoC(res *elaborate.Resolution) (string, error) {
 			errs = append(errs, &EmitError{Kind: ErrUnboundEntity, Inst: re.Name})
 			continue
 		}
-		stmts = append(stmts, topInstStmt(re))
+		stmts = append(stmts, topInstStmt(re, res))
 	}
 	stmts = append(stmts, devicesInstStmt(res))
 	if len(zeroNames) > 0 {
@@ -139,7 +141,8 @@ func socEntityPorts(res *elaborate.Resolution) []*vhdl.InterfaceDecl {
 // P6b-3c) and a port map wiring each port to its global signal (no data-bus/subst
 // at the top level). sortInstMaps sorts both maps before printing.
 // Requires: if re.Config is nil, re.Entity must be non-nil (caller ensures binding).
-func topInstStmt(re *elaborate.ResolvedEntity) *vhdl.InstantiationStmt {
+// res is used to expand entity-bound inout ports (BufEntity) into per-bit pad associations.
+func topInstStmt(re *elaborate.ResolvedEntity, res *elaborate.Resolution) *vhdl.InstantiationStmt {
 	inst := &vhdl.InstantiationStmt{Label: lc(re.Name)}
 	if re.Config != nil {
 		inst.UnitKind = vhdl.CONFIGURATION
@@ -153,9 +156,47 @@ func topInstStmt(re *elaborate.ResolvedEntity) *vhdl.InstantiationStmt {
 		inst.GenericMap = append(inst.GenericMap, &vhdl.AssocElement{Formal: lc(name), Actual: emitValue(val)})
 	}
 	for _, p := range re.Ports {
+		if res != nil && p.Kind == elaborate.KindSignal && res.EntityBoundPads[p.GlobalSignal] {
+			for _, bit := range entityPadBits(res, p.GlobalSignal) {
+				inst.PortMap = append(inst.PortMap, &vhdl.AssocElement{
+					Formal: lc(p.Name) + "(" + bit.idx + ")",
+					Actual: &vhdl.Ident{Name: "pin_" + bit.net},
+				})
+			}
+			continue
+		}
 		inst.PortMap = append(inst.PortMap, &vhdl.AssocElement{Formal: lc(p.Name), Actual: portActual(p, "", nil, nil)})
 	}
 	return inst
+}
+
+// entityPadBits returns the per-bit pad entries for an entity-bound base signal,
+// sorted ascending by numeric bit index. Each entry holds the bit index string and
+// the net name (e.g. {idx:"0", net:"sdram_d0"}).
+func entityPadBits(res *elaborate.Resolution, base string) []struct{ idx, net string } {
+	type entry struct {
+		n   int
+		idx string
+		net string
+	}
+	var entries []entry
+	for _, pin := range res.Pins {
+		if pin.BufferKind != elaborate.BufEntity || pin.Signal != base {
+			continue
+		}
+		suffix := strings.TrimPrefix(pin.Net, base)
+		n, err := strconv.Atoi(suffix)
+		if err != nil {
+			continue
+		}
+		entries = append(entries, entry{n: n, idx: suffix, net: pin.Net})
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].n < entries[j].n })
+	out := make([]struct{ idx, net string }, len(entries))
+	for i, e := range entries {
+		out[i] = struct{ idx, net string }{e.idx, e.net}
+	}
+	return out
 }
 
 // devicesInstStmt instantiates the devices architecture, wiring each TopDevices

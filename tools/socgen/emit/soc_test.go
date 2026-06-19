@@ -36,7 +36,7 @@ func TestTopInstStmtEntityVsConfig(t *testing.T) {
 		Config: &iface.Configuration{Name: "one_cpu_decode_rom_fpga"},
 		Ports:  []*elaborate.ResolvedPort{{Name: "clk", Kind: elaborate.KindSignal, GlobalSignal: "clk_sys"}},
 	}
-	ci := topInstStmt(cfg)
+	ci := topInstStmt(cfg, nil)
 	if ci.UnitKind != vhdl.CONFIGURATION || ci.Unit != "work.one_cpu_decode_rom_fpga" || ci.Arch != "" {
 		t.Errorf("config inst = %+v", ci)
 	}
@@ -47,7 +47,7 @@ func TestTopInstStmtEntityVsConfig(t *testing.T) {
 		Name: "ddr_ctrl", Entity: &iface.Entity{Name: "ddr_fsm"}, ArchName: "logic",
 		Ports: []*elaborate.ResolvedPort{{Name: "clk", Kind: elaborate.KindSignal, GlobalSignal: "clk_sys"}},
 	}
-	ei := topInstStmt(ent)
+	ei := topInstStmt(ent, nil)
 	if ei.UnitKind != vhdl.ENTITY || ei.Unit != "work.ddr_fsm" || ei.Arch != "logic" || ei.Label != "ddr_ctrl" {
 		t.Errorf("entity inst = %+v", ei)
 	}
