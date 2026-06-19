@@ -43,6 +43,7 @@ package data_bus_pack is
     inv : std_logic;
   end record;
   constant NULL_CACHE_CTRL : cache_ctrl_t := (en => '0', inv => '0');
+  constant CACHE_CTRL_ON : cache_ctrl_t := (en => '1', inv => '0');
 end;
 
 package body data_bus_pack is

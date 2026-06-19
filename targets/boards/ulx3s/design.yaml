@@ -16,6 +16,10 @@ top-entities:
 
   ddr_ram_mux:
     configuration: ddr_ram_mux_one_cpu_idcache_fpga
+    ports:
+      # icache enabled (hardwired on, as the hand-written board does — the
+      # one_cpu_idcache path needs it to serve SDRAM instruction fetches).
+      icache0_ctrl: CACHE_CTRL_ON
 
   sdram_ctrl:
     entity: sdram_ctrl
@@ -93,7 +97,6 @@ merge-signals:
 zero-signals:
   - dma_dbus_o
   - debug_i
-  - icache0_ctrl
   - icache1_ctrl
   - dcache0_ctrl
   - dcache1_ctrl

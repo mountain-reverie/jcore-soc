@@ -9,6 +9,12 @@ all:
 	@echo "ULX3S synthesis/simulation is driven by synth.sh / sim.sh"
 	@echo "(ghdl + yosys + nextpnr-ecp5). This Makefile is for socgen only."
 
+# ULX3S CPU/mem clock = 20 MHz (period 50 ns) from the EHXPLLL. The generated
+# config derives CFG_CLK_CPU_FREQ_HZ = PLLE2_HZ / PERIOD_NS, and PERIOD_NS =
+# CLK_CPU_DIVIDE; so divide=50 => 1e9/50 = 20 MHz. Single clock domain (mem=cpu).
+CONFIG_CLK_CPU_DIVIDE := 50
+CONFIG_CLK_MEM_2X_DIVIDE := 25
+
 include $(TOP_DIR)/soc_config.mk
 include $(TOOLS_DIR)/soc.mk
 
