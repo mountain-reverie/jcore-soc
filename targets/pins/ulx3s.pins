@@ -1,0 +1,65 @@
+# ULX3S (ECP5 LFE5U-85F, CABGA381) pin sites — from targets/boards/ulx3s/ulx3s.lpf
+clk_25mhz G2
+
+ftdi_txd L4
+ftdi_rxd M1
+
+btn0 D6
+btn1 C7
+btn2 A7
+btn3 A8
+btn4 C8
+btn5 D8
+btn6 D7
+
+led0 B2
+led1 C2
+led2 C1
+led3 D1
+led4 E2
+led5 E1
+led6 H3
+led7 J3
+
+sdram_clk F19
+sdram_cke F20
+sdram_csn P20
+sdram_rasn R20
+sdram_casn T19
+sdram_wen T20
+sdram_dqm0 U19
+sdram_dqm1 E20
+
+sdram_a0 M20
+sdram_a1 M19
+sdram_a2 L20
+sdram_a3 L19
+sdram_a4 K20
+sdram_a5 K19
+sdram_a6 K18
+sdram_a7 J20
+sdram_a8 J19
+sdram_a9 H20
+sdram_a10 N19
+sdram_a11 G20
+sdram_a12 G19
+
+sdram_ba0 P19
+sdram_ba1 N20
+
+sdram_d0 J16
+sdram_d1 L18
+sdram_d2 M18
+sdram_d3 N18
+sdram_d4 P18
+sdram_d5 T18
+sdram_d6 T17
+sdram_d7 U20
+sdram_d8 E19
+sdram_d9 D20
+sdram_d10 D19
+sdram_d11 C20
+sdram_d12 E18
+sdram_d13 F18
+sdram_d14 J18
+sdram_d15 J17

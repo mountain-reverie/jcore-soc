@@ -1,0 +1,130 @@
+target: ecp5
+
+device-classes: !include ../common_device_classes.yaml
+
+top-entities:
+  cpus:
+    configuration: one_cpu_m0_direct_fpga
+    ports:
+      cpu0_copro_i: NULL_COPR_I
+      cpu1_copro_i: NULL_COPR_I
+      cpu1eni: 0
+    generics:
+      INSERT_WRITE_DELAY_BOOT_MEM: false
+      INSERT_READ_DELAY_BOOT_MEM: false
+      INSERT_INST_DELAY_BOOT_MEM: false
+
+  ddr_ram_mux:
+    configuration: ddr_ram_mux_one_cpu_idcache_fpga
+
+  sdram_ctrl:
+    entity: sdram_ctrl
+    ports:
+      clk: clk_sys
+      req: ddr_bus_o
+      bst: ddr_burst
+      resp: ddr_bus_i
+      ack_r: ddr_bus_ack_r
+      cmd: sd_cmd
+      dq_o: sd_dq_o
+      dq_oe: sd_dq_oe
+      dq_i: sd_dq_i
+
+padring-entities:
+  clkgen:
+    entity: clkgen
+    ports:
+      clk_in: clk_25mhz
+      rst_in: ext_rst
+      clk: clk_sys
+      locked: pll_locked
+
+  reset_sync:
+    entity: reset_sync
+    ports:
+      clk: clk_sys
+      locked: pll_locked
+      rst: reset
+
+  sdram_iocells:
+    entity: sdram_iocells
+    ports:
+      dq_o: sd_dq_o
+      dq_oe: sd_dq_oe
+      dq_i: sd_dq_i
+      dq: sdram_d
+
+devices:
+  - class: gpio2
+    name: gpio0
+    base-addr: 0xabcd0000
+    ports:
+      d_o: po
+      d_i: pi
+
+  - class: aic
+    name: aic0
+    base-addr: 0xabcd0040
+    generics:
+      c_busperiod: CFG_CLK_CPU_PERIOD_NS
+    ports:
+      bstb_i: 0
+      back_i: 0
+      enmi_i: 1
+      event_i: cpu0_event_o
+      event_o: cpu0_event_i
+
+  - class: uartlite
+    name: uart0
+    base-addr: 0xabcd0100
+    generics:
+      intcfg: 1
+      bps: 115200e0
+      fclk: CFG_CLK_CPU_FREQ_HZ
+
+peripheral-buses:
+  cpu1: false
+
+merge-signals:
+  clk_sys: [clk_mem]
+
+# v1: caches disabled (no cache_ctrl device yet — hand-written hardwires icache
+# on; deferred refinement), CPU1 unused, buttons not yet wired to gpio/AIC.
+zero-signals:
+  - dma_dbus_o
+  - debug_i
+  - icache0_ctrl
+  - icache1_ctrl
+  - dcache0_ctrl
+  - dcache1_ctrl
+  - cache01sel_ctrl_temp
+  - cpu1_event_i
+
+system:
+  data-bus-decode: exact
+  dram: [0x10000000, 0x2000000]
+  pio:
+    "[0 7]": { name: led }
+    "[8 31]": 0
+
+pins:
+  file: ../pins/ulx3s.pins
+  type: pin-names
+  rules:
+    - { match: ".*", attrs: { iostandard: LVCMOS33 } }
+    - { match: clk_25mhz, signal: true, buff: false }
+    - { match: ftdi_rxd, signal: uart0_rx }
+    - { match: ftdi_txd, signal: uart0_tx }
+    - { match: [btn, n], in: ["pi(", n, ")"], attrs: { pullmode: DOWN } }
+    - { match: btn0, signal: ext_rst, attrs: { pullmode: DOWN } }
+    - { match: [led, n], out: ["po(", n, ")"], attrs: { drive: 4 } }
+    - { match: sdram_clk, signal: clk_sys, attrs: { drive: 4, slewrate: FAST } }
+    - { match: sdram_cke, out: sd_cmd.cke, attrs: { drive: 4, slewrate: FAST } }
+    - { match: sdram_csn, out: sd_cmd.cs_n, attrs: { drive: 4, slewrate: FAST } }
+    - { match: sdram_rasn, out: sd_cmd.ras_n, attrs: { drive: 4, slewrate: FAST } }
+    - { match: sdram_casn, out: sd_cmd.cas_n, attrs: { drive: 4, slewrate: FAST } }
+    - { match: sdram_wen, out: sd_cmd.we_n, attrs: { drive: 4, slewrate: FAST } }
+    - { match: [sdram_dqm, n], out: ["sd_cmd.dqm(", n, ")"], attrs: { drive: 4, slewrate: FAST } }
+    - { match: [sdram_a, n], out: ["sd_cmd.a(", n, ")"], attrs: { drive: 4, slewrate: FAST } }
+    - { match: [sdram_ba, n], out: ["sd_cmd.ba(", n, ")"], attrs: { drive: 4, slewrate: FAST } }
+    - { match: [sdram_d, n], signal: sdram_d, entity-pad: true, attrs: { drive: 4, slewrate: FAST } }
