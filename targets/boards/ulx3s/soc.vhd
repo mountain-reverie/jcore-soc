@@ -56,7 +56,6 @@ architecture impl of soc is
     signal ddr_bus_o : cpu_data_o_t;
     signal debug_i : cpu_debug_i_t;
     signal dma_dbus_o : bus_ddr_o_t;
-    signal icache0_ctrl : cache_ctrl_t;
     signal icache1_ctrl : cache_ctrl_t;
 begin
     cpus : configuration work.one_cpu_m0_direct_fpga
@@ -121,7 +120,7 @@ begin
             ddr_bus_o => ddr_bus_o,
             dma_dbus_i => open,
             dma_dbus_o => dma_dbus_o,
-            icache0_ctrl => icache0_ctrl,
+            icache0_ctrl => CACHE_CTRL_ON,
             icache1_ctrl => icache1_ctrl,
             rst => reset
         );
@@ -160,6 +159,5 @@ begin
     dcache1_ctrl <= (en => '0', inv => '0');
     debug_i <= (en => '0', cmd => BREAK, ir => (others => '0'), d => (others => '0'), d_en => '0');
     dma_dbus_o <= (en => '0', a => (others => '0'), d => (others => '0'), wr => '0', we => (others => '0'), burst32 => '0', burst16 => '0', bgrp => '0');
-    icache0_ctrl <= (en => '0', inv => '0');
     icache1_ctrl <= (en => '0', inv => '0');
 end;
