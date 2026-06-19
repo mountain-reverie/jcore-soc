@@ -33,8 +33,9 @@ type PinRule struct {
 	In     *SigSpec         `yaml:"in"`
 	Out    *SigSpec         `yaml:"out"`
 	OutEn  *SigSpec         `yaml:"out-en"`
-	Attrs  map[string]Value `yaml:"attrs"`
-	Buff   *bool            `yaml:"buff"`
+	Attrs     map[string]Value `yaml:"attrs"`
+	Buff      *bool            `yaml:"buff"`
+	EntityPad *bool            `yaml:"entity-pad"`
 }
 
 // SeqPart is one element of a parametric match or signal template: exactly one of

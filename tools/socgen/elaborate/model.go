@@ -49,6 +49,10 @@ type Resolution struct {
 	PadringEntities map[string]*ResolvedEntity // by padring-entity name (P4d)
 	Signals         map[string]*Signal         // global net-list, populated by Elaborate
 	Pins            []*ResolvedPin             // resolved pins (P4d-ii)
+	// EntityBoundPads is the set of base signal names whose pad is an inout pad
+	// bound directly to a padring-entity port (BufEntity). Emit wires the
+	// entity port to the per-bit pad ports and emits no buffer/assign/signal.
+	EntityBoundPads map[string]bool
 	DataBus         *PeripheralBusModel        // P5b; nil if no data-bus devices
 	SignalLocations *SignalLocations           // P5c-i
 	Pio             []PioBit                   // P5d-c: resolved system.pio loopback bits (sorted by Idx)
@@ -174,6 +178,7 @@ const (
 	BufIOBUF
 	BufIBUFDS
 	BufOBUFDS
+	BufEntity // inout pad wired directly to a padring-entity port; no buffer/assign emitted
 )
 
 // ResolvedPin is a board pin resolved to its signal refs, buffer kind, and attrs.

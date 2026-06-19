@@ -108,6 +108,7 @@ func expandSig(s *design.SigSpec, pinNet string, env map[string]int) (ref, diff 
 type folded struct {
 	attrs      map[string]design.Value
 	buff       *bool
+	entityPad  *bool
 	signalRef  string // bare signal: (direction auto-inferred later)
 	signalDiff string
 	inRef      string
@@ -130,6 +131,9 @@ func foldRules(rules []*design.PinRule, pin *design.Pin) folded {
 		maps.Copy(f.attrs, r.Attrs)
 		if r.Buff != nil {
 			f.buff = r.Buff
+		}
+		if r.EntityPad != nil {
+			f.entityPad = r.EntityPad
 		}
 		if r.Signal != nil {
 			ref, diff, _ := expandSig(r.Signal, pin.Net, env)
@@ -207,14 +211,16 @@ func signalIsReal(sigs map[string]*Signal, d *design.Design, base string) bool {
 }
 
 // resolvePins folds the rules over each pin, joins the resulting legs into the
-// net-list (sigs), and returns the resolved pins (with buffer kind + attrs). It
+// net-list (sigs), and returns the resolved pins (with buffer kind + attrs) plus
+// the set of base signal names that are entity-bound inout pads (BufEntity). It
 // must run AFTER device/top/padring gather so a bare-`signal:` pin's direction can
 // be inferred from existing drivers, and BEFORE zero-signals.
-func resolvePins(d *design.Design, sigs map[string]*Signal) []*ResolvedPin {
+func resolvePins(d *design.Design, sigs map[string]*Signal) ([]*ResolvedPin, map[string]bool) {
 	if d == nil || d.Pins == nil {
-		return nil
+		return nil, nil
 	}
 	out := make([]*ResolvedPin, 0, len(d.Pins.Pins))
+	boundPads := map[string]bool{}
 	for _, pin := range d.Pins.Pins {
 		f := foldRules(d.Pins.Rules, pin)
 		// Constant-driven output pin (e.g. atmel_rst out: 1, eth_mdc out: 0): the
@@ -236,6 +242,17 @@ func resolvePins(d *design.Design, sigs map[string]*Signal) []*ResolvedPin {
 				Net: pin.Net, Pad: pin.Pad, Attrs: f.attrs,
 				BufferKind: BufOBUF, PadDir: dirOut, OutConst: lit,
 			})
+			continue
+		}
+		// entity-pad pins bypass the :missing check — the signal is wired directly to
+		// a padring-entity port; no device declares it in the normal net-list.
+		if f.entityPad != nil && *f.entityPad && f.signalRef != "" {
+			rp := &ResolvedPin{Net: pin.Net, Pad: pin.Pad, Attrs: f.attrs}
+			rp.Signal = f.signalRef
+			rp.BufferKind = BufEntity
+			rp.PadDir = dirInout
+			boundPads[f.signalRef] = true
+			out = append(out, rp)
 			continue
 		}
 		// Skip pins with no signal connection (matched only attr rules, or nothing):
@@ -291,9 +308,12 @@ func resolvePins(d *design.Design, sigs map[string]*Signal) []*ResolvedPin {
 		}
 		rp.BufferKind = bufferKind(f, bareDir)
 		rp.PadDir = padDir(rp.BufferKind, bareDir)
+		// BufEntity pins are recorded in boundPads on the fast-path above (which
+		// requires a signal: and continues), so a pin reaching here is never
+		// BufEntity — no accumulation needed.
 		out = append(out, rp)
 	}
-	return out
+	return out, boundPads
 }
 
 // padDir is the pad's physical direction. Buffered pins follow their buffer kind;
@@ -307,7 +327,7 @@ func padDir(bk BufferKind, bareDir string) string {
 		return dirIn
 	case BufOBUF, BufOBUFT, BufOBUFDS:
 		return dirOut
-	case BufIOBUF:
+	case BufIOBUF, BufEntity:
 		return dirInout
 	default: // BufDirect
 		if bareDir == dirOut {
@@ -342,6 +362,9 @@ func addPinPort(sigs map[string]*Signal, net, leg, base, element, dir, diff stri
 // drives the net, so the pad is an INPUT; "in" = the pin consumes, pad is OUTPUT);
 // it is "" for pins using explicit in/out/out-en legs.
 func bufferKind(f folded, bareDir string) BufferKind {
+	if f.entityPad != nil && *f.entityPad {
+		return BufEntity
+	}
 	if f.buff != nil && !*f.buff {
 		return BufDirect
 	}
