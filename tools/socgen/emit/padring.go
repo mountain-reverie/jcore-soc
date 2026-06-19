@@ -245,6 +245,9 @@ func PadRing(res *elaborate.Resolution) (string, error) {
 		names := append([]string(nil), res.SignalLocations.Padring...)
 		sort.Strings(names)
 		for _, n := range names {
+			if res.EntityBoundPads[n] {
+				continue // the inout pad port IS this net; no internal signal
+			}
 			var typ *elaborate.ResolvedType
 			if s := res.Signals[n]; s != nil {
 				typ = s.Type

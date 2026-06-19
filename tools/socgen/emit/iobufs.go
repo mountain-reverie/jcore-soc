@@ -239,7 +239,9 @@ func ecp5PinStatements(res *elaborate.Resolution) ([]vhdl.Stmt, error) {
 			errs = append(errs, err)
 			continue
 		}
-		stmts = append(stmts, st)
+		if st != nil {
+			stmts = append(stmts, st)
+		}
 	}
 	return stmts, errors.Join(errs...)
 }
@@ -255,6 +257,8 @@ func ecp5PinStatements(res *elaborate.Resolution) ([]vhdl.Stmt, error) {
 // return an explicit error rather than emitting wrong hardware.
 func ecp5PinStmt(rp *elaborate.ResolvedPin) (vhdl.Stmt, error) {
 	switch {
+	case rp.BufferKind == elaborate.BufEntity:
+		return nil, nil // pad is owned by a padring-entity; emit nothing here
 	case rp.Diff != "":
 		return nil, fmt.Errorf("ecp5 pin %q: differential pads are deferred to Phase 2", rp.Net)
 	case rp.OutEn != "":
