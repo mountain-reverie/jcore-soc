@@ -185,7 +185,7 @@ func TestResolvePinsDifferentialConsistentDirection(t *testing.T) {
 	// (input pads) -> both IBUFDS, same direction. The net must be real (a device
 	// declares it) or the bare-signal pins would be dropped as :missing.
 	sigs := map[string]*Signal{"ddr_clk": {Name: "ddr_clk", Ports: []*SignalPortRef{{Context: Context{Kind: "device", ID: "ddrc"}, Dir: "in"}}}}
-	pins := resolvePins(mk(), sigs)
+	pins, _ := resolvePins(mk(), sigs)
 	bufs := map[string]BufferKind{}
 	for _, p := range pins {
 		bufs[p.Net] = p.BufferKind
@@ -203,7 +203,8 @@ func TestResolvePinsDifferentialConsistentDirection(t *testing.T) {
 	// device-driven net -> BOTH pins consume (output pads) -> both OBUFDS.
 	sigs2 := map[string]*Signal{"ddr_clk": {Name: "ddr_clk", Ports: []*SignalPortRef{{Context: Context{Kind: "device", ID: "ddrc"}, Dir: "out"}}}}
 	bufs2 := map[string]BufferKind{}
-	for _, p := range resolvePins(mk(), sigs2) {
+	pins2, _ := resolvePins(mk(), sigs2)
+	for _, p := range pins2 {
 		bufs2[p.Net] = p.BufferKind
 	}
 	if bufs2["ck_n"] != BufOBUFDS || bufs2["ck_p"] != BufOBUFDS {
@@ -232,7 +233,7 @@ func TestResolvePinsJoinAndBuffer(t *testing.T) {
 		"clk":     {Name: "clk", Ports: []*SignalPortRef{{Context: Context{Kind: "device", ID: "clkgen"}, Dir: "in"}}},
 		"po":      {Name: "po", Ports: []*SignalPortRef{{Context: Context{Kind: "device", ID: "gpio"}, Dir: "out"}}},
 	}
-	pins := resolvePins(d, sigs)
+	pins, _ := resolvePins(d, sigs)
 	// clk consumed by a device -> pin drives it (out), pin-context, IBUF
 	var clkPin *SignalPortRef
 	for _, p := range sigs["clk"].Ports {
@@ -334,7 +335,7 @@ func TestPadDir(t *testing.T) {
 	}{
 		{BufIBUF, "", dirIn}, {BufIBUFDS, "", dirIn},
 		{BufOBUF, "", dirOut}, {BufOBUFT, "", dirOut}, {BufOBUFDS, "", dirOut},
-		{BufIOBUF, "", dirInout},
+		{BufIOBUF, "", dirInout}, {BufEntity, "", dirInout},
 		{BufDirect, dirOut, dirIn}, // pin drives net -> input pad
 		{BufDirect, dirIn, dirOut},
 	}

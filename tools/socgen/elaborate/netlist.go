@@ -74,7 +74,7 @@ func Elaborate(b *board.Board) (*Resolution, error) {
 	}
 	// Pins resolve AFTER gather (bare-signal direction reads existing drivers) and
 	// BEFORE zero-signals (so a pin-driven signal isn't given a synthetic driver).
-	res.Pins = resolvePins(b.Design, res.Signals)
+	res.Pins, res.EntityBoundPads = resolvePins(b.Design, res.Signals)
 	errs = append(errs, validatePinInvert(b.Design))
 	applyZeroSignals(res.Signals, b.Design.ZeroSignals)
 	errs = append(errs, validateSignals(res.Signals))
