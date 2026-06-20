@@ -26,16 +26,16 @@ entity devices is
         gpio_di : in std_logic_vector(31 downto 0);
         gpio_do : out std_logic_vector(31 downto 0);
         reset : in std_logic;
-        spi0_clk : out std_logic;
-        spi0_cs : out std_logic_vector(1 downto 0);
-        spi0_miso : in std_logic;
-        spi0_mosi : out std_logic;
+        spi2_clk : out std_logic;
+        spi2_cs : out std_logic_vector(1 downto 0);
+        spi2_miso : in std_logic;
+        spi2_mosi : out std_logic;
         uart0_rx : in std_logic;
         uart0_tx : out std_logic
     );
 end;
 architecture impl of devices is
-    type device_t is (NONE, DEV_AIC0, DEV_GPIO0, DEV_SPI0, DEV_UART0);
+    type device_t is (NONE, DEV_AIC0, DEV_GPIO0, DEV_SPI2, DEV_UART0);
     signal active_dev : device_t;
     type data_bus_i_t is array (device_t'left to device_t'right) of cpu_data_i_t;
     type data_bus_o_t is array (device_t'left to device_t'right) of cpu_data_o_t;
@@ -61,7 +61,7 @@ architecture impl of devices is
                 end if;
             elsif addr(9 downto 3) = "1000000" then
                 -- ABCD0200-ABCD0207
-                return DEV_SPI0;
+                return DEV_SPI2;
             end if;
         end if;
         return NONE;
@@ -109,7 +109,7 @@ begin
             irq => open,
             rst => reset
         );
-    spi0 : entity work.spi2(arch)
+    spi2 : entity work.spi2(arch)
         generic map (
             clk_freq => CFG_CLK_CPU_FREQ_HZ
         )
@@ -118,13 +118,13 @@ begin
             clk => clk_sys,
             cpha => '0',
             cpol => '0',
-            cs => spi0_cs,
-            db_i => devs_bus_o(DEV_SPI0),
-            db_o => devs_bus_i(DEV_SPI0),
-            miso => spi0_miso,
-            mosi => spi0_mosi,
+            cs => spi2_cs,
+            db_i => devs_bus_o(DEV_SPI2),
+            db_o => devs_bus_i(DEV_SPI2),
+            miso => spi2_miso,
+            mosi => spi2_mosi,
             rst => reset,
-            spi_clk => spi0_clk
+            spi_clk => spi2_clk
         );
     uart0 : entity work.uartlitedb(arch)
         generic map (
