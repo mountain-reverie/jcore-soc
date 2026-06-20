@@ -99,7 +99,7 @@ devices:
       fclk: CFG_CLK_CPU_FREQ_HZ
 
   - class: spi
-    name: spi0
+    name: spi2
     base-addr: 0xabcd0200
     generics:
       clk_freq: CFG_CLK_CPU_FREQ_HZ
@@ -153,7 +153,7 @@ pins:
     - { match: [sdram_a, n], out: ["sd_cmd.a(", n, ")"], attrs: { drive: 4, slewrate: FAST } }
     - { match: [sdram_ba, n], out: ["sd_cmd.ba(", n, ")"], attrs: { drive: 4, slewrate: FAST } }
     - { match: [sdram_d, n], signal: sdram_d, entity-pad: true, attrs: { drive: 4, slewrate: FAST } }
-    - { match: sd_clk, out: spi0_clk }
-    - { match: sd_cmd, out: spi0_mosi }
-    - { match: sd_d0,  in:  spi0_miso }
-    - { match: sd_d3,  out: "spi0_cs(0)" }
+    - { match: sd_clk, out: spi2_clk }
+    - { match: sd_cmd, out: spi2_mosi }
+    - { match: sd_d0,  in:  spi2_miso }
+    - { match: sd_d3,  out: "spi2_cs(0)" }

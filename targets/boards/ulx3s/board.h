@@ -10,7 +10,7 @@
 // Memory mapped peripherals
 #define DEVICE_AIC0_ADDR  0xabcd0040
 #define DEVICE_GPIO0_ADDR 0xabcd0000
-#define DEVICE_SPI0_ADDR  0xabcd0200
+#define DEVICE_SPI2_ADDR  0xabcd0200
 #define DEVICE_UART0_ADDR 0xabcd0100
 
 struct aic_regs {
@@ -39,12 +39,7 @@ struct spi_regs {
   uint32_t ctrl; // only byte 3
   uint32_t data; // only byte 3
 };
-#define DEVICE_SPI0 ((volatile struct spi_regs *) DEVICE_SPI0_ADDR)
-
-/* boot/files/spi.c uses DEVICE_SPI2_ADDR / DEVICE_SPI2 naming convention */
-#define DEVICE_SPI2_ADDR DEVICE_SPI0_ADDR
-#define spi2_regs spi_regs
-#define DEVICE_SPI2 DEVICE_SPI0
+#define DEVICE_SPI2 ((volatile struct spi_regs *) DEVICE_SPI2_ADDR)
 
 struct uartlite_regs {
   uint32_t rx; // only byte 3
