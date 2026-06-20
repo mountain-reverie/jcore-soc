@@ -63,3 +63,11 @@ sdram_d12 E18
 sdram_d13 F18
 sdram_d14 J18
 sdram_d15 J17
+
+# SD card (micro-SD slot; SPI mode: clk=K2 mosi=J1 miso=J2 cs_n=K1)
+sd_clk K2
+sd_cmd J1
+sd_d0  J2
+sd_d1  H2
+sd_d2  H1
+sd_d3  K1
