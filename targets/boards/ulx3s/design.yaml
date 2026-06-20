@@ -1,4 +1,5 @@
 target: ecp5
+plugins: !include ../default_plugins.yaml
 
 device-classes: !include ../common_device_classes.yaml
 
