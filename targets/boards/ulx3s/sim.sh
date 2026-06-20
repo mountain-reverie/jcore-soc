@@ -15,8 +15,11 @@ cd "$ROOT"
 rm -rf "$WORK" "$UNITWORK"; mkdir -p "$WORK" "$UNITWORK"
 
 # 1. boot image
-make -C targets/boards/ulx3s/rom
-perl tools/genbootpkg targets/boards/ulx3s/rom/main.bin 4096 > targets/boards/ulx3s/boot_image_pkg.vhd
+make -C targets/boards/ulx3s/rom all
+perl tools/genbootpkg \
+    targets/boards/ulx3s/rom/boot.bin \
+    4096 \
+    > targets/boards/ulx3s/boot_image_pkg.vhd
 
 # 2. generated sources: cpu (decode generate + v2p) and uartlite uart.vhd
 make -C components/cpu/decode generate
