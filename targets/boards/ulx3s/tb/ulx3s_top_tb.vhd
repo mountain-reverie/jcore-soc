@@ -71,8 +71,9 @@ begin
         n := n + 1;
         buf(n) := character'val(to_integer(unsigned(b)));
       end if;
-      if contains(buf, n, "HS-2J0 SH2 ROM") then
-        report "ulx3s_top_tb PASSED: bootloader started"
+      if contains(buf, n, "HS-2J0 SH2 ROM") and
+         contains(buf, n, "SPI LOOPBACK OK") then
+        report "ulx3s_top_tb PASSED: bootloader started and SPI loopback verified"
           severity note;
         done <= true;
         wait;

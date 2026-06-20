@@ -41,6 +41,11 @@ struct spi_regs {
 };
 #define DEVICE_SPI0 ((volatile struct spi_regs *) DEVICE_SPI0_ADDR)
 
+/* boot/files/spi.c uses DEVICE_SPI2_ADDR / DEVICE_SPI2 naming convention */
+#define DEVICE_SPI2_ADDR DEVICE_SPI0_ADDR
+#define spi2_regs spi_regs
+#define DEVICE_SPI2 DEVICE_SPI0
+
 struct uartlite_regs {
   uint32_t rx; // only byte 3
   uint32_t tx; // only byte 3
