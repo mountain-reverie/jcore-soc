@@ -39,6 +39,29 @@ jobs:
       - name: Board testbenches
         run: ./targets/boards/${{ matrix.board }}/sim.sh
 
+  sim-generated:
+    needs: metrics-tests
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/jcore-cpu-ci:latest
+    strategy:
+      matrix:
+        board: [ulx3s]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      # socgen (Go) regenerates the SoC from design.yaml; the container ships
+      # the ghdl + cpu sim toolchain but not necessarily Go, so install it here.
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - name: Generated-SoC testbench
+        run: ./targets/boards/${{ matrix.board }}/sim_gen.sh
+
   bitstream:
     needs: sim
     runs-on: ubuntu-latest
