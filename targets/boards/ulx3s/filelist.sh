@@ -71,6 +71,7 @@ FILES=(
   components/misc/aic_edgedet.vhd
   components/misc/aic.vhd
   components/misc/gpio2.vhd
+  components/misc/spi2.vhd
   targets/boards/ulx3s/periph_mux.vhd
   targets/boards/ulx3s/boot_image_pkg.vhd
   components/memory/bootram_infer.vhd

@@ -56,7 +56,8 @@ begin
               pin_sdram_d6 => s_d(6), pin_sdram_d7 => s_d(7), pin_sdram_d8 => s_d(8),
               pin_sdram_d9 => s_d(9), pin_sdram_d10 => s_d(10), pin_sdram_d11 => s_d(11),
               pin_sdram_d12 => s_d(12), pin_sdram_d13 => s_d(13), pin_sdram_d14 => s_d(14),
-              pin_sdram_d15 => s_d(15));
+              pin_sdram_d15 => s_d(15),
+              pin_sd_d0 => '1');
 
   mem : entity work.sdram_model(behave)
     generic map (CAS_LATENCY => 2, MEM_WORDS => 8192)

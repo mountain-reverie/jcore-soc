@@ -97,6 +97,16 @@ devices:
       bps: 115200e0
       fclk: CFG_CLK_CPU_FREQ_HZ
 
+  - class: spi
+    name: spi0
+    base-addr: 0xabcd0200
+    generics:
+      clk_freq: CFG_CLK_CPU_FREQ_HZ
+    ports:
+      clk: clk_sys
+      cpha: 0
+      cpol: 0
+
 peripheral-buses:
   cpu1: false
 
@@ -142,3 +152,7 @@ pins:
     - { match: [sdram_a, n], out: ["sd_cmd.a(", n, ")"], attrs: { drive: 4, slewrate: FAST } }
     - { match: [sdram_ba, n], out: ["sd_cmd.ba(", n, ")"], attrs: { drive: 4, slewrate: FAST } }
     - { match: [sdram_d, n], signal: sdram_d, entity-pad: true, attrs: { drive: 4, slewrate: FAST } }
+    - { match: sd_clk, out: spi0_clk }
+    - { match: sd_cmd, out: spi0_mosi }
+    - { match: sd_d0,  in:  spi0_miso }
+    - { match: sd_d3,  out: "spi0_cs(0)" }
