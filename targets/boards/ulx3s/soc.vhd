@@ -25,6 +25,10 @@ entity soc is
         sd_dq_i : in std_logic_vector(15 downto 0);
         sd_dq_o : out std_logic_vector(15 downto 0);
         sd_dq_oe : out std_logic;
+        spi0_clk : out std_logic;
+        spi0_cs : out std_logic_vector(1 downto 0);
+        spi0_miso : in std_logic;
+        spi0_mosi : out std_logic;
         uart0_rx : in std_logic;
         uart0_tx : out std_logic
     );
@@ -157,6 +161,10 @@ begin
             gpio_di => gpio_di,
             gpio_do => gpio_do,
             reset => reset,
+            spi0_clk => spi0_clk,
+            spi0_cs => spi0_cs,
+            spi0_miso => spi0_miso,
+            spi0_mosi => spi0_mosi,
             uart0_rx => uart0_rx,
             uart0_tx => uart0_tx
         );

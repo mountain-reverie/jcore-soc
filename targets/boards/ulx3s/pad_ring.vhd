@@ -35,6 +35,10 @@ entity pad_ring is
         pin_led5 : out std_logic;
         pin_led6 : out std_logic;
         pin_led7 : out std_logic;
+        pin_sd_clk : out std_logic;
+        pin_sd_cmd : out std_logic;
+        pin_sd_d0 : in std_logic;
+        pin_sd_d3 : out std_logic;
         pin_sdram_a0 : out std_logic;
         pin_sdram_a1 : out std_logic;
         pin_sdram_a2 : out std_logic;
@@ -88,6 +92,10 @@ architecture impl of pad_ring is
     signal sd_dq_i : std_logic_vector(15 downto 0);
     signal sd_dq_o : std_logic_vector(15 downto 0);
     signal sd_dq_oe : std_logic;
+    signal spi0_clk : std_logic;
+    signal spi0_cs : std_logic_vector(1 downto 0);
+    signal spi0_miso : std_logic;
+    signal spi0_mosi : std_logic;
     signal uart0_rx : std_logic;
     signal uart0_tx : std_logic;
 begin
@@ -101,6 +109,10 @@ begin
             sd_dq_i => sd_dq_i,
             sd_dq_o => sd_dq_o,
             sd_dq_oe => sd_dq_oe,
+            spi0_clk => spi0_clk,
+            spi0_cs => spi0_cs,
+            spi0_miso => spi0_miso,
+            spi0_mosi => spi0_mosi,
             uart0_rx => uart0_rx,
             uart0_tx => uart0_tx
         );
@@ -157,6 +169,10 @@ begin
     pin_led5 <= gpio_do(5);
     pin_led6 <= gpio_do(6);
     pin_led7 <= gpio_do(7);
+    pin_sd_clk <= spi0_clk;
+    pin_sd_cmd <= spi0_mosi;
+    spi0_miso <= pin_sd_d0;
+    pin_sd_d3 <= spi0_cs(0);
     pin_sdram_a0 <= sd_cmd.a(0);
     pin_sdram_a1 <= sd_cmd.a(1);
     pin_sdram_a2 <= sd_cmd.a(2);

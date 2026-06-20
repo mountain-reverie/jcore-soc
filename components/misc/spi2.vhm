@@ -16,7 +16,7 @@ use work.attr_pack.all;
 entity spi2 is
   generic (
     NUM_CS   : integer range 2 to 5         := 2;
-    CLK_FREQ : real range 25.0e6 to 125.0e6;
+    CLK_FREQ : real range 1.0e6 to 125.0e6;
 
     LOW_SPEED_FREQ  : real := 400.0e3;
     HIGH_SPEED_FREQ : real := 25.0e6
