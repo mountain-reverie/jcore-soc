@@ -102,6 +102,9 @@ func buildIRQ(res *Resolution, d *design.Design) (*IRQModel, []error) {
 
 	// aicByCPU: cpu -> aic device name.
 	aicByCPU := map[int]string{}
+	// aics whose design explicitly maps irq_i (board owns the irq vector, e.g. a
+	// raw-pin IRQ source) — their irq_i is NOT auto-wired to irqs<cpu> below.
+	aicExplicitIrqI := map[string]bool{}
 	for i, dev := range d.Devices {
 		if lc(dev.Class) != "aic" {
 			continue
@@ -113,6 +116,9 @@ func buildIRQ(res *Resolution, d *design.Design) (*IRQModel, []error) {
 			continue
 		}
 		aicByCPU[cpu] = name
+		if _, ok := dev.Ports["irq_i"]; ok {
+			aicExplicitIrqI[name] = true
+		}
 	}
 	if len(aicByCPU) == 0 {
 		return nil, errs
@@ -232,8 +238,12 @@ func buildIRQ(res *Resolution, d *design.Design) (*IRQModel, []error) {
 		m.OrAssigns = append(m.OrAssigns, IRQOrAssign{Target: target, Sources: sources})
 	}
 
-	// each aic's irq_i input is wired to its own cpu's irqs<cpu>.
+	// each aic's irq_i input is wired to its own cpu's irqs<cpu>, unless the
+	// design maps irq_i explicitly (then the board's mapping wins).
 	for _, cpu := range aicCPUs {
+		if aicExplicitIrqI[aicByCPU[cpu]] {
+			continue
+		}
 		setOverride(m, aicByCPU[cpu], "irq_i", fmt.Sprintf("irqs%d", cpu))
 	}
 

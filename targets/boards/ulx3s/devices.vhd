@@ -23,8 +23,8 @@ entity devices is
         cpu0_periph_dbus_o : in cpu_data_o_t;
         cpu1_periph_dbus_i : out cpu_data_i_t;
         cpu1_periph_dbus_o : in cpu_data_o_t;
-        pi : in std_logic_vector(31 downto 0);
-        po : out std_logic_vector(31 downto 0);
+        gpio_di : in std_logic_vector(31 downto 0);
+        gpio_do : out std_logic_vector(31 downto 0);
         reset : in std_logic;
         uart0_rx : in std_logic;
         uart0_tx : out std_logic
@@ -83,7 +83,7 @@ begin
             enmi_i => '1',
             event_i => cpu0_event_o,
             event_o => cpu0_event_i,
-            irq_i => irqs0,
+            irq_i => aic_irq,
             reboot => open,
             rst_i => reset,
             rtc_nsec => open,
@@ -92,8 +92,8 @@ begin
     gpio0 : entity work.gpio2(arch)
         port map (
             clk => clk_sys,
-            d_i => pi,
-            d_o => po,
+            d_i => gpio_di,
+            d_o => gpio_do,
             d_t => open,
             db_i => devs_bus_o(DEV_GPIO0),
             db_o => devs_bus_i(DEV_GPIO0),

@@ -25,7 +25,7 @@ top-entities:
     entity: aic_irq_gen
     ports:
       clk: clk_sys
-      pi_in: pi
+      pi_in: gpio_di
       irq: aic_irq
 
   sdram_ctrl:
@@ -70,8 +70,8 @@ devices:
     name: gpio0
     base-addr: 0xabcd0000
     ports:
-      d_o: po
-      d_i: pi
+      d_o: gpio_do
+      d_i: gpio_di
 
   - class: aic
     name: aic0
@@ -117,9 +117,9 @@ zero-signals:
 system:
   data-bus-decode: exact
   dram: [0x10000000, 0x2000000]
-  pio:
-    "[0 7]": { name: led }
-    "[8 31]": 0
+  # No pio loopback: ULX3S has real gpio I/O (LEDs out via gpio_do, buttons in
+  # via gpio_di) wired directly in the pins rules; the pi<=po loopback would
+  # conflict with the button inputs (multiple drivers -> 'X').
 
 pins:
   file: ../pins/ulx3s.pins
@@ -129,9 +129,9 @@ pins:
     - { match: clk_25mhz, signal: true, buff: false }
     - { match: ftdi_rxd, signal: uart0_rx }
     - { match: ftdi_txd, signal: uart0_tx }
-    - { match: [btn, n], in: ["pi(", n, ")"], attrs: { pullmode: DOWN } }
+    - { match: [btn, n], in: ["gpio_di(", n, ")"], attrs: { pullmode: DOWN } }
     - { match: btn0, signal: ext_rst, attrs: { pullmode: DOWN } }
-    - { match: [led, n], out: ["po(", n, ")"], attrs: { drive: 4 } }
+    - { match: [led, n], out: ["gpio_do(", n, ")"], attrs: { drive: 4 } }
     - { match: sdram_clk, signal: clk_sys, attrs: { drive: 4, slewrate: FAST } }
     - { match: sdram_cke, out: sd_cmd.cke, attrs: { drive: 4, slewrate: FAST } }
     - { match: sdram_csn, out: sd_cmd.cs_n, attrs: { drive: 4, slewrate: FAST } }

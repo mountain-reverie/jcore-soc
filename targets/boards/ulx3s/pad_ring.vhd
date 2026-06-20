@@ -80,9 +80,9 @@ architecture impl of pad_ring is
     signal clk_25mhz : std_logic;
     signal clk_sys : std_logic;
     signal ext_rst : std_logic;
-    signal pi : std_logic_vector(31 downto 0);
+    signal gpio_di : std_logic_vector(31 downto 0);
+    signal gpio_do : std_logic_vector(31 downto 0);
     signal pll_locked : std_logic;
-    signal po : std_logic_vector(31 downto 0);
     signal reset : std_logic;
     signal sd_cmd : sdram_cmd_t;
     signal sd_dq_i : std_logic_vector(15 downto 0);
@@ -94,8 +94,8 @@ begin
     soc : entity work.soc(impl)
         port map (
             clk_sys => clk_sys,
-            pi => pi,
-            po => po,
+            gpio_di => gpio_di,
+            gpio_do => gpio_do,
             reset => reset,
             sd_cmd => sd_cmd,
             sd_dq_i => sd_dq_i,
@@ -139,64 +139,24 @@ begin
             dq_o => sd_dq_o,
             dq_oe => sd_dq_oe
         );
-    -- led
-    pi(0) <= po(0);
-    -- led
-    pi(1) <= po(1);
-    -- led
-    pi(2) <= po(2);
-    -- led
-    pi(3) <= po(3);
-    -- led
-    pi(4) <= po(4);
-    -- led
-    pi(5) <= po(5);
-    -- led
-    pi(6) <= po(6);
-    -- led
-    pi(7) <= po(7);
-    pi(8) <= '0';
-    pi(9) <= '0';
-    pi(10) <= '0';
-    pi(11) <= '0';
-    pi(12) <= '0';
-    pi(13) <= '0';
-    pi(14) <= '0';
-    pi(15) <= '0';
-    pi(16) <= '0';
-    pi(17) <= '0';
-    pi(18) <= '0';
-    pi(19) <= '0';
-    pi(20) <= '0';
-    pi(21) <= '0';
-    pi(22) <= '0';
-    pi(23) <= '0';
-    pi(24) <= '0';
-    pi(25) <= '0';
-    pi(26) <= '0';
-    pi(27) <= '0';
-    pi(28) <= '0';
-    pi(29) <= '0';
-    pi(30) <= '0';
-    pi(31) <= '0';
-    pi(0) <= pin_btn0;
-    pi(1) <= pin_btn1;
-    pi(2) <= pin_btn2;
-    pi(3) <= pin_btn3;
-    pi(4) <= pin_btn4;
-    pi(5) <= pin_btn5;
-    pi(6) <= pin_btn6;
+    gpio_di(0) <= pin_btn0;
+    gpio_di(1) <= pin_btn1;
+    gpio_di(2) <= pin_btn2;
+    gpio_di(3) <= pin_btn3;
+    gpio_di(4) <= pin_btn4;
+    gpio_di(5) <= pin_btn5;
+    gpio_di(6) <= pin_btn6;
     clk_25mhz <= pin_clk_25mhz;
     uart0_rx <= pin_ftdi_rxd;
     pin_ftdi_txd <= uart0_tx;
-    pin_led0 <= po(0);
-    pin_led1 <= po(1);
-    pin_led2 <= po(2);
-    pin_led3 <= po(3);
-    pin_led4 <= po(4);
-    pin_led5 <= po(5);
-    pin_led6 <= po(6);
-    pin_led7 <= po(7);
+    pin_led0 <= gpio_do(0);
+    pin_led1 <= gpio_do(1);
+    pin_led2 <= gpio_do(2);
+    pin_led3 <= gpio_do(3);
+    pin_led4 <= gpio_do(4);
+    pin_led5 <= gpio_do(5);
+    pin_led6 <= gpio_do(6);
+    pin_led7 <= gpio_do(7);
     pin_sdram_a0 <= sd_cmd.a(0);
     pin_sdram_a1 <= sd_cmd.a(1);
     pin_sdram_a2 <= sd_cmd.a(2);

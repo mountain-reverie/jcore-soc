@@ -18,8 +18,8 @@ use work.sdram_pkg.all;
 entity soc is
     port (
         clk_sys : in std_logic;
-        pi : in std_logic_vector(31 downto 0);
-        po : out std_logic_vector(31 downto 0);
+        gpio_di : in std_logic_vector(31 downto 0);
+        gpio_do : out std_logic_vector(31 downto 0);
         reset : in std_logic;
         sd_cmd : out sdram_cmd_t;
         sd_dq_i : in std_logic_vector(15 downto 0);
@@ -63,7 +63,7 @@ begin
         port map (
             clk => clk_sys,
             irq => aic_irq,
-            pi_in => pi
+            pi_in => gpio_di
         );
     cpus : configuration work.one_cpu_m0_direct_fpga
         generic map (
@@ -154,8 +154,8 @@ begin
             cpu0_periph_dbus_o => cpu0_periph_dbus_o,
             cpu1_periph_dbus_i => cpu1_periph_dbus_i,
             cpu1_periph_dbus_o => cpu1_periph_dbus_o,
-            pi => pi,
-            po => po,
+            gpio_di => gpio_di,
+            gpio_do => gpio_do,
             reset => reset,
             uart0_rx => uart0_rx,
             uart0_tx => uart0_tx
