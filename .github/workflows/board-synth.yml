@@ -37,7 +37,7 @@ jobs:
         with:
           submodules: recursive
       - name: Install tools
-        run: sudo apt-get install -y device-tree-compiler
+        run: apt-get install -y device-tree-compiler
       - name: Board testbenches
         run: ./targets/boards/${{ matrix.board }}/sim.sh
 
