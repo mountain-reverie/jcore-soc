@@ -36,8 +36,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Install tools
-        run: apt-get install -y device-tree-compiler
       - name: Board testbenches
         run: ./targets/boards/${{ matrix.board }}/sim.sh
 
