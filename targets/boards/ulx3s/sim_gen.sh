@@ -52,7 +52,7 @@ LD_LIBRARY_PATH='' perl tools/v2p < components/uartlite/uart.vhm > components/ua
 for f in components/cpu/cache/dcache_ccl components/cpu/cache/dcache_mcl \
          components/cpu/cache/icache_ccl components/cpu/cache/icache_mcl \
          components/misc/bus_mux_typecsub components/misc/bus_mux_typec \
-         components/misc/gpio2; do
+         components/misc/gpio2 components/misc/spi2; do
   LD_LIBRARY_PATH='' perl tools/v2p < "$f.vhm" > "$f.vhd"
 done
 source targets/boards/ulx3s/gen_synth_sources.sh
