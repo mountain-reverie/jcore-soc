@@ -26,6 +26,7 @@ type Design struct {
 	Pins               *PinsSpec               `yaml:"pins"`
 	PeripheralBuses    map[string]bool         `yaml:"peripheral-buses"`
 	System             *System                 `yaml:"system"`
+	CPU                *CPU                    `yaml:"cpu"`
 	Plugins            []string                `yaml:"plugins"`
 }
 
@@ -284,6 +285,17 @@ type TopEntity struct {
 	Architecture  string           `yaml:"architecture"`
 	Generics      map[string]Value `yaml:"generics"`
 	Ports         map[string]Value `yaml:"ports"`
+}
+
+// CPU is the declarative CPU-topology block. socgen turns it into the generated
+// `cpus` configuration declaration and the ddr_ram_mux configuration selection.
+type CPU struct {
+	Architecture string `yaml:"architecture"` // hand-written cpus architecture, e.g. one_cpu_m0
+	Cores        int    `yaml:"cores"`        // 1 | 2
+	Model        string `yaml:"model"`        // j1 | j2 | j4
+	Decode       string `yaml:"decode"`       // direct | rom
+	Copro        bool   `yaml:"copro"`
+	Cache        string `yaml:"cache"` // none | i | id
 }
 
 type Reg struct {
