@@ -44,19 +44,30 @@ deterministic cascade over these axes:
 | Axis        | Values                | Today's selection mechanism                                  |
 |-------------|-----------------------|--------------------------------------------------------------|
 | core count  | 1, 2                  | architecture `one_cpu` vs `two_cpus_fpga` (same `cpus` entity)|
-| core model  | J1, J2, J4, J4C       | `cpu_synth_{j1, direct, j4, …}` (mult + regfile + shifter bundle, + cache/TLB for J4C) |
+| core model  | J1, J2, J4            | `cpu_synth_{j1, direct, j4}` (mult + regfile + shifter bundle; J4 adds SH-4 privileged datapath + TLB via `PRIV_ARCH`/`MMU_ARCH` generics) |
 | decode      | direct, rom           | `cpu_decode_{direct,rom}_fpga` + which `decode_table_*` file compiled |
 | coprocessor | on/off                | `COPRO_DECODE` generic on `cpu_core`                          |
+| cache       | none, i, id           | **separate axis** — the `ddr_ram_mux` configuration (`ddr_ram_mux_one_cpu_{direct,icache,idcache}_fpga`) + `icache_modereg` byte-bus slave + cache-control registers |
 
 The `cpus` **entity interface is identical** regardless of core count (it always has
 cpu0 and cpu1 ports; `one_cpu` ties cpu1 off). A two-core config additionally
 instantiates `cpumreg` (RAM arbitration / CPU1 enable).
 
-J4 and J4C are real core models in the `components/cpu` submodule (mountain-reverie
-master): J4 is an SH-4 superset of the J1/J2 instruction set; **J4C adds cache + TLB**.
-(J1 and J2 share the same instruction set — they differ only in microarchitecture, which
-is why the field is named `model`, not `isa`.) The submodule must be pinned to a
-revision that contains J4/J4C.
+**Cache is orthogonal to the CPU model.** In the SoC, cache is *not* part of the CPU
+synth config (the submodule's `cpu_cache_timing_top` is only a measurement harness).
+It is selected by the **`ddr_ram_mux` top-entity block**, which — like `cpus` — already
+names a VHDL `configuration` in `design.yaml`. ULX3S today already runs an I+D cache
+(`ddr_ram_mux_one_cpu_idcache_fpga`) paired with a J2-direct CPU. So "J4C" is **not new
+cache integration**: it is `model: j4` (SH-4 privileged + TLB/MMU binding) combined with
+the already-integrated `cache: id` ram-mux.
+
+J4 is a real core model in the `components/cpu` submodule (mountain-reverie master): an
+SH-4 superset of the J1/J2 instruction set with privileged datapath + TLB/MMU. (J1 and
+J2 share the same instruction set — they differ only in microarchitecture, which is why
+the field is named `model`, not `isa`.) **PRIV_ARCH/MMU_ARCH must be set via a VHDL
+configuration binding with generic map**, not the ghdl `-g` flag, because the yosys-ghdl
+plugin does not support `-g`; the SoC's `cpu_core`→`cpu` component instantiation provides
+the binding context. The submodule is pinned to latest mountain-reverie master.
 
 ## Design
 
@@ -67,24 +78,33 @@ A new `cpu:` block in the board YAML:
 ```yaml
 cpu:
   cores: 2          # 1 | 2          → architecture one_cpu | two_cpus_fpga
-  model: j4c        # j1 | j2 | j4 | j4c   (j4c implies cache + TLB)
+  model: j4         # j1 | j2 | j4   (j4 ⇒ SH-4 privileged datapath + TLB/MMU binding)
   decode: rom       # direct | rom   → cpu_decode_* config + decode_table_* file
   copro: false      # → COPRO_DECODE generic
+  cache: id         # none | i | id  → ddr_ram_mux configuration + icache byte-bus slave
 ```
 
-`model` selects the core microarchitecture bundle (multiplier, register file, shifter,
-and — for `j4c` — cache + TLB). The cache/TLB is implied by `model: j4c`; there is no
-separate `cache:` flag.
+`model` selects the core microarchitecture bundle (multiplier, register file, shifter;
+for `j4`, additionally binds `PRIV_ARCH`/`MMU_ARCH => true` for the SH-4 privileged
+datapath + TLB). `cache` is an **independent axis** selecting the `ddr_ram_mux` variant.
+"J4C" = `model: j4` + `cache: id`.
 
 socgen consumes this block and produces:
 
 1. **A generated `cpus_config.vhd`** — the full `configuration <name> of cpus is …`
    declaration that today is hand-written as `cpus_one_m0.vhd`. The cascade is emitted
-   from the axes: core-count → architecture, `model` → `cpu_synth_*` binding, `decode`
-   → `cpu_decode_*` binding, `copro` → generic.
+   from the axes: core-count → architecture, `model` → `cpu_synth_*` binding (with
+   `PRIV_ARCH`/`MMU_ARCH` generic map for j4), `decode` → `cpu_decode_*` binding,
+   `copro` → generic.
 2. **The CPU portion of the synthesis filelist** — which `decode_table_*` and
    `cpu_synth_*` source files to compile (plus `cpumreg` for two-core). This removes
    decode/synth file selection from the hand-written `filelist.sh`.
+3. **The `ddr_ram_mux` configuration selection** from `cache:` — mapping `none|i|id`
+   to `ddr_ram_mux_one_cpu_{direct,icache,idcache}_fpga` (or the `two_cpu_idcache`
+   variant for `cores: 2`), plus the matching ram-mux/cache source files in the
+   filelist and the `icache_modereg` byte-bus slave + cache-control registers. This
+   axis is already partly declarative (ULX3S names the configuration today); the
+   refactor derives it from `cache:` instead of a hand-written configuration string.
 
 **Stable generated configuration name.** The generated configuration always uses one
 fixed name (e.g. `work.soc_cpus_config`). The hand-written top-level references that
@@ -96,9 +116,9 @@ This decouples the hand-written board top from the chosen CPU topology.
 ```
 targets/boards/ulx3s/
   base.yaml               # board-physical: pins, devices, clocks, system, padring
-  design.j2-single.yaml   # !include base.yaml  +  cpu: {cores:1, model:j2, decode:direct}
-  design.j4c-single.yaml  # !include base.yaml  +  cpu: {cores:1, model:j4c, decode:rom}
-  design.j4-dual.yaml     # !include base.yaml  +  cpu: {cores:2, model:j4, decode:rom}
+  design.j2-single.yaml   # !include base.yaml  +  cpu: {cores:1, model:j2, decode:direct, cache:id}
+  design.j4c-single.yaml  # !include base.yaml  +  cpu: {cores:1, model:j4, decode:rom, cache:id}
+  design.j4-dual.yaml     # !include base.yaml  +  cpu: {cores:2, model:j4, decode:rom, cache:id}
 ```
 
 - A variant file is a thin `!include base.yaml` plus the `cpu:` block (and any
@@ -121,8 +141,8 @@ targets/boards/ulx3s/
   `padring-entities: clkgen` mechanism.
 - **Synth flow** — `synth_ice40` + `nextpnr-ice40` + `icepack` in the board's
   `synth.sh`, mirroring ULX3S's yosys/ghdl flow.
-- **CPU** — `cpu: {cores:1, model:j1, decode:rom, copro:false}` (J1 fits the iCE40 LUT
-  budget).
+- **CPU** — `cpu: {cores:1, model:j1, decode:rom, copro:false, cache:none}` (J1, no
+  cache, fits the iCE40 LUT budget).
 
 ### 4. Testing / no-regression strategy
 
@@ -146,8 +166,16 @@ targets/boards/ulx3s/
 
 ## Open implementation notes
 
-- Pin `components/cpu` submodule to a mountain-reverie revision containing J4/J4C.
-- Confirm the exact `cpu_synth_*` / `cpu_decode_*` config names for J4 and J4C in the
-  pinned submodule before wiring the model→config map.
-- Decide where the generated `cpus_config.vhd` is written (board output dir) and how the
-  hand-written top references it via the stable name.
+- `components/cpu` pinned to latest mountain-reverie master (the revision with the real
+  J4 privileged datapath + TLB and the `j2c`/`j4c` cache harness).
+- Confirmed config names in the pinned submodule: `cpu_synth_direct` (J2),
+  `cpu_synth_j1`, `cpu_synth_j4` (+ `cpu_synth_j4_priv` wrapper for `PRIV_ARCH=>true`);
+  decode `cpu_decode_{direct,rom}_fpga`. J4 SoC binding sets `PRIV_ARCH`/`MMU_ARCH` via
+  configuration generic map at the `cpu_core`→`cpu` instantiation (no `-g`, per the
+  yosys-ghdl limitation).
+- Cache `none|i|id` → `ddr_ram_mux_one_cpu_{direct,icache,idcache}_fpga` (and the
+  `two_cpu_idcache` variant for two cores). ULX3S already integrates `idcache`, so the
+  cache path is proven; the refactor only derives the configuration name from `cache:`.
+- Decide where the generated `cpus_config.vhd` is written (board `generated/` dir, as
+  `ddr_ram_mux.vhd` already is) and how the hand-written top references it via the
+  stable configuration name.
