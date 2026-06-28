@@ -44,7 +44,7 @@ CLEAN_DIRS += boot
 CLEAN_DIRS += $(TEST_DIRS) $(TEST_DIRS2)
 CLEAN_DIRS := $(sort $(CLEAN_DIRS))
 
-REVISION := $(shell hg log -r . --template "{latesttag}-{latesttagdistance}-{node|short}")
+REVISION := $(shell hg log -r . --template "{latesttag}-{latesttagdistance}-{node|short}" 2>/dev/null || git describe --always --dirty 2>/dev/null || echo unknown)
 export REVISION
 
 ISE_VERSION := $(shell xst -help 2>/dev/null | head -1 | sed -n 's/^.*Release \([^ ]*\) .*/\1/p')
