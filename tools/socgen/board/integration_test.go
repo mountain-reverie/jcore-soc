@@ -42,7 +42,7 @@ func TestBoardMimasV2(t *testing.T) {
 		}
 	}
 	// Full-board validation of the migrated mimas_v2 spec.
-	b, verr := Load(root, "mimas_v2")
+	b, verr := Load(root, "mimas_v2", "")
 	t.Logf("mimas_v2 Load: %d total errors", len(errutil.Errors(verr)))
 	for _, e := range errutil.Errors(verr) {
 		t.Logf("  %v", e)

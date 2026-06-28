@@ -137,7 +137,7 @@ func TestBuildMimasV2(t *testing.T) {
 	if root == "" {
 		t.Skip("JCORE_SOC_ROOT not set")
 	}
-	b, lerr := board.Load(root, "mimas_v2")
+	b, lerr := board.Load(root, "mimas_v2", "")
 	if b == nil || b.Design == nil {
 		t.Fatalf("board.Load: %v", lerr)
 	}
@@ -210,7 +210,7 @@ func TestBuildTurtle(t *testing.T) {
 	if root == "" {
 		t.Skip("JCORE_SOC_ROOT not set")
 	}
-	b, lerr := board.Load(root, "turtle_1v0")
+	b, lerr := board.Load(root, "turtle_1v0", "")
 	if b == nil || b.Design == nil {
 		t.Fatalf("board.Load: %v", lerr)
 	}
@@ -260,7 +260,7 @@ func TestBoardDTSTurtleSMP(t *testing.T) {
 	if root == "" {
 		t.Skip("JCORE_SOC_ROOT not set")
 	}
-	b, lerr := board.Load(root, "turtle_1v0")
+	b, lerr := board.Load(root, "turtle_1v0", "")
 	if b == nil || b.Design == nil {
 		t.Fatalf("board.Load: %v", lerr)
 	}
@@ -284,7 +284,7 @@ func TestBoardDTSTurtleAicReg(t *testing.T) {
 	if root == "" {
 		t.Skip("JCORE_SOC_ROOT not set")
 	}
-	b, _ := board.Load(root, "turtle_1v0")
+	b, _ := board.Load(root, "turtle_1v0", "")
 	res, _ := elaborate.Elaborate(b)
 	dts, err := devicetree.BoardDTS(b, res)
 	if err != nil {
@@ -307,7 +307,7 @@ func TestBoardDTSTurtleIPIVector(t *testing.T) {
 	if root == "" {
 		t.Skip("JCORE_SOC_ROOT not set")
 	}
-	b, _ := board.Load(root, "turtle_1v0")
+	b, _ := board.Load(root, "turtle_1v0", "")
 	res, _ := elaborate.Elaborate(b)
 	dts, err := devicetree.BoardDTS(b, res)
 	if err != nil {
@@ -325,7 +325,7 @@ func TestBoardDTSTurtleComplete(t *testing.T) {
 	if root == "" {
 		t.Skip("JCORE_SOC_ROOT not set")
 	}
-	b, _ := board.Load(root, "turtle_1v0")
+	b, _ := board.Load(root, "turtle_1v0", "")
 	res, _ := elaborate.Elaborate(b)
 	got, err := devicetree.BoardDTS(b, res)
 	if err != nil {
@@ -360,7 +360,7 @@ func TestBoardDTSMimasUnchanged(t *testing.T) {
 	if root == "" {
 		t.Skip("JCORE_SOC_ROOT not set")
 	}
-	b, _ := board.Load(root, "mimas_v2")
+	b, _ := board.Load(root, "mimas_v2", "")
 	res, _ := elaborate.Elaborate(b)
 	got, err := devicetree.BoardDTS(b, res)
 	if err != nil {

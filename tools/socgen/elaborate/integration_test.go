@@ -13,7 +13,7 @@ func TestElaborateMimasV2(t *testing.T) {
 	if root == "" {
 		t.Skip("JCORE_SOC_ROOT not set")
 	}
-	b, lerrs := board.Load(root, "mimas_v2")
+	b, lerrs := board.Load(root, "mimas_v2", "")
 	if b.Design == nil || b.Library == nil {
 		t.Fatalf("board.Load returned incomplete board: %v", lerrs)
 	}

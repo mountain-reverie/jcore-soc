@@ -21,7 +21,7 @@ func TestEmitDevicesMimasV2(t *testing.T) {
 	if root == "" {
 		t.Skip("JCORE_SOC_ROOT not set")
 	}
-	b, err := board.Load(root, "mimas_v2")
+	b, err := board.Load(root, "mimas_v2", "")
 	if err != nil {
 		t.Fatalf("board.Load: %v", err)
 	}

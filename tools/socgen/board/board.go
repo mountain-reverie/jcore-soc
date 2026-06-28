@@ -46,8 +46,8 @@ func readFileList(path string) ([]string, error) {
 
 // loadFrom composes spec-load + library-build + validate for a board whose VHDL
 // file set is already known (no make). Load (Task 2) wraps it with Files.
-func loadFrom(root, name string, files []string) (*Board, error) {
-	d, derr := design.Load(filepath.Join(root, "targets", "boards", name, "design.yaml"))
+func loadFrom(root, name, variant string, files []string) (*Board, error) {
+	d, derr := design.Load(filepath.Join(root, "targets", "boards", name, designFileName(variant)))
 	lib, lerr := Library(files)
 	var errs []error
 	if lerr != nil {
@@ -87,10 +87,17 @@ func Files(root, name string) ([]string, error) {
 // file-list step (Files) fails, the returned Board has a nil Library (nothing can
 // be parsed without the file list); callers must guard on the error before using
 // b.Library.
-func Load(root, name string) (*Board, error) {
+func designFileName(variant string) string {
+	if variant == "" {
+		return "design.yaml"
+	}
+	return "design." + variant + ".yaml"
+}
+
+func Load(root, name, variant string) (*Board, error) {
 	files, err := Files(root, name)
 	if err != nil {
-		d, derr := design.Load(filepath.Join(root, "targets", "boards", name, "design.yaml"))
+		d, derr := design.Load(filepath.Join(root, "targets", "boards", name, designFileName(variant)))
 		// The file-list failure is the primary error (it's why nothing could be
 		// built); list it first, then any secondary spec-load error.
 		errs := []error{err}
@@ -99,7 +106,7 @@ func Load(root, name string) (*Board, error) {
 		}
 		return &Board{Name: name, Design: d}, errors.Join(errs...)
 	}
-	return loadFrom(root, name, files)
+	return loadFrom(root, name, variant, files)
 }
 
 func tailStr(s string) string {

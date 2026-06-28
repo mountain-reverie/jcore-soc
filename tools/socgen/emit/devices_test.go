@@ -273,7 +273,7 @@ func TestDevicesPruneMimasV2(t *testing.T) {
 	if root == "" {
 		t.Skip("JCORE_SOC_ROOT not set")
 	}
-	b, lerr := board.Load(root, "mimas_v2")
+	b, lerr := board.Load(root, "mimas_v2", "")
 	if b == nil || b.Design == nil {
 		t.Fatalf("board.Load: %v", lerr)
 	}
