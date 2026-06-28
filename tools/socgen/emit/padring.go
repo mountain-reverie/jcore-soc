@@ -256,10 +256,12 @@ func PadRing(res *elaborate.Resolution) (string, error) {
 			decls = append(decls, &vhdl.SignalDecl{Names: []string{n}, SubtypeMark: mark, Constraint: con})
 		}
 	}
-	// Inverted-pad intermediates (e.g. pad_reset_n) are appended after the sorted
-	// Padring signals, matching golden (generate.clj appends `vals invert-signals`).
-	for _, iv := range invertIntermediates(res) {
-		decls = append(decls, &vhdl.SignalDecl{Names: []string{iv.name}, SubtypeMark: stdLogicMark})
+	// Inverted-pad intermediates (e.g. pad_reset_n) are only needed on the Xilinx
+	// path where outExpr references the intermediate; ecp5/ice40 emits `not` directly.
+	if !externalConstraints(res.Target) {
+		for _, iv := range invertIntermediates(res) {
+			decls = append(decls, &vhdl.SignalDecl{Names: []string{iv.name}, SubtypeMark: stdLogicMark})
+		}
 	}
 
 	stmts := []vhdl.Stmt{socInstStmt(res)}
@@ -282,8 +284,11 @@ func PadRing(res *elaborate.Resolution) (string, error) {
 
 	stmts = append(stmts, pioStatements(res)...)
 	// Inverted-pad assignments (pad_reset_n <= not reset) sit between the pio
-	// statements and the pin buffers/direct-wires, matching golden.
-	stmts = append(stmts, invertAssigns(res)...)
+	// statements and the pin buffers/direct-wires, matching golden. Omitted for
+	// ecp5/ice40 where the inversion is emitted inline in the pin assignment.
+	if !externalConstraints(res.Target) {
+		stmts = append(stmts, invertAssigns(res)...)
+	}
 
 	pinStmts, perr := pinStatements(res)
 	if perr != nil {

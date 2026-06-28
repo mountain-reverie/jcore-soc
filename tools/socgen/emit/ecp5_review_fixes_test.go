@@ -48,15 +48,14 @@ func TestPadringContextOmitsUnisimForEcp5(t *testing.T) {
 	}
 }
 
-// FIX 2/3: differential and inverted-output ecp5 pads must error, not emit wrong
-// hardware.
+// FIX 2/3: differential and bidirectional ecp5 pads must error (still deferred
+// to Phase 2). Inverted-output pads are now supported and must NOT error.
 func TestEcp5DeferredPinShapesError(t *testing.T) {
 	cases := []struct {
 		name string
 		pin  *elaborate.ResolvedPin
 	}{
 		{"differential", &elaborate.ResolvedPin{Net: "clk_p", Pad: "A1", Signal: "clk", Diff: "pos", PadDir: "in"}},
-		{"inverted-output", &elaborate.ResolvedPin{Net: "rst_n", Pad: "B1", Out: "reset", OutInvert: true, PadDir: "out"}},
 		{"bidirectional", &elaborate.ResolvedPin{Net: "io0", Pad: "C1", In: "io_i", Out: "io_o", PadDir: "inout"}},
 	}
 	for _, tc := range cases {

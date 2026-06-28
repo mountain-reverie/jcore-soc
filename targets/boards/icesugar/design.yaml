@@ -50,6 +50,6 @@ pins:
     - { match: clk, signal: true, buff: false }
     - { match: ser_rx, signal: uart0_rx }
     - { match: ser_tx, signal: uart0_tx }
-    - { match: ledr_n, out: "gpio_do(0)" }
-    - { match: ledg_n, out: "gpio_do(1)" }
-    - { match: ledb_n, out: "gpio_do(2)" }
+    - { match: ledr_n, out: { name: "gpio_do(0)", invert: true } }
+    - { match: ledg_n, out: { name: "gpio_do(1)", invert: true } }
+    - { match: ledb_n, out: { name: "gpio_do(2)", invert: true } }
