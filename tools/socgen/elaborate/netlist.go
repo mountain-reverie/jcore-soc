@@ -56,6 +56,12 @@ func Elaborate(b *board.Board) (*Resolution, error) {
 		if ce := res.TopEntities["cpus"]; ce != nil {
 			ce.Config = &iface.Configuration{Name: CPUsConfigName}
 		}
+		if rm := res.TopEntities["ddr_ram_mux"]; rm != nil {
+			cfg, _, rerr := RAMMuxConfig(b.Design.CPU.Cores, b.Design.CPU.Cache)
+			if rerr == nil {
+				rm.Config = &iface.Configuration{Name: cfg}
+			}
+		}
 	}
 	padEnts, perr := resolveEntities("padring", b.Design.PadringEntities, b.Library, merge)
 	res.PadringEntities = padEnts
