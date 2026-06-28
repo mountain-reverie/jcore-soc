@@ -5,7 +5,7 @@ use work.cpu2j0_pack.all;
 use work.boot_image_pkg.all;
 
 entity bootram_infer is
-  generic (c_addr_width : integer range 13 to 14 := 14);
+  generic (c_addr_width : integer range 11 to 14 := 14);
   port (
     clk    : in  std_logic;
     ibus_i : in  cpu_instruction_o_t;
