@@ -1,19 +1,27 @@
 package elaborate
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestCPUSynthConfig(t *testing.T) {
 	cases := []struct {
 		model, decode, want string
 		priv                bool
+		wantFiles           []string // must all be present in files (subset check)
 	}{
-		{"j2", "direct", "cpu_synth_direct", false},
-		{"j1", "rom", "cpu_synth_j1", false},
-		{"j4", "direct", "cpu_synth_j4", true},
-		{"j4", "rom", "cpu_synth_j4_rom", true},
+		{"j2", "direct", "cpu_synth_direct", false, []string{
+			"decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_config.vhd"}},
+		{"j1", "rom", "cpu_synth_j1", false, []string{
+			"core/register_file_ebr.vhd", "decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j1_config.vhd"}},
+		{"j4", "direct", "cpu_synth_j4", true, []string{
+			"decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_j4_config.vhd"}},
+		{"j4", "rom", "cpu_synth_j4_rom", true, []string{
+			"decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j4_rom_config.vhd"}},
 	}
 	for _, c := range cases {
-		cfg, gen, _, err := CPUSynthConfig(c.model, c.decode)
+		cfg, gen, files, err := CPUSynthConfig(c.model, c.decode)
 		if err != nil {
 			t.Fatalf("%s/%s: %v", c.model, c.decode, err)
 		}
@@ -22,6 +30,23 @@ func TestCPUSynthConfig(t *testing.T) {
 		}
 		if c.priv && gen["PRIV_ARCH"] != "true" {
 			t.Errorf("%s/%s: expected PRIV_ARCH=>true, got %v", c.model, c.decode, gen)
+		}
+		for _, want := range c.wantFiles {
+			found := false
+			for _, f := range files {
+				if f == want {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("%s/%s: files missing %q; got %v", c.model, c.decode, want, files)
+			}
+		}
+		// tlb is a base file (analyzed before cpu.vhd), never in this fragment.
+		for _, f := range files {
+			if strings.HasSuffix(f, "tlb.vhd") {
+				t.Errorf("%s/%s: tlb.vhd must not be in the post-decode_core fragment; got %v", c.model, c.decode, files)
+			}
 		}
 	}
 	if _, _, _, err := CPUSynthConfig("j9", "direct"); err == nil {

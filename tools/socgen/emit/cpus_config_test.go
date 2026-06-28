@@ -34,8 +34,18 @@ func TestCPUsConfigJ4Rom(t *testing.T) {
 			t.Errorf("generated config missing %q:\n%s", want, src)
 		}
 	}
-	if len(files) == 0 {
-		t.Error("expected synth filelist additions")
+	for _, want := range []string{
+		"synth/cpu_synth_j4_rom_config.vhd", "decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd",
+	} {
+		found := false
+		for _, f := range files {
+			if f == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("j4-rom synth files missing %q; got %v", want, files)
+		}
 	}
 }
 
