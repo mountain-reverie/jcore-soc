@@ -14,7 +14,7 @@ func TestCPUSynthConfig(t *testing.T) {
 		{"j2", "direct", "cpu_synth_direct", false, []string{
 			"decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_config.vhd"}},
 		{"j1", "rom", "cpu_synth_j1", false, []string{
-			"core/register_file_ebr.vhd", "decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j1_config.vhd"}},
+			"core/register_file_ebr.vhd", "core/mult_seq.vhd", "core/shifter_seq.vhd", "decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j1_config.vhd"}},
 		{"j4", "direct", "cpu_synth_j4", true, []string{
 			"decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_j4_config.vhd"}},
 		{"j4", "rom", "cpu_synth_j4_rom", true, []string{
