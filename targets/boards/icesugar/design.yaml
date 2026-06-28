@@ -4,13 +4,22 @@ device-classes: !include ../common_device_classes.yaml
 
 top-entities:
   cpus:
-    ports: { cpu0_copro_i: NULL_COPR_I }
-    generics: {}
+    ports:
+      cpu0_copro_i: NULL_COPR_I
+      cpu1_copro_i: NULL_COPR_I
+      cpu1eni: 0
+    generics:
+      INSERT_WRITE_DELAY_BOOT_MEM: false
+      INSERT_READ_DELAY_BOOT_MEM: false
+      INSERT_INST_DELAY_BOOT_MEM: false
 
 padring-entities:
+  # iCESugar 12 MHz passthrough clock + power-on reset. Outputs drive the SoC
+  # clock net (clk_sys) and reset net (reset) so soc_gen exposes them as soc
+  # ports and pad_ring wires clkgen -> soc.
   clkgen:
     entity: ice_clkgen
-    ports: { clk_in: clk, rst_out: rst, clk_out: clk_cpu }
+    ports: { clk_in: clk, clk_out: clk_sys, rst_out: reset }
 
 cpu:
   architecture: one_cpu_ebr

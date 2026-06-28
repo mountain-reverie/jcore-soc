@@ -1,0 +1,61 @@
+/dts-v1/;
+
+/ {
+	model = "icesugar";
+	compatible = "jcore,j2-soc";
+	#address-cells = <1>;
+	#size-cells = <1>;
+	interrupt-parent = <&aic>;
+
+	chosen { };
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+
+		cpu@0 {
+			device_type = "cpu";
+			compatible = "jcore,j2";
+			clock-frequency = <12048192>;
+			reg = <0>;
+		};
+	};
+
+	clocks {
+
+		bus_clock: bus_clock {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <12048192>;
+		};
+	};
+
+	memory@10000000 {
+		device_type = "memory";
+		reg = <0x10000000 0x8000000>;
+	};
+
+	soc@abcd0000 {
+		compatible = "simple-bus";
+		ranges = <0x0 0xabcd0000 0x110>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		gpio2 {
+			compatible = "jcore,gpio2";
+			reg = <0x0 0x10>; // ABCD0000-ABCD000F
+		};
+
+		serial {
+			compatible = "jcore,uartlite", "xlnx,xps-uartlite-1.00.a";
+			device_type = "serial";
+			reg = <0x100 0x10>; // ABCD0100-ABCD010F
+		};
+	};
+
+	cpuid {
+		compatible = "jcore,cpuid-mmio";
+		reg = <0xabcd0600 0x4>;
+	};
+};
