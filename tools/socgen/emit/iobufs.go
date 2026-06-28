@@ -138,7 +138,7 @@ func signalBase(ref string) string {
 // assign or buffer per single-ended pin (in sortedPins net order), then the
 // differential-pair buffers. Best-effort; accumulates per-pin errors.
 func pinStatements(res *elaborate.Resolution) ([]vhdl.Stmt, error) {
-	if res.Target == "ecp5" {
+	if externalConstraints(res.Target) {
 		return ecp5PinStatements(res)
 	}
 	pins := sortedPins(res)
