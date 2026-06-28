@@ -2,6 +2,7 @@ package elaborate
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 
 	"github.com/j-core/jcore-soc/tools/socgen/board"
@@ -58,7 +59,9 @@ func Elaborate(b *board.Board) (*Resolution, error) {
 		}
 		if rm := res.TopEntities["ddr_ram_mux"]; rm != nil {
 			cfg, _, rerr := RAMMuxConfig(b.Design.CPU.Cores, b.Design.CPU.Cache)
-			if rerr == nil {
+			if rerr != nil {
+				errs = append(errs, fmt.Errorf("ddr_ram_mux: unsupported CPU config (cores=%d cache=%v): %w", b.Design.CPU.Cores, b.Design.CPU.Cache, rerr))
+			} else {
 				rm.Config = &iface.Configuration{Name: cfg}
 			}
 		}
