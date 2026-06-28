@@ -28,7 +28,11 @@ sed 's/set_io pin_/set_io /' targets/boards/icesugar/icesugar.pcf > "$OUT/icesug
 
 # 5. synthesize to iCE40 JSON, place & route on the UP5K (SG48), pack.
 GHDL_BASE="ghdl --std=93 -fexplicit -fsynopsys --syn-binding --workdir=$WORK ${FILES[*]}"
-yosys -m ghdl -p "$GHDL_BASE -e icesugar_top; synth_ice40 -top icesugar_top -json $OUT/icesugar.json" \
+# synth_ice40 maps the design; then strip the VHDL assert cells ($check/$print/
+# $assert) that nextpnr-ice40 rejects before writing the json it consumes.
+yosys -m ghdl -p "$GHDL_BASE -e icesugar_top; synth_ice40 -top icesugar_top; \
+  check -assert; chformal -remove; delete t:\$check t:\$print; stat; \
+  write_json $OUT/icesugar.json" \
   2>&1 | tee "$OUT/yosys.log"
 nextpnr-ice40 --up5k --package sg48 --json "$OUT/icesugar.json" \
   --pcf "$OUT/icesugar.pcf" --asc "$OUT/icesugar.asc" 2>&1 | tee "$OUT/nextpnr.log"

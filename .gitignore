@@ -12,3 +12,4 @@ targets/boards/ulx3s/generated/
 
 # Python bytecode (metrics scripts)
 __pycache__/
+targets/boards/icesugar/build/

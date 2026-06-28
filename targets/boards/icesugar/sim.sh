@@ -10,12 +10,12 @@ rm -rf "$WORK"; mkdir -p "$WORK"
 
 # 0. boot image: cross-compile the standalone banner/blink program (its own
 #    crt0 + linker script, no boot/ submodule), then pack the SREC/bin into the
-#    bootram_infer init package (c_addr_width = 13 -> 2048 words). This
+#    bootram_infer init package (c_addr_width = 11 -> 512 words). This
 #    overwrites the boot_image_pkg.vhd placeholder with the real program.
 make -C targets/boards/icesugar/rom all
 perl tools/genbootpkg \
     targets/boards/icesugar/rom/boot.bin \
-    2048 \
+    512 \
     > targets/boards/icesugar/boot_image_pkg.vhd
 
 # 1. generated cpu sources: decode tables (generate) + v2p of the templated

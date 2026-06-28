@@ -62,7 +62,7 @@ begin
   -- for the DEV_SRAM region. bootram_infer is 0-wait (falling-edge read), so no
   -- data_bus_delay / instr_bus_delay wrappers are needed.
   sram : entity work.bootram_infer(inferred)
-    generic map (c_addr_width => 13)
+    generic map (c_addr_width => 11)
     port map (clk => clk, ibus_i => sraminst_o, ibus_o => sraminst_i,
               db_i => sramdt_o, db_o => sramdt_i);
 
