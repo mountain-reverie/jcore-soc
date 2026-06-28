@@ -1,0 +1,9 @@
+# iCESugar (iCE40UP5K-SG48) pin sites — MuseLab canonical PCF
+clk 35
+
+ser_rx 4
+ser_tx 6
+
+ledr_n 41
+ledg_n 40
+ledb_n 39
