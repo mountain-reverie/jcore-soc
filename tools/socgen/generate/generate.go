@@ -94,6 +94,15 @@ func Build(b *board.Board, res *elaborate.Resolution) ([]File, error) {
 		}
 	}
 
+	if b.Design.CPU != nil {
+		_, src, _, cerr := emit.CPUsConfig(b.Design.CPU)
+		if cerr != nil {
+			errs = append(errs, &GenerateError{Kind: ErrEmit, Name: "cpus_config.vhd", Detail: cerr.Error()})
+		} else {
+			files = append(files, File{Name: "cpus_config.vhd", Content: src, InBuildMK: true})
+		}
+	}
+
 	if res != nil && res.Target == "ecp5" {
 		lpf, lerr := emit.LPF(res)
 		if lerr != nil {

@@ -11,7 +11,8 @@ import (
 
 // CPUsConfigName is the stable name of the generated cpus configuration. The
 // hand-written board top-level references this single name regardless of variant.
-const CPUsConfigName = "soc_cpus_config"
+// It is an alias for elaborate.CPUsConfigName (defined there to avoid import cycles).
+const CPUsConfigName = elaborate.CPUsConfigName
 
 // CPUsConfig generates the `configuration soc_cpus_config of cpus` declaration
 // from a declarative cpu: block. It returns the stable name, the VHDL source,

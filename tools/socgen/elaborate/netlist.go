@@ -6,6 +6,7 @@ import (
 
 	"github.com/j-core/jcore-soc/tools/socgen/board"
 	"github.com/j-core/jcore-soc/tools/socgen/design"
+	"github.com/j-core/jcore-soc/tools/socgen/iface"
 )
 
 // Elaborate runs device resolution (P4b) then builds the net-list (P4c):
@@ -51,6 +52,11 @@ func Elaborate(b *board.Board) (*Resolution, error) {
 	topEnts, terr := resolveEntities("top", b.Design.TopEntities, b.Library, merge)
 	res.TopEntities = topEnts
 	errs = append(errs, terr)
+	if b.Design.CPU != nil {
+		if ce := res.TopEntities["cpus"]; ce != nil {
+			ce.Config = &iface.Configuration{Name: CPUsConfigName}
+		}
+	}
 	padEnts, perr := resolveEntities("padring", b.Design.PadringEntities, b.Library, merge)
 	res.PadringEntities = padEnts
 	errs = append(errs, perr)
