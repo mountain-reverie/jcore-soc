@@ -1,0 +1,3 @@
+decode/decode_table_direct.vhd
+decode/decode_table_direct_config.vhd
+synth/cpu_synth_config.vhd

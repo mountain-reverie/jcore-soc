@@ -3,9 +3,20 @@
 # The cpu .vhd files must be generated first: `make -C components/cpu/decode
 # generate` + v2p of mult/datapath/decode_core (done by sim.sh/synth.sh).
 CPU=components/cpu
+GEN=targets/boards/ulx3s/generated
+# Variant-specific synth sources (decode tables + cpu_synth config + j1/j4
+# alternate architectures) are soc_gen-generated into $GEN/cpu_synth_files.list
+# (cpu-submodule-relative, one per line; staged by gen_synth_sources.sh). They
+# replace the hardcoded j2-direct decode_table_direct/_config + cpu_synth_config
+# lines so j1/j4 analyze their own tables. Spliced in below right after
+# decode_core.vhd (the position those lines occupied).
+[ -f "$GEN/cpu_synth_files.list" ] || { echo "ERROR: $GEN/cpu_synth_files.list missing — run gen_synth_sources.sh (soc_gen) first" >&2; exit 1; }
 FILES=(
   $CPU/cpu2j0_pkg.vhd
   $CPU/core/components_pkg.vhd
+  # tlb: cpu.vhd directly instantiates work.tlb (entity inst. in the MMU_ARCH
+  # generate), so ghdl needs it analyzed before cpu.vhd for ALL variants.
+  $CPU/core/tlb.vhd
   $CPU/core/mult_pkg.vhd
   $CPU/decode/decode_pkg.vhd
   $CPU/core/datapath_pkg.vhd
@@ -19,10 +30,13 @@ FILES=(
   $CPU/decode/decode.vhd
   $CPU/decode/decode_body.vhd
   $CPU/decode/decode_table.vhd
-  $CPU/decode/decode_table_direct.vhd
   $CPU/decode/decode_core.vhd
-  $CPU/decode/decode_table_direct_config.vhd
-  $CPU/synth/cpu_synth_config.vhd
+)
+# Splice in the soc_gen-generated variant synth sources, $CPU-prefixed.
+while IFS= read -r _f; do
+  [ -n "$_f" ] && FILES+=("$CPU/$_f")
+done < "$GEN/cpu_synth_files.list"
+FILES+=(
   lib/hwutils/attr_pkg.vhd
   components/misc/misc_pkg.vhd
   targets/boards/ulx3s/config.vhd

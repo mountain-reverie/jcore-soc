@@ -28,6 +28,12 @@ perl -0pe 's/-- synopsys translate_off.*?-- synopsys translate_on\n//s;
 # generated/cpus_config.vhd uniformly with the other staged sources.
 cp targets/boards/ulx3s/cpus_config.vhd "$GEN/cpus_config.vhd"
 
+# cpu_synth_files.list: soc_gen-generated list of the variant's model/decode-
+# specific synth sources (cpu-submodule-relative, one per line). filelist.sh
+# reads it from $GEN and prefixes each entry with $CPU/. Plain copy like
+# cpus_config.vhd above.
+cp targets/boards/ulx3s/cpu_synth_files.list "$GEN/cpu_synth_files.list"
+
 # NOTE: the icache/dcache transparent-latch -> negedge-FF rewrite that used to
 # live here is GONE. jcore-cpu now provides the single-clock CDC form directly
 # (cache/cache_clkmode_sc.vhd selects POSEDGE _sc phase FFs in cache/{i,d}cache.vhd

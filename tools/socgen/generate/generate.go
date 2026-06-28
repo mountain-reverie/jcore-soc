@@ -2,6 +2,7 @@ package generate
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/j-core/jcore-soc/tools/socgen/board"
 	"github.com/j-core/jcore-soc/tools/socgen/cheader"
@@ -95,11 +96,22 @@ func Build(b *board.Board, res *elaborate.Resolution) ([]File, error) {
 	}
 
 	if b.Design != nil && b.Design.CPU != nil {
-		_, src, _, cerr := emit.CPUsConfig(b.Design.CPU)
+		_, src, synthFiles, cerr := emit.CPUsConfig(b.Design.CPU)
 		if cerr != nil {
 			errs = append(errs, &GenerateError{Kind: ErrEmit, Name: "cpus_config.vhd", Detail: cerr.Error()})
 		} else {
 			files = append(files, File{Name: "cpus_config.vhd", Content: src, InBuildMK: true})
+			// cpu_synth_files.list: the variant's model/decode-specific synth
+			// sources, one cpu-submodule-relative path per line. filelist.sh reads
+			// this (prefixing each with $CPU/) instead of hardcoding the j2-direct
+			// set, so j1/j4 variants analyze their own decode tables + cpu_synth
+			// config. Not in build.mk (consumed by the ULX3S ghdl-yosys filelist).
+			var lb strings.Builder
+			for _, f := range synthFiles {
+				lb.WriteString(f)
+				lb.WriteByte('\n')
+			}
+			files = append(files, File{Name: "cpu_synth_files.list", Content: lb.String(), InBuildMK: false})
 		}
 	}
 
