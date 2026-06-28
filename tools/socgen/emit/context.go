@@ -166,7 +166,7 @@ func topContext(res *elaborate.Resolution) []vhdl.Node {
 // no UNISIM primitives, so a unisim library/use would be dead (and unanalyzable
 // in the ECP5 flow).
 func padringContext(res *elaborate.Resolution) []vhdl.Node {
-	if res.Target == "ecp5" {
+	if externalConstraints(res.Target) {
 		return topContext(res)
 	}
 	return append(topContext(res),

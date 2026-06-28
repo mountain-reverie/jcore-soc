@@ -122,6 +122,13 @@ func Build(b *board.Board, res *elaborate.Resolution) ([]File, error) {
 		}
 		files = append(files, File{Name: b.Name + ".lpf", Content: lpf, InBuildMK: false})
 	}
+	if res != nil && res.Target == "ice40" {
+		pcf, perr := emit.PCF(res)
+		if perr != nil {
+			errs = append(errs, &GenerateError{Kind: ErrEmit, Name: b.Name + ".pcf", Detail: perr.Error()})
+		}
+		files = append(files, File{Name: b.Name + ".pcf", Content: pcf, InBuildMK: false})
+	}
 
 	files = append(files, File{Name: "build.mk", Content: buildMK(files)})
 	return files, errors.Join(errs...)
