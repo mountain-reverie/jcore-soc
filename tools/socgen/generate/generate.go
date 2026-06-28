@@ -94,7 +94,7 @@ func Build(b *board.Board, res *elaborate.Resolution) ([]File, error) {
 		}
 	}
 
-	if b.Design.CPU != nil {
+	if b.Design != nil && b.Design.CPU != nil {
 		_, src, _, cerr := emit.CPUsConfig(b.Design.CPU)
 		if cerr != nil {
 			errs = append(errs, &GenerateError{Kind: ErrEmit, Name: "cpus_config.vhd", Detail: cerr.Error()})
