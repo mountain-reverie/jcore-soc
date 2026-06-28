@@ -39,7 +39,7 @@ func TestPinsNetlistMimasV2(t *testing.T) {
 	if root == "" {
 		t.Skip("JCORE_SOC_ROOT not set")
 	}
-	b, _ := board.Load(root, "mimas_v2")
+	b, _ := board.Load(root, "mimas_v2", "")
 	if b.Design == nil || b.Library == nil {
 		t.Skip("board.Load incomplete")
 	}

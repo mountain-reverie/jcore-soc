@@ -30,6 +30,7 @@ func run(args []string) error {
 	root := fs.String("root", ".", "repository root (contains targets/boards)")
 	outDir := fs.String("o", "", "output directory (default: the board's dir)")
 	watch := fs.Bool("watch", false, "watch the board's yaml inputs and regenerate on change (Ctrl-C to stop)")
+	variant := fs.String("variant", "", "board design variant (selects design.<variant>.yaml)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil // usage already printed by flag; exit 0
@@ -41,16 +42,16 @@ func run(args []string) error {
 	}
 	name := fs.Arg(0)
 	if *watch {
-		return runWatch(*root, name, *outDir)
+		return runWatch(*root, name, *outDir, *variant)
 	}
-	return generateBoard(*root, name, *outDir)
+	return generateBoard(*root, name, *outDir, *variant)
 }
 
 // generateBoard loads, elaborates, builds and writes one board's file set.
 // Best-effort: load/elaborate/generate warnings print to stderr; only hard
 // errors (unknown/duplicate plugin) and write failures are returned.
-func generateBoard(root, name, outDir string) error {
-	b, lerr := board.Load(root, name)
+func generateBoard(root, name, outDir, variant string) error {
+	b, lerr := board.Load(root, name, variant)
 	if b == nil || b.Design == nil {
 		return fmt.Errorf("load board %q: %w", name, lerr)
 	}

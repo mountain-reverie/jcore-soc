@@ -1,5 +1,7 @@
 # useful utilities for board Makefiles that build the SoC
 
+VARIANT ?=
+
 # TODO: Executing xst to just read the version number takes a second.
 # Could try to read it from path to XST or a file.
 #XST_VERSION := $(shell xst -help | head -1 | sed -n 's/^.*Release \([^ ]*\) .*/\1/p')
@@ -105,7 +107,7 @@ vhdl_list.txt: config/config.vhd $(addprefix ../../,$(VHDL_FILES))
 
 soc_gen:
 	@command -v go >/dev/null 2>&1 || (printf "***************************************************************************\n****** Go (https://go.dev/dl/) is required to run the soc_gen tool.   ******\n***************************************************************************\n" && false)
-	(cd $(TOP_DIR)/tools/socgen && go run ./cmd/socgen -root "$(TOP_DIR)" "$(BOARD_NAME)")
+	(cd $(TOP_DIR)/tools/socgen && go run ./cmd/socgen -root "$(TOP_DIR)" -variant "$(VARIANT)" "$(BOARD_NAME)")
 	@echo "Done"
 
 # soc_regen watches the board's yaml inputs and regenerates on change (Ctrl-C to stop).

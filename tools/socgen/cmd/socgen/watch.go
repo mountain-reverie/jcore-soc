@@ -63,8 +63,8 @@ func changed(prev, cur map[string]time.Time) bool {
 // runWatch generates the board once, then regenerates whenever a watched input
 // file changes, until interrupted (SIGINT). Generate errors are printed and
 // watching continues (a dev convenience).
-func runWatch(root, name, outDir string) error {
-	if err := generateBoard(root, name, outDir); err != nil {
+func runWatch(root, name, outDir, variant string) error {
+	if err := generateBoard(root, name, outDir, variant); err != nil {
 		return err
 	}
 	paths := watchedFiles(root, name)
@@ -84,7 +84,7 @@ func runWatch(root, name, outDir string) error {
 			cur := snapshot(paths)
 			if changed(prev, cur) {
 				prev = cur
-				if err := generateBoard(root, name, outDir); err != nil {
+				if err := generateBoard(root, name, outDir, variant); err != nil {
 					fmt.Fprintln(os.Stderr, "socgen: regenerate error:", err)
 				} else {
 					fmt.Fprintf(os.Stderr, "socgen: regenerated %s\n", name)

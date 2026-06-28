@@ -19,7 +19,7 @@ func loadBoard(t *testing.T, name string) *elaborate.Resolution {
 	if root == "" {
 		t.Skip("JCORE_SOC_ROOT not set")
 	}
-	b, lerr := board.Load(root, name)
+	b, lerr := board.Load(root, name, "")
 	if b == nil || b.Design == nil {
 		t.Fatalf("board.Load(%q): %v", name, lerr)
 	}

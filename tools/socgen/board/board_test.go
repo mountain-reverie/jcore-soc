@@ -111,7 +111,7 @@ devices:
 `)
 	ent := writeFile(t, root, "vhdl/uartlitedb.vhd",
 		"entity uartlitedb is port (clk : in std_logic); end entity;")
-	b, err := loadFrom(root, "tb", []string{ent})
+	b, err := loadFrom(root, "tb", "", []string{ent})
 	if err != nil {
 		t.Fatalf("expected clean load+validate, got: %v", err)
 	}

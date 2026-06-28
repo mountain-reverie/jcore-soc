@@ -14,7 +14,7 @@ func TestBuildEmitsCPUsConfig(t *testing.T) {
 	if root == "" {
 		t.Skip("JCORE_SOC_ROOT not set")
 	}
-	b, _ := board.Load(root, "ulx3s")
+	b, _ := board.Load(root, "ulx3s", "")
 	if b == nil || b.Design == nil || b.Design.CPU == nil {
 		t.Skip("ulx3s not yet migrated to cpu: block")
 	}
