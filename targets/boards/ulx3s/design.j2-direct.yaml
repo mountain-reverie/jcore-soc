@@ -1,0 +1,13 @@
+# ULX3S default variant: single J2 core, direct decode, id-cache.
+# Reproduces the retired hand-written one_cpu_m0_direct_fpga + idcache binding.
+# `<<: !include base.yaml` merges the shared board definition (bare root-level
+# `!include` plus sibling keys is not valid YAML; the merge key is the standard
+# form, already supported by design/include.go).
+<<: !include base.yaml
+cpu:
+  architecture: one_cpu_m0
+  cores: 1
+  model: j2
+  decode: direct
+  copro: false
+  cache: id

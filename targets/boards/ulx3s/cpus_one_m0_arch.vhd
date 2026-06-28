@@ -66,21 +66,3 @@ begin
 
   data_bus_i(DEV_CPU) <= loopback_bus(data_bus_o(DEV_CPU));
 end architecture;
-
--- Bind u_cpu via the cpu repo's cpu_synth_direct configuration (synth/
--- cpu_synth_config.vhd): it binds u_mult => mult(stru) + direct decode +
--- register_file(two_bank). The committed FPGA decode configs omit u_mult,
--- which would leave the multiplier an unbound black box; cpu_synth_direct is
--- the CI-proven ECP5 binding, so we reuse it rather than re-specify it.
-configuration one_cpu_m0_direct_fpga of cpus is
-  for one_cpu_m0
-    for all : cpu_core
-      use entity work.cpu_core(arch);
-      for arch
-        for u_cpu : cpu
-          use configuration work.cpu_synth_direct;
-        end for;
-      end for;
-    end for;
-  end for;
-end configuration;

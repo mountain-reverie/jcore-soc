@@ -1,0 +1,9 @@
+# ULX3S J4 ROM-decode variant: single J4 core, ROM decode, id-cache.
+<<: !include base.yaml
+cpu:
+  architecture: one_cpu_m0
+  cores: 1
+  model: j4
+  decode: rom
+  copro: false
+  cache: id
