@@ -15,13 +15,18 @@ all:
 CONFIG_CLK_CPU_DIVIDE := 50
 CONFIG_CLK_MEM_2X_DIVIDE := 25
 
+# Default CPU/cache variant for plain `make ulx3s`. design.yaml itself includes
+# design.j2-direct.yaml, so this VARIANT default keeps soc_gen variant selection
+# in sync (override with `make ulx3s VARIANT=j4-rom`).
+VARIANT ?= j2-direct
+
 include $(TOP_DIR)/soc_config.mk
 include $(TOOLS_DIR)/soc.mk
 
 # Board-specific entities that design.yaml references but that are not part of
 # the global FPGA VHDL set: the single-CPU M0 `cpus` configuration, the clkgen
 # wrapper, and the reset synchronizer. Append so they land in vhdl_list.txt.
-VHDL_FILES += targets/boards/ulx3s/cpus_one_m0.vhd
+VHDL_FILES += targets/boards/ulx3s/cpus_one_m0_arch.vhd
 VHDL_FILES += targets/boards/ulx3s/ulx3s_clkgen.vhd
 VHDL_FILES += targets/boards/ulx3s/reset_sync.vhd
 VHDL_FILES += targets/boards/ulx3s/aic_irq_gen.vhd

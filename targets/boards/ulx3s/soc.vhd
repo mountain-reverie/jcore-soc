@@ -69,7 +69,7 @@ begin
             irq => aic_irq,
             pi_in => gpio_di
         );
-    cpus : configuration work.one_cpu_m0_direct_fpga
+    cpus : configuration work.soc_cpus_config
         generic map (
             insert_inst_delay_boot_mem => FALSE,
             insert_read_delay_boot_mem => FALSE,

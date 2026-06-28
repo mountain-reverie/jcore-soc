@@ -22,6 +22,12 @@ perl -0pe 's/-- synopsys translate_off.*?-- synopsys translate_on\n//s;
            s/^\s*attribute soc_port_global_name of .*?;\n//mg' \
   targets/ddr_ram_mux/ddr_ram_mux.vhd > "$GEN/ddr_ram_mux.vhd"
 
+# cpus_config: the soc_gen-generated `configuration soc_cpus_config of cpus`
+# (binds the variant's cpu_synth config). It carries no soc_gen-only metadata,
+# so a plain copy into the synth-staging dir suffices; the filelist references
+# generated/cpus_config.vhd uniformly with the other staged sources.
+cp targets/boards/ulx3s/cpus_config.vhd "$GEN/cpus_config.vhd"
+
 # NOTE: the icache/dcache transparent-latch -> negedge-FF rewrite that used to
 # live here is GONE. jcore-cpu now provides the single-clock CDC form directly
 # (cache/cache_clkmode_sc.vhd selects POSEDGE _sc phase FFs in cache/{i,d}cache.vhd
