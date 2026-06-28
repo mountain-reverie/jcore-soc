@@ -1,12 +1,22 @@
 #!/usr/bin/env bash
-# Analyze + elaborate the iCESugar EBR-only J1 design under ghdl. The hard gate
-# for the board VHDL is that `ghdl -e icesugar_top` elaborates with no unbound
-# entity (cpus / ice_clkgen / soc). Full nextpnr synthesis is synth.sh.
+# Build the EBR boot image, analyze the iCESugar EBR-only J1 design under ghdl,
+# and run the top-level banner testbench (drive 12 MHz, decode ser_tx, assert
+# the boot banner). Full nextpnr synthesis is synth.sh.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 WORK="${WORK:-/tmp/icework}"
 cd "$ROOT"
 rm -rf "$WORK"; mkdir -p "$WORK"
+
+# 0. boot image: cross-compile the standalone banner/blink program (its own
+#    crt0 + linker script, no boot/ submodule), then pack the SREC/bin into the
+#    bootram_infer init package (c_addr_width = 13 -> 2048 words). This
+#    overwrites the boot_image_pkg.vhd placeholder with the real program.
+make -C targets/boards/icesugar/rom all
+perl tools/genbootpkg \
+    targets/boards/icesugar/rom/boot.bin \
+    2048 \
+    > targets/boards/icesugar/boot_image_pkg.vhd
 
 # 1. generated cpu sources: decode tables (generate) + v2p of the templated
 #    cores, plus the v2p'd uart / gpio2 peripherals. Must precede soc_gen so the
@@ -26,3 +36,11 @@ source targets/boards/icesugar/filelist.sh   # defines FILES=( ... )
 ghdl -a --std=93 -fexplicit -fsynopsys --workdir="$WORK" "${FILES[@]}"
 ghdl -e --std=93 -fexplicit -fsynopsys --syn-binding --workdir="$WORK" icesugar_top
 echo "icesugar_top elaborated OK"
+
+# 4. top-level banner testbench: drive 12 MHz, decode ser_tx, assert the banner.
+echo "=== icesugar_top_tb ==="
+ghdl -a --std=93 -fexplicit -fsynopsys --workdir="$WORK" \
+    targets/boards/icesugar/tb/icesugar_top_tb.vhd
+ghdl -e --std=93 -fexplicit -fsynopsys --syn-binding --workdir="$WORK" icesugar_top_tb
+ghdl -r --std=93 -fexplicit -fsynopsys --syn-binding --workdir="$WORK" icesugar_top_tb \
+    --stop-time=5ms --assert-level=error
