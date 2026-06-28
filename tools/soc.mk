@@ -113,7 +113,7 @@ soc_gen:
 # soc_regen watches the board's yaml inputs and regenerates on change (Ctrl-C to stop).
 soc_regen:
 	@command -v go >/dev/null 2>&1 || (printf "***************************************************************************\n****** Go (https://go.dev/dl/) is required to run the soc_gen tool.   ******\n***************************************************************************\n" && false)
-	(cd $(TOP_DIR)/tools/socgen && go run ./cmd/socgen -watch -root "$(TOP_DIR)" "$(BOARD_NAME)")
+	(cd $(TOP_DIR)/tools/socgen && go run ./cmd/socgen -watch -root "$(TOP_DIR)" -variant "$(VARIANT)" "$(BOARD_NAME)")
 
 ################################################################################
 # Build device tree dtb
