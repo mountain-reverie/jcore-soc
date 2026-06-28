@@ -2,6 +2,11 @@ package elaborate
 
 import "fmt"
 
+// CPUsConfigName is the stable name of the generated cpus configuration
+// declaration. Defined here (not in emit) so that elaborate can reference it
+// without creating an import cycle (emit already imports elaborate).
+const CPUsConfigName = "soc_cpus_config"
+
 // cpuSynth maps (model, decode) to the cpu repo's synth configuration name,
 // the generics it must be bound with, and the extra source files the synth
 // filelist needs. Verified against components/cpu/synth/cpu_synth.sh.
