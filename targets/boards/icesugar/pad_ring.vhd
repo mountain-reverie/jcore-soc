@@ -45,9 +45,9 @@ begin
             rst_out => reset
         );
     clk <= pin_clk;
-    pin_ledb_n <= gpio_do(2);
-    pin_ledg_n <= gpio_do(1);
-    pin_ledr_n <= gpio_do(0);
+    pin_ledb_n <= not gpio_do(2);
+    pin_ledg_n <= not gpio_do(1);
+    pin_ledr_n <= not gpio_do(0);
     uart0_rx <= pin_ser_rx;
     pin_ser_tx <= uart0_tx;
 end;

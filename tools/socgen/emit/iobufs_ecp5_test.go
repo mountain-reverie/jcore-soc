@@ -63,6 +63,25 @@ func TestNonEcp5PinStatementsKeepBuffers(t *testing.T) {
 	}
 }
 
+// TestEcp5PinStatementsInvertedOutput asserts that an inverted output pad on the
+// ecp5/ice40 path emits `pin_x <= not <src>` directly (no intermediate signal).
+func TestEcp5PinStatementsInvertedOutput(t *testing.T) {
+	res := &elaborate.Resolution{
+		Target: "ecp5",
+		Pins: []*elaborate.ResolvedPin{
+			{Net: "ledr_n", Pad: "B3", Out: "gpio_do(0)", OutInvert: true, PadDir: "out", BufferKind: elaborate.BufOBUF},
+		},
+	}
+	stmts, err := pinStatements(res)
+	if err != nil {
+		t.Fatalf("pinStatements: %v", err)
+	}
+	out := printStmts(stmts)
+	if !strings.Contains(out, "pin_ledr_n <= not gpio_do(0)") {
+		t.Errorf("inverted output should emit `pin_ledr_n <= not gpio_do(0)`; got:\n%s", out)
+	}
+}
+
 // TestEcp5PinStatementsBareSignal covers bare-signal pins (Signal set, no
 // In/Out legs). Direction follows PadDir, mirroring the Xilinx BufDirect
 // convention: "in" drives the net; an unset PadDir drives the pad (output).

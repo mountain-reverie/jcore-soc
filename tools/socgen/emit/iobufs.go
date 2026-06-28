@@ -265,8 +265,9 @@ func ecp5PinStmt(rp *elaborate.ResolvedPin) (vhdl.Stmt, error) {
 		return nil, fmt.Errorf("ecp5 pin %q: inout/tristate pads are deferred to Phase 2", rp.Net)
 	case rp.In != "" && rp.Out != "":
 		return nil, fmt.Errorf("ecp5 pin %q: bidirectional pads are deferred to Phase 2", rp.Net)
-	case rp.OutInvert:
-		return nil, fmt.Errorf("ecp5 pin %q: inverted-output pads are deferred to Phase 2", rp.Net)
+	case rp.OutInvert && rp.Out != "":
+		pin := &vhdl.Ident{Name: "pin_" + rp.Net}
+		return concAssign(pin, &vhdl.UnaryExpr{Op: vhdl.NOT, X: &vhdl.Ident{Name: rp.Out}}), nil
 	}
 	pin := &vhdl.Ident{Name: "pin_" + rp.Net}
 	switch {
