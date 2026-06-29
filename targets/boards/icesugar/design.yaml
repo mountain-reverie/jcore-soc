@@ -38,6 +38,8 @@ devices:
   - class: gpio2
     name: gpio0
     base-addr: 0xabcd0000
+    # 8-bit bank (3 RGB LEDs) instead of the full 32-bit one to fit the up5k.
+    generics: { width: 8 }
     ports: { d_o: gpio_do, d_i: gpio_di }
 
 system:

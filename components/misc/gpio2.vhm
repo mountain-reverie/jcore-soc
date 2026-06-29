@@ -5,6 +5,11 @@ use work.cpu2j0_pack.all;
 use work.attr_pack.all;
 
 entity gpio2 is
+  generic (
+    -- Number of GPIO bits. Default 32 keeps the historical full-bank behaviour
+    -- byte-for-byte; boards tight on resources (e.g. iCESugar up5k) may shrink
+    -- it (8 for the 3 RGB LEDs) to recover logic.
+    WIDTH : integer := 32);
   port (
     clk : in std_logic;
     rst : in std_logic;
@@ -13,16 +18,16 @@ entity gpio2 is
     db_o : out cpu_data_i_t;
     irq : out std_logic;
 
-    d_i : in std_logic_vector(31 downto 0);
-    d_o : out std_logic_vector(31 downto 0);
-    d_t : out std_logic_vector(31 downto 0));
+    d_i : in std_logic_vector(WIDTH - 1 downto 0);
+    d_o : out std_logic_vector(WIDTH - 1 downto 0);
+    d_t : out std_logic_vector(WIDTH - 1 downto 0));
   attribute soc_port_irq of irq : signal is true;
 end entity;
 
 architecture arch of gpio2 is
   type reg_t is record
-    d : std_logic_vector(31 downto 0);
-    t : std_logic_vector(31 downto 0);
+    d : std_logic_vector(WIDTH - 1 downto 0);
+    t : std_logic_vector(WIDTH - 1 downto 0);
     db : cpu_data_i_t;
   end record;
 
@@ -38,25 +43,40 @@ begin
   begin
     if db_i.en = '1' and this.db.ack = '0' then
       if db_i.wr = '1' then
+        -- Byte-lane set / in_out / toggle. Iterating per bit (with a static
+        -- in-range guard against WIDTH) keeps every index locally static for
+        -- synthesis and clamps the top byte when WIDTH is not a multiple of 8.
+        -- For WIDTH = 32 this is exactly the historical full-byte behaviour.
         case db_i.a(3 downto 2) is
           when "00" =>
-            for i in 0 to 3 loop
+            for i in 0 to (WIDTH + 7) / 8 - 1 loop
               if db_i.we(i) = '1' then
-                this.d(i * 8 + 7 downto i * 8) := db_i.d(i * 8 + 7 downto i * 8);
+                for b in 0 to 7 loop
+                  if i * 8 + b <= WIDTH - 1 then
+                    this.d(i * 8 + b) := db_i.d(i * 8 + b);
+                  end if;
+                end loop;
               end if;
             end loop;
           when "01" =>
-            for i in 0 to 3 loop
+            for i in 0 to (WIDTH + 7) / 8 - 1 loop
               if db_i.we(i) = '1' then
-                this.t(i * 8 + 7 downto i * 8) := db_i.d(i * 8 + 7 downto i * 8);
+                for b in 0 to 7 loop
+                  if i * 8 + b <= WIDTH - 1 then
+                    this.t(i * 8 + b) := db_i.d(i * 8 + b);
+                  end if;
+                end loop;
               end if;
             end loop;
           when "10" =>
             -- toggle data bits by xor-ing with written data
-            for i in 0 to 3 loop
+            for i in 0 to (WIDTH + 7) / 8 - 1 loop
               if db_i.we(i) = '1' then
-                this.d(i * 8 + 7 downto i * 8) := this.d(i * 8 + 7 downto i * 8)
-                                                  xor db_i.d(i * 8 + 7 downto i * 8);
+                for b in 0 to 7 loop
+                  if i * 8 + b <= WIDTH - 1 then
+                    this.d(i * 8 + b) := this.d(i * 8 + b) xor db_i.d(i * 8 + b);
+                  end if;
+                end loop;
               end if;
             end loop;
           when others =>
@@ -65,13 +85,15 @@ begin
     end if;
     this.db.ack := db_i.en;
 
+    -- Zero-extend the WIDTH-bit value onto the 32-bit data bus.
+    this.db.d := (others => '0');
     case db_i.a(3 downto 2) is
       when "00" =>
-        this.db.d := d_i;
+        this.db.d(WIDTH - 1 downto 0) := d_i;
       when "01" =>
-        this.db.d := this.t;
+        this.db.d(WIDTH - 1 downto 0) := this.t;
       when others =>
-        this.db.d := (others => '0');
+        null;
     end case;
   end process;
 
