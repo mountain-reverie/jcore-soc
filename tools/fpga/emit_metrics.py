@@ -118,12 +118,19 @@ def build_ecp5(parsed, board, commit, variant=None):
 
 def build_ice40(stat, parsed_pnr, board, commit, variant=None):
     """Canonical doc for the iCE40 flow. LC/RAM come from the yosys `stat`
-    (always present); Fmax from nextpnr only when it routed (parsed_pnr.fmax)."""
+    (always present); Fmax from nextpnr only when it routed (parsed_pnr.fmax).
+    yosys synth_ice40 uses SB_* cell names, while nextpnr reports ICESTORM_*
+    names in its utilisation summary (printed even on placement failure).
+    Fall back to nextpnr util so LC counts are available regardless of route."""
     fmax = (parsed_pnr or {}).get("fmax", {})
+    pnr_util = (parsed_pnr or {}).get("util", {})
+    # stat (yosys) takes precedence; nextpnr util is the fallback for cells
+    # like ICESTORM_LC that synth_ice40 does not directly emit.
+    combined = {**pnr_util, **stat}
     metrics_ = []
     for cell, label in NEXTPNR_ICE40_BLOCKS:
-        if cell in stat:
-            metrics_.append(_metric(_vname(board, variant, label), "cells", stat[cell], "smaller"))
+        if cell in combined:
+            metrics_.append(_metric(_vname(board, variant, label), "cells", combined[cell], "smaller"))
     if fmax:
         metrics_.append(_metric(_vname(board, variant, "Fmax"), "MHz",
                                 round(min(fmax.values()), 2), "bigger"))
