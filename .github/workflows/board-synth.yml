@@ -69,7 +69,9 @@ jobs:
       image: ghcr.io/${{ github.repository_owner }}/jcore-cpu-ci:latest
     strategy:
       matrix:
-        board: [ulx3s]
+        include:
+          - { board: ulx3s, variant: j2-direct }
+          - { board: ulx3s, variant: j4-rom }
     defaults:
       run:
         shell: bash
@@ -77,23 +79,62 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      # socgen (Go) regenerates cpus_config.vhd + cpu_synth_files.list for the
+      # selected variant; synth.sh copies them verbatim (gen_synth_sources.sh),
+      # so this step is required to ensure j4-rom synthesizes its own SoC and
+      # not the committed j2-direct default.
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - name: Regenerate SoC for variant
+        run: make ${{ matrix.board }} TARGET=soc_gen VARIANT=${{ matrix.variant }}
       - name: Build bitstream + metrics (gates timing)
-        run: ./targets/boards/${{ matrix.board }}/synth.sh
+        run: VARIANT=${{ matrix.variant }} ./targets/boards/${{ matrix.board }}/synth.sh
       - name: Upload bitstream
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.board }}-bitstream
+          name: ${{ matrix.board }}-${{ matrix.variant }}-bitstream
           path: targets/boards/${{ matrix.board }}/build/${{ matrix.board }}.bit
           if-no-files-found: error
       - name: Upload metrics
         uses: actions/upload-artifact@v4
         with:
-          name: metrics-${{ matrix.board }}
+          name: metrics-${{ matrix.board }}-${{ matrix.variant }}
           path: targets/boards/${{ matrix.board }}/build/metrics.json
           if-no-files-found: error
 
+  bitstream-icesugar:
+    needs: sim
+    runs-on: ubuntu-latest
+    continue-on-error: true   # board is ~103% over UP5K; metrics still upload
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/jcore-cpu-ci:latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Synth (yosys-stat metrics even if nextpnr cannot place)
+        run: ./targets/boards/icesugar/synth.sh
+      - name: Upload metrics
+        if: always()   # synth.sh exits nonzero on the fit failure, but wrote metrics.json
+        uses: actions/upload-artifact@v4
+        with:
+          name: metrics-icesugar-j1
+          path: targets/boards/icesugar/build/metrics.json
+          if-no-files-found: error
+      - name: Upload bitstream (only if it placed)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: icesugar-j1-bitstream
+          path: targets/boards/icesugar/build/icesugar.bin
+          if-no-files-found: ignore
+
   benchmark:
-    needs: bitstream
+    needs: [bitstream, bitstream-icesugar]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
