@@ -1,0 +1,4 @@
+Info:        ICESTORM_LC:  5443/ 5280   103%
+Info:       ICESTORM_RAM:    17/   30    56%
+Info: Max frequency for clock 'clk': 18.40 MHz (FAIL at 12.00 MHz)
+ERROR: Failed to expand region (0, 0) |_> (25, 31) of 5443 ICESTORM_LCs

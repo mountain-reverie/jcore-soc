@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Parse jcore-soc board synthesis output into canonical metric JSON.
 
-ECP5-only, keyed by board name. Parsers are pure (text -> dict) and unit-tested;
+Supports ECP5 and iCE40 flows. Parsers are pure (text -> dict) and unit-tested;
 the CLI wires file reads and writes one canonical JSON. Best-effort: a missing
 field yields no metric rather than an error. Adapted from jcore-cpu synth/metrics.py
 (stripped to the ECP5 board case; adds the nextpnr PASS/FAIL timing-gate signal).
@@ -16,6 +16,12 @@ NEXTPNR_BLOCKS = [
     ("MULT18X18D", "MULT18X18D"),
     ("EHXPLLL", "EHXPLLL"),
     ("TRELLIS_IO", "IO"),
+]
+
+# nextpnr-ice40 utilisation blocks we surface, mapped to dashboard metric labels.
+NEXTPNR_ICE40_BLOCKS = [
+    ("ICESTORM_LC", "LC"),
+    ("ICESTORM_RAM", "RAM"),
 ]
 
 
@@ -41,6 +47,37 @@ def parse_nextpnr_log(text):
     return {"util": util, "fmax": fmax}
 
 
+def parse_nextpnr_ice40_log(text):
+    """nextpnr-ice40 stdout -> {"util": {block: used}, "fmax": {clock: mhz}}.
+    Utilisation rows: "  ICESTORM_LC:  5443/ 5280  103%" (keep `used`). Fmax rows
+    reuse the ECP5 format; clock names are cleaned and the LOWEST per name kept
+    (the binding post-route constraint)."""
+    util, fmax = {}, {}
+    for line in text.splitlines():
+        for blk, _label in NEXTPNR_ICE40_BLOCKS:
+            m = re.search(r"\b%s:\s+(\d+)/" % re.escape(blk), line)
+            if m:
+                util[blk] = int(m.group(1))
+        m = re.search(r"Max frequency for clock '([^']+)':\s+([\d.]+)\s*MHz", line)
+        if m:
+            name = m.group(1).split("$")[-1]
+            val = float(m.group(2))
+            if name not in fmax or val < fmax[name]:
+                fmax[name] = val
+    return {"util": util, "fmax": fmax}
+
+
+def parse_yosys_stat(text):
+    """yosys `stat` (post synth_ice40) -> {cell: count}. Surfaces the ICESTORM_*
+    rows so LC/RAM are available even when nextpnr later fails to place."""
+    out = {}
+    for line in text.splitlines():
+        m = re.search(r"\b(ICESTORM_LC|ICESTORM_RAM|ICESTORM_SPRAM):\s+(\d+)", line)
+        if m:
+            out[m.group(1)] = int(m.group(2))
+    return out
+
+
 def timing_failed(text):
     """True if nextpnr reported a timing violation on any constrained clock.
     nextpnr (run with --timing-allow-fail) prints "(FAIL at <freq> MHz)" when a
@@ -52,7 +89,14 @@ def _metric(name, unit, value, direction):
     return {"name": name, "unit": unit, "value": value, "dir": direction}
 
 
-def build_ecp5(parsed, board, commit):
+def _vname(board, variant, label):
+    """'<board> [<variant>]/<label>' (or '<board>/<label>' when variant is falsy).
+    The space-bracket suffix is what the dashboard regex keys variants on."""
+    head = "%s [%s]" % (board, variant) if variant else board
+    return "%s/%s" % (head, label)
+
+
+def build_ecp5(parsed, board, commit, variant=None):
     """Canonical doc for the ECP5 board flow. `parsed` is parse_nextpnr_log output.
     Metric names are board-prefixed so each board is its own dashboard series.
 
@@ -64,12 +108,26 @@ def build_ecp5(parsed, board, commit):
     metrics_ = []
     for blk, label in NEXTPNR_BLOCKS:
         if blk in util:
-            metrics_.append(_metric("%s/%s" % (board, label), "cells", util[blk], "smaller"))
+            metrics_.append(_metric(_vname(board, variant, label), "cells", util[blk], "smaller"))
     if fmax:
-        metrics_.append(_metric("%s/Fmax" % board, "MHz",
+        metrics_.append(_metric(_vname(board, variant, "Fmax"), "MHz",
                                 round(min(fmax.values()), 2), "bigger"))
     return {"target": "ecp5-lfe5u-85f", "board": board, "commit": commit,
             "metrics": metrics_}
+
+
+def build_ice40(stat, parsed_pnr, board, commit, variant=None):
+    """Canonical doc for the iCE40 flow. LC/RAM come from the yosys `stat`
+    (always present); Fmax from nextpnr only when it routed (parsed_pnr.fmax)."""
+    fmax = (parsed_pnr or {}).get("fmax", {})
+    metrics_ = []
+    for cell, label in NEXTPNR_ICE40_BLOCKS:
+        if cell in stat:
+            metrics_.append(_metric(_vname(board, variant, label), "cells", stat[cell], "smaller"))
+    if fmax:
+        metrics_.append(_metric(_vname(board, variant, "Fmax"), "MHz",
+                                round(min(fmax.values()), 2), "bigger"))
+    return {"target": "ice40-up5k", "board": board, "commit": commit, "metrics": metrics_}
 
 
 def _read(path):
@@ -86,14 +144,29 @@ def main(argv=None):
     import json
     import os
 
-    p = argparse.ArgumentParser(description="emit canonical ECP5 board synth metrics JSON")
+    p = argparse.ArgumentParser(description="emit canonical board synth metrics JSON")
     p.add_argument("--board", required=True)
     p.add_argument("--commit", required=True)
-    p.add_argument("--nextpnr", required=True, help="nextpnr-ecp5 log")
+    p.add_argument("--flow", choices=["ecp5", "ice40"], default="ecp5")
+    p.add_argument("--variant", default=None, help="variant tag for metric names")
+    p.add_argument("--nextpnr", help="nextpnr log (required for ecp5, optional for ice40)")
+    p.add_argument("--yosys-stat", help="yosys stat output (required for ice40)")
     p.add_argument("--out", required=True)
     a = p.parse_args(argv)
 
-    doc = build_ecp5(parse_nextpnr_log(_read(a.nextpnr)), a.board, a.commit)
+    if a.flow == "ecp5":
+        if not a.nextpnr:
+            p.error("--nextpnr is required for ecp5 flow")
+        doc = build_ecp5(parse_nextpnr_log(_read(a.nextpnr)), a.board, a.commit, a.variant)
+    elif a.flow == "ice40":
+        if not a.yosys_stat:
+            p.error("--yosys-stat is required for ice40 flow")
+        stat = parse_yosys_stat(_read(a.yosys_stat))
+        parsed_pnr = parse_nextpnr_ice40_log(_read(a.nextpnr)) if a.nextpnr else {"util": {}, "fmax": {}}
+        doc = build_ice40(stat, parsed_pnr, a.board, a.commit, a.variant)
+    else:
+        p.error("unknown flow: %s" % a.flow)
+
     if not doc["metrics"]:
         print("WARN: no metrics parsed — writing empty doc")
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
