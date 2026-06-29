@@ -67,12 +67,16 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/${{ github.repository_owner }}/jcore-cpu-ci:latest
+    # j2-direct is the production config and hard-gates timing; j4-rom is an
+    # experimental variant whose metrics we want to TRACK even if it misses the
+    # timing gate, so it is non-fatal (continue-on-error).
+    continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false   # variants are independent; one failing must not cancel the other's metrics
       matrix:
         include:
-          - { board: ulx3s, variant: j2-direct }
-          - { board: ulx3s, variant: j4-rom }
+          - { board: ulx3s, variant: j2-direct, experimental: false }
+          - { board: ulx3s, variant: j4-rom,   experimental: true }
     defaults:
       run:
         shell: bash
@@ -103,12 +107,14 @@ jobs:
       - name: Build bitstream + metrics (gates timing)
         run: VARIANT=${{ matrix.variant }} ./targets/boards/${{ matrix.board }}/synth.sh
       - name: Upload bitstream
+        if: always()   # the timing gate may exit nonzero after producing the .bit
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.board }}-${{ matrix.variant }}-bitstream
           path: targets/boards/${{ matrix.board }}/build/${{ matrix.board }}.bit
-          if-no-files-found: error
+          if-no-files-found: ignore
       - name: Upload metrics
+        if: always()   # synth.sh writes metrics.json before the timing gate exits
         uses: actions/upload-artifact@v4
         with:
           name: metrics-${{ matrix.board }}-${{ matrix.variant }}
@@ -147,12 +153,11 @@ jobs:
 
   benchmark:
     needs: [bitstream, bitstream-icesugar]
-    # bitstream-icesugar is EXPECTED to fail (board is ~103% over UP5K) — its
-    # metrics still upload (if: always()). A failed `needs` job would otherwise
-    # skip this job, so run whenever the ULX3S bitstream matrix succeeded,
-    # regardless of the iCESugar fit-failure; the empty-array guard below covers
-    # the no-artifacts case.
-    if: always() && needs.bitstream.result == 'success'
+    # Chart whatever metrics were produced. Synth legs that miss their gate
+    # (j4-rom timing, iCESugar UP5K fit) are non-fatal and still upload metrics
+    # via `if: always()`, so run regardless of any leg's pass/fail; the
+    # empty-array guard below covers the genuinely-no-artifacts case.
+    if: always()
     runs-on: ubuntu-24.04
     permissions:
       contents: read
