@@ -116,7 +116,7 @@ begin
             uart0_rx => uart0_rx,
             uart0_tx => uart0_tx
         );
-    clkgen : entity work.clkgen(sim)
+    clkgen : entity work.clkgen(ecp5)
         port map (
             clk => clk_sys,
             clk_in => clk_25mhz,
@@ -152,6 +152,7 @@ begin
             dq_oe => sd_dq_oe
         );
     gpio_di(0) <= pin_btn0;
+    ext_rst <= pin_btn0;
     gpio_di(1) <= pin_btn1;
     gpio_di(2) <= pin_btn2;
     gpio_di(3) <= pin_btn3;

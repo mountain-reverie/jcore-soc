@@ -28,6 +28,7 @@ include $(TOOLS_DIR)/soc.mk
 # wrapper, and the reset synchronizer. Append so they land in vhdl_list.txt.
 VHDL_FILES += targets/boards/ulx3s/cpus_one_m0_arch.vhd
 VHDL_FILES += targets/boards/ulx3s/ulx3s_clkgen.vhd
+VHDL_FILES += targets/boards/ulx3s/ulx3s_clkgen_ecp5.vhd
 VHDL_FILES += targets/boards/ulx3s/reset_sync.vhd
 VHDL_FILES += targets/boards/ulx3s/aic_irq_gen.vhd
 # SDRAM controller + ASIC-portable IO cells (the BufEntity inout pad target).
