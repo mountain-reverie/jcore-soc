@@ -40,12 +40,17 @@ func TestEcp5PinSingleLegUnchanged(t *testing.T) {
 		{&elaborate.ResolvedPin{Net: "btn1", In: "gpio_di(1)", PadDir: "in"}, "gpio_di(1) <= pin_btn1"},
 		{&elaborate.ResolvedPin{Net: "led0", Out: "gpio_do(0)", PadDir: "out"}, "pin_led0 <= gpio_do(0)"},
 		{&elaborate.ResolvedPin{Net: "clk_25mhz", Signal: "clk_25mhz", PadDir: "in"}, "clk_25mhz <= pin_clk_25mhz"},
+		{&elaborate.ResolvedPin{Net: "dbg", Signal: "dbg_sig", PadDir: "out"}, "pin_dbg <= dbg_sig"},
 	}
 	for _, c := range cases {
-		out, err := renderPinStmts(t, c.rp)
+		stmts, err := ecp5PinStmt(c.rp)
 		if err != nil {
 			t.Fatalf("%s: %v", c.rp.Net, err)
 		}
+		if len(stmts) != 1 {
+			t.Errorf("%s: expected exactly 1 statement, got %d", c.rp.Net, len(stmts))
+		}
+		out := printStmts(stmts)
 		if !strings.Contains(out, c.want) {
 			t.Errorf("%s: want %q, got:\n%s", c.rp.Net, c.want, out)
 		}
