@@ -4,5 +4,3 @@
      SB_DFFE                       418
      SB_LUT4                      5443
      SB_RAM40_4K                     9
-   ICESTORM_LC:                   5443
-   ICESTORM_RAM:                    17
