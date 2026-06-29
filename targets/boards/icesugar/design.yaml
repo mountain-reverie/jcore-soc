@@ -42,6 +42,11 @@ devices:
     generics: { width: 8 }
     ports: { d_o: gpio_do, d_i: gpio_di }
 
+# Single J1 master: drop cpu1's peripheral bus so socgen connects the one master
+# directly (no multi_master_bus_mux) — saves LCs on the UP5K.
+peripheral-buses:
+  cpu1: false
+
 system:
   data-bus-decode: exact
 

@@ -28,8 +28,6 @@ entity devices is
 end;
 architecture impl of devices is
     signal gpio_di : std_logic_vector(7 downto 0);
-    signal cpu01_periph_dbus_i : cpu_data_i_t;
-    signal cpu01_periph_dbus_o : cpu_data_o_t;
     type device_t is (NONE, DEV_GPIO0, DEV_UART0);
     signal active_dev : device_t;
     type data_bus_i_t is array (device_t'left to device_t'right) of cpu_data_i_t;
@@ -52,22 +50,13 @@ architecture impl of devices is
         return NONE;
     end;
 begin
-    cpus_mux : entity work.multi_master_bus_mux
-        port map (
-            clk => clk_sys,
-            rst => reset,
-            m1_i => cpu0_periph_dbus_i,
-            m1_o => cpu0_periph_dbus_o,
-            m2_i => cpu1_periph_dbus_i,
-            m2_o => cpu1_periph_dbus_o,
-            slave_i => cpu01_periph_dbus_i,
-            slave_o => cpu01_periph_dbus_o
-        );
+    -- Disconnected peripheral buses
+    cpu1_periph_dbus_i <= loopback_bus(cpu1_periph_dbus_o);
     -- multiplex data bus to and from devices
-    active_dev <= decode_address(cpu01_periph_dbus_o.a);
-    cpu01_periph_dbus_i <= devs_bus_i(active_dev);
+    active_dev <= decode_address(cpu0_periph_dbus_o.a);
+    cpu0_periph_dbus_i <= devs_bus_i(active_dev);
     bus_split : for dev in device_t'left to device_t'right generate
-        devs_bus_o(dev) <= mask_data_o(cpu01_periph_dbus_o, to_bit(dev = active_dev));
+        devs_bus_o(dev) <= mask_data_o(cpu0_periph_dbus_o, to_bit(dev = active_dev));
     end generate;
     devs_bus_i(NONE) <= loopback_bus(devs_bus_o(NONE));
     -- Instantiate devices
