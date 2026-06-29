@@ -84,7 +84,9 @@ begin
         );
     uart0 : entity work.uartlitedb(arch)
         generic map (
-            fclk => CFG_CLK_CPU_FREQ_HZ
+            fclk => CFG_CLK_CPU_FREQ_HZ,
+            rx_fifo_len => 2,
+            tx_fifo_len => 2
         )
         port map (
             clk => clk_sys,

@@ -27,26 +27,29 @@ constant UART_RX_FIFO_LEN : integer := 32;
 constant UART_TX_FIFO_LEN : integer := 16;
 constant UART_RX_INT_TIMEOUT       : integer := 128;
 
-type uart_tx_fifo_t is array (0 to UART_TX_FIFO_LEN-1) of std_logic_vector(7 downto 0);
+-- FIFO storage array types are UNCONSTRAINED so that the actual depth is
+-- fixed by the entity generics (see uart.vhm). The UART_*_FIFO_LEN constants
+-- above remain the DEFAULT depths.
+type uart_tx_fifo_t is array (natural range <>) of std_logic_vector(7 downto 0);
 type uart_tx_fifo_w_t is record
-   a   : integer range 0 to UART_TX_FIFO_LEN-1;
+   a   : natural;
    d   : std_logic_vector(7 downto 0);
    we  : std_logic;
 end record;
 type uart_tx_fifo_p_t is record
-   wa  : integer range 0 to UART_TX_FIFO_LEN-1;
-   ra  : integer range 0 to UART_TX_FIFO_LEN-1;
+   wa  : natural;
+   ra  : natural;
 end record;
 
-type uart_rx_fifo_t is array (0 to UART_RX_FIFO_LEN-1) of std_logic_vector(7 downto 0);
+type uart_rx_fifo_t is array (natural range <>) of std_logic_vector(7 downto 0);
 type uart_rx_fifo_w_t is record
-   a   : integer range 0 to UART_RX_FIFO_LEN-1;
+   a   : natural;
    d   : std_logic_vector(7 downto 0);
    we  : std_logic;
 end record;
 type uart_rx_fifo_p_t is record
-   wa  : integer range 0 to UART_RX_FIFO_LEN-1;
-   ra  : integer range 0 to UART_RX_FIFO_LEN-1;
+   wa  : natural;
+   ra  : natural;
 end record;
 
 type uart_state_t is ( IDLE, START, DATA, STOP );
@@ -84,7 +87,9 @@ constant UART_REG_RESET : uart_reg_t := ( UART_ENGINE_RESET, (0,0), UART_ENGINE_
 component uartlite generic (
    intcfg : integer := 1;
    fclk   : real := 31.25e6;
-   bps    : real := 115.2e3);
+   bps    : real := 115.2e3;
+   rx_fifo_len : integer := UART_RX_FIFO_LEN;
+   tx_fifo_len : integer := UART_TX_FIFO_LEN);
                    port (
    rst    : in  std_logic;
    clk    : in  std_logic;

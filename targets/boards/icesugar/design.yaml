@@ -34,6 +34,7 @@ devices:
     name: uart0
     base-addr: 0xabcd0100
     ports: { rx: uart0_rx, tx: uart0_tx }
+    generics: { rx_fifo_len: 2, tx_fifo_len: 2 }
   - class: gpio2
     name: gpio0
     base-addr: 0xabcd0000

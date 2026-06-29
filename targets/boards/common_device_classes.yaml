@@ -12,6 +12,8 @@ uartlite:
     - { name: ctrl, width: 1, addr: 15 }
   generics:
     fclk: CFG_CLK_CPU_FREQ_HZ
+    # rx_fifo_len / tx_fifo_len default to the entity defaults (32 / 16). A
+    # board may shrink them per-device (see icesugar: 2 / 2 for the up5k fit).
 
 uart16550:
   dt-name: serial
