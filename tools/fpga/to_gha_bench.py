@@ -8,6 +8,9 @@ Each entry: {"name","unit","value","extra"}. `name` is prefixed with the target
 each board is a distinct series automatically. `extra` carries the board.
 Output is sorted by name for deterministic diffs. Adapted from jcore-cpu
 synth/to_gha_bench.py (board-keyed; no J1/J2/J4 variant machinery).
+
+Metric names may carry a `[<variant>]` suffix (e.g. `ulx3s [j4-rom]/LUT4`); it is
+preserved verbatim so github-action-benchmark keys each variant as its own series.
 """
 import json
 
