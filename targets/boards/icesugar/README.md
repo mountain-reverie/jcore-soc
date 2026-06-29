@@ -124,24 +124,38 @@ docker run --rm \
 
 ## Known Constraints / Status
 
-**As of 2026-06-28** the J2/J1 + ring-bus + UART + GPIO SoC exceeds the
-UP5K resource limits when targeting the full J1 CPU:
+The GHDL simulation (`sim.sh`) **passes** — the J1 SoC is functionally correct
+(boots from EBR, emits the UART banner). The physical UP5K fit is currently
+**~3% over** on logic and is a tracked follow-up.
 
-- ICESTORM_LC: **5838 / 5280 (110%)** — over capacity
-- ICESTORM_RAM: **41 / 30 (136%)** — over capacity
-- nextpnr-ice40 exits with error (routing impossible at >100%)
+Current synth fit (after the optimizations below):
 
-Additionally, yosys emits a `$assert` unsupported-cell error because
-nextpnr-ice40 does not implement formal-verification cells.
+- ICESTORM_LC: **5443 / 5280 (103%)** — ~163 LC over; nextpnr-ice40 cannot place
+- ICESTORM_RAM: **17 / 30 (56%)** — fits
+- `$assert` cells: handled (stripped in `synth.sh`)
 
-**Root cause:** the J1 CPU core with register file, multiplier, shifter,
-and the ring-bus interconnect is too large for the 5280-LC UP5K device
-with stock EBR (no SPRAM). The `$assert` issue is secondary.
+### Optimizations already applied (893 LC reclaimed, 6336 → 5443)
 
-**Remediation paths (out of scope for this task):**
-1. Replace EBR register file with iCE40 SPRAM (4× 256 kbit = 1 Mbit available).
-2. Strip the multiplier / barrel-shift units (software emulation).
-3. Target the iCE40 HX8K (8k LUTs) or UP5K with SPRAM if a future board revision allows.
+All default-preserving — other boards are byte-unaffected:
 
-The GHDL simulation (`sim.sh`) passes — the J1 SoC is functionally
-correct; only the physical fit on the UP5K is too tight.
+1. **uartlite RX/TX FIFO depth is a generic** (defaults 32/16; iCESugar uses
+   2/2 for the TX-polling demo). Saved ~734 LC.
+2. **gpio2 width is a generic** (default 32; iCESugar uses 8 for the 3 RGB
+   LEDs). Saved ~85 LC.
+3. **Single-CPU peripheral bus** (`peripheral-buses: cpu1: false`) drops the
+   `multi_master_bus_mux`. Saved ~74 LC.
+4. Boot EBR right-sized (`c_addr_width => 11`, 2 KB) — RAM now well under budget.
+
+### Remaining levers to close the last ~163 LC (follow-up; higher risk)
+
+These touch shared CPU/bus code and carry regression risk to all J-Core boards,
+so they were left for a dedicated optimization pass:
+
+1. Trim the unused `data_bus_pkg` DEV slots (iCESugar uses 2 of 4 device regions
+   on the instr/data buses; the 4-way muxes are wider than needed).
+2. Reduce uartlite FIFOs to 1/1 (a few more LC).
+3. J1 core-level reduction, or move the register file to iCE40 SPRAM.
+4. An HX8K (7680 LC) board variant if a real UP5K bitstream isn't required.
+
+Note: SPRAM (planned as a separate spec) helps **RAM**, not LCs, so it does
+**not** by itself close the logic overage.
