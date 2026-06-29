@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Build the iCESugar bitstream: ghdl + yosys synth_ice40 -> nextpnr-ice40 (UP5K,
-# SG48) -> icepack. The board top is the hand-written icesugar_top; the
-# soc_gen-emitted icesugar.pcf names pins for the generated pad_ring (pin_*
-# prefix), so we derive an icesugar_top-matching pcf (unprefixed) at build time.
+# SG48) -> icepack. The board top is the soc_gen-generated pad_ring; the
+# soc_gen-emitted icesugar.pcf names pins (pin_* prefix) that match pad_ring's
+# ports directly, so it is passed to nextpnr as-is (no prefix rewrite).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 WORK="${WORK:-/tmp/icesynth}"
@@ -23,17 +23,14 @@ make icesugar TARGET=soc_gen
 # 3. file list.
 source targets/boards/icesugar/filelist.sh   # defines FILES=( ... )
 
-# 4. derive an icesugar_top-matching pcf (strip the pad_ring pin_ prefix).
-sed 's/set_io pin_/set_io /' targets/boards/icesugar/icesugar.pcf > "$OUT/icesugar.pcf"
-
-# 5. synthesize to iCE40 JSON, place & route on the UP5K (SG48), pack.
+# 4. synthesize to iCE40 JSON, place & route on the UP5K (SG48), pack.
 GHDL_BASE="ghdl --std=93 -fexplicit -fsynopsys --syn-binding --workdir=$WORK ${FILES[*]}"
 COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 # synth_ice40 maps the design; then strip the VHDL assert cells ($check/$print/
 # $assert) that nextpnr-ice40 rejects before writing the json it consumes.
 # stat output is captured in yosys.log so emit_metrics.py can read LC/RAM counts
 # even when nextpnr later fails to place.
-yosys -m ghdl -p "$GHDL_BASE -e icesugar_top; synth_ice40 -top icesugar_top; \
+yosys -m ghdl -p "$GHDL_BASE -e pad_ring; synth_ice40 -top pad_ring; \
   check -assert; chformal -remove; delete t:\$check t:\$print; stat; \
   write_json $OUT/icesugar.json" 2>&1 | tee "$OUT/yosys.log"
 
@@ -41,7 +38,7 @@ yosys -m ghdl -p "$GHDL_BASE -e icesugar_top; synth_ice40 -top icesugar_top; \
 # before metrics are emitted. Capture its log; success also produces the bitstream.
 set +e
 nextpnr-ice40 --up5k --package sg48 --json "$OUT/icesugar.json" \
-  --pcf "$OUT/icesugar.pcf" --asc "$OUT/icesugar.asc" 2>&1 | tee "$OUT/nextpnr.log"
+  --pcf targets/boards/icesugar/icesugar.pcf --asc "$OUT/icesugar.asc" 2>&1 | tee "$OUT/nextpnr.log"
 PNR_RC=${PIPESTATUS[0]}
 set -e
 [ "$PNR_RC" -eq 0 ] && icepack "$OUT/icesugar.asc" "$OUT/icesugar.bin" && echo "built $OUT/icesugar.bin" || \

@@ -64,7 +64,7 @@ FILES+=(
   $BRD/cpus_config.vhd
   $BRD/devices.vhd
   $BRD/soc.vhd
-  # Board top + 12 MHz clkgen.
+  # Board top (soc_gen-generated pad_ring) + 12 MHz clkgen.
   $BRD/ice_clkgen.vhd
-  $BRD/icesugar_top.vhd
+  $BRD/pad_ring.vhd
 )

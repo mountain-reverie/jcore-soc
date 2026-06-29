@@ -26,9 +26,9 @@ architecture sim of icesugar_top_tb is
     return false;
   end function;
 begin
-  uut : entity work.icesugar_top(rtl)
-    port map (clk => clk, ser_rx => ser_rx, ser_tx => ser_tx,
-              ledr_n => ledr_n, ledg_n => ledg_n, ledb_n => ledb_n);
+  uut : entity work.pad_ring(impl)
+    port map (pin_clk => clk, pin_ser_rx => ser_rx, pin_ser_tx => ser_tx,
+              pin_ledr_n => ledr_n, pin_ledg_n => ledg_n, pin_ledb_n => ledb_n);
 
   clk <= not clk after CLK_PER/2 when not done else '0';
 
