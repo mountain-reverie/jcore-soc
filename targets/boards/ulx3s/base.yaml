@@ -43,6 +43,7 @@ top-entities:
 padring-entities:
   clkgen:
     entity: clkgen
+    architecture: ecp5
     ports:
       clk_in: clk_25mhz
       rst_in: ext_rst
