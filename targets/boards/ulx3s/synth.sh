@@ -59,8 +59,9 @@ ecppack "$OUT/ulx3s.config" "$OUT/ulx3s.bit"
 echo "built $OUT/ulx3s.bit"
 
 # 6. emit synthesis metrics (utilisation + Fmax) for the dashboard.
+VARIANT="${VARIANT:-j2-direct}"
 COMMIT="${GITHUB_SHA:-$(git rev-parse HEAD)}"
-python3 tools/fpga/emit_metrics.py --board ulx3s --commit "$COMMIT" \
+python3 tools/fpga/emit_metrics.py --board ulx3s --variant "$VARIANT" --commit "$COMMIT" \
   --nextpnr "$OUT/nextpnr.log" --out "$OUT/metrics.json"
 
 # 7. timing gate: fail the build if nextpnr reported a timing violation on any
