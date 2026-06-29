@@ -34,8 +34,8 @@ make icesugar TARGET=soc_gen
 # 3. analyze the full design and elaborate the board top.
 source targets/boards/icesugar/filelist.sh   # defines FILES=( ... )
 ghdl -a --std=93 -fexplicit -fsynopsys --workdir="$WORK" "${FILES[@]}"
-ghdl -e --std=93 -fexplicit -fsynopsys --syn-binding --workdir="$WORK" icesugar_top
-echo "icesugar_top elaborated OK"
+ghdl -e --std=93 -fexplicit -fsynopsys --syn-binding --workdir="$WORK" pad_ring
+echo "pad_ring elaborated OK"
 
 # 4. top-level banner testbench: drive 12 MHz, decode ser_tx, assert the banner.
 echo "=== icesugar_top_tb ==="
