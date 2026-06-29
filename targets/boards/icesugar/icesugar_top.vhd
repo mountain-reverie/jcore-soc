@@ -21,7 +21,7 @@ end entity;
 architecture rtl of icesugar_top is
   signal clk_cpu   : std_logic;
   signal rst       : std_logic;
-  signal gpio_do   : std_logic_vector(31 downto 0);
+  signal gpio_do   : std_logic_vector(7 downto 0);
   signal uart0_rx  : std_logic;
   signal uart0_tx  : std_logic;
 begin
