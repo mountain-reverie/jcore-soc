@@ -244,15 +244,14 @@ func ecp5PinStatements(res *elaborate.Resolution) ([]vhdl.Stmt, error) {
 	return stmts, errors.Join(errs...)
 }
 
-// ecp5PinStmt emits the direct concurrent assignment that wires one single-ended
-// pad to its internal net (no vendor buffer). Direction follows the legs, with
-// bare-signal direction mirroring the Xilinx BufDirect convention (PadDir "in"
-// drives the net, otherwise drives the pad). It reuses outExpr/inExpr so the
-// Signal fallback and constant outputs are handled the same way as the Xilinx
-// path. Pin shapes whose ECP5 handling is deferred to Phase 2 — differential,
-// inout/tristate (OutEn), bidirectional (both legs), and inverted outputs (which
-// need the inverted-intermediate machinery PadRing builds only for Xilinx) —
-// return an explicit error rather than emitting wrong hardware.
+// ecp5PinStmt emits the direct concurrent assignment(s) that wire one single-ended
+// pad to its internal net (no vendor buffer). The device leg handles In/Out/OutConst
+// following the Xilinx path logic. The signal leg, when rp.Signal != "", wires the
+// named internal signal directly: for input pads (PadDir "in"), `signal <= pad`;
+// for output pads, `pad <= signal`. Pin shapes whose ECP5 handling is deferred to
+// Phase 2 — differential, inout/tristate (OutEn), bidirectional (both legs), and
+// inverted outputs (which need the inverted-intermediate machinery PadRing builds
+// only for Xilinx) — return an explicit error rather than emitting wrong hardware.
 func ecp5PinStmt(rp *elaborate.ResolvedPin) ([]vhdl.Stmt, error) {
 	switch {
 	case rp.BufferKind == elaborate.BufEntity:
