@@ -234,14 +234,12 @@ func ecp5PinStatements(res *elaborate.Resolution) ([]vhdl.Stmt, error) {
 	var stmts []vhdl.Stmt
 	var errs []error
 	for _, rp := range sortedPins(res) {
-		st, err := ecp5PinStmt(rp)
+		sts, err := ecp5PinStmt(rp)
 		if err != nil {
 			errs = append(errs, err)
 			continue
 		}
-		if st != nil {
-			stmts = append(stmts, st)
-		}
+		stmts = append(stmts, sts...)
 	}
 	return stmts, errors.Join(errs...)
 }
@@ -255,7 +253,7 @@ func ecp5PinStatements(res *elaborate.Resolution) ([]vhdl.Stmt, error) {
 // inout/tristate (OutEn), bidirectional (both legs), and inverted outputs (which
 // need the inverted-intermediate machinery PadRing builds only for Xilinx) —
 // return an explicit error rather than emitting wrong hardware.
-func ecp5PinStmt(rp *elaborate.ResolvedPin) (vhdl.Stmt, error) {
+func ecp5PinStmt(rp *elaborate.ResolvedPin) ([]vhdl.Stmt, error) {
 	switch {
 	case rp.BufferKind == elaborate.BufEntity:
 		return nil, nil // pad is owned by a padring-entity; emit nothing here
@@ -265,21 +263,34 @@ func ecp5PinStmt(rp *elaborate.ResolvedPin) (vhdl.Stmt, error) {
 		return nil, fmt.Errorf("ecp5 pin %q: inout/tristate pads are deferred to Phase 2", rp.Net)
 	case rp.In != "" && rp.Out != "":
 		return nil, fmt.Errorf("ecp5 pin %q: bidirectional pads are deferred to Phase 2", rp.Net)
-	case rp.OutInvert && rp.Out != "":
-		pin := &vhdl.Ident{Name: "pin_" + rp.Net}
-		return concAssign(pin, &vhdl.UnaryExpr{Op: vhdl.NOT, X: &vhdl.Ident{Name: rp.Out}}), nil
 	}
 	pin := &vhdl.Ident{Name: "pin_" + rp.Net}
+	var stmts []vhdl.Stmt
+	// device leg
 	switch {
+	case rp.OutInvert && rp.Out != "":
+		stmts = append(stmts, concAssign(pin, &vhdl.UnaryExpr{Op: vhdl.NOT, X: &vhdl.Ident{Name: rp.Out}}))
 	case rp.In != "": // input pad: internal <= pin
-		return concAssign(inExpr(rp), pin), nil
+		stmts = append(stmts, concAssign(inExpr(rp), pin))
 	case rp.Out != "" || rp.OutConst != "": // output pad: pin <= internal (incl. constant)
-		return concAssign(pin, outExpr(rp)), nil
-	case rp.Signal != "" && rp.PadDir == "in": // bare signal input: net <= pad
-		return concAssign(inExpr(rp), pin), nil
-	case rp.Signal != "": // bare signal output (PadDir "out" or unset): pad <= net
-		return concAssign(pin, outExpr(rp)), nil
-	default:
+		stmts = append(stmts, concAssign(pin, outExpr(rp)))
+	}
+	// signal leg: a pad whose rule has a `signal:` target wires that internal
+	// signal too (in addition to any device leg). Direction follows PadDir.
+	// We use &vhdl.Ident{Name: rp.Signal} directly — identical to what the old
+	// bare-signal path produced via inExpr/outExpr (which fall through to
+	// rp.Signal when In/Out are empty). Complex refs like "sd_cmd.a(0)" are
+	// rendered as-is by vhdl.Ident, matching the old path byte-for-byte.
+	if rp.Signal != "" {
+		sig := &vhdl.Ident{Name: rp.Signal}
+		if rp.PadDir == "in" {
+			stmts = append(stmts, concAssign(sig, pin)) // signal <= pad
+		} else {
+			stmts = append(stmts, concAssign(pin, sig)) // pad <= signal
+		}
+	}
+	if len(stmts) == 0 {
 		return nil, fmt.Errorf("ecp5 pin %q: unsupported pin shape (no leg or signal)", rp.Net)
 	}
+	return stmts, nil
 }

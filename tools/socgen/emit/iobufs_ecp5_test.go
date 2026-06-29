@@ -8,6 +8,50 @@ import (
 	"github.com/j-core/jcore-soc/tools/socgen/vhdl"
 )
 
+// renderPinStmts calls ecp5PinStmt and renders all returned statements to VHDL text.
+func renderPinStmts(t *testing.T, rp *elaborate.ResolvedPin) (string, error) {
+	t.Helper()
+	stmts, err := ecp5PinStmt(rp)
+	if err != nil {
+		return "", err
+	}
+	return printStmts(stmts), nil
+}
+
+func TestEcp5PinDeviceAndSignalLegsBothEmitted(t *testing.T) {
+	// btn0: input pad feeding gpio_di(0) AND the internal ext_rst signal.
+	rp := &elaborate.ResolvedPin{Net: "btn0", Pad: "D6", In: "gpio_di(0)", Signal: "ext_rst", PadDir: "in"}
+	out, err := renderPinStmts(t, rp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"gpio_di(0) <= pin_btn0", "ext_rst <= pin_btn0"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+func TestEcp5PinSingleLegUnchanged(t *testing.T) {
+	cases := []struct {
+		rp   *elaborate.ResolvedPin
+		want string
+	}{
+		{&elaborate.ResolvedPin{Net: "btn1", In: "gpio_di(1)", PadDir: "in"}, "gpio_di(1) <= pin_btn1"},
+		{&elaborate.ResolvedPin{Net: "led0", Out: "gpio_do(0)", PadDir: "out"}, "pin_led0 <= gpio_do(0)"},
+		{&elaborate.ResolvedPin{Net: "clk_25mhz", Signal: "clk_25mhz", PadDir: "in"}, "clk_25mhz <= pin_clk_25mhz"},
+	}
+	for _, c := range cases {
+		out, err := renderPinStmts(t, c.rp)
+		if err != nil {
+			t.Fatalf("%s: %v", c.rp.Net, err)
+		}
+		if !strings.Contains(out, c.want) {
+			t.Errorf("%s: want %q, got:\n%s", c.rp.Net, c.want, out)
+		}
+	}
+}
+
 func printStmts(stmts []vhdl.Stmt) string {
 	df := &vhdl.DesignFile{
 		Units: []vhdl.DesignUnit{
