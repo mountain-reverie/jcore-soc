@@ -89,6 +89,10 @@ jobs:
           go-version: "1.26"
       - name: Regenerate SoC for variant
         run: |
+          # The checkout runs as a different user than the container, so git
+          # refuses repo ops ("dubious ownership"); allow them. This also lets
+          # synth.sh's `git rev-parse` stamp a real commit into the metrics.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           make ${{ matrix.board }} TARGET=soc_gen VARIANT=${{ matrix.variant }}
           # socgen's LPF emitter currently drops the SDRAM bus constraints
           # (sdram_d/sdram_dqm), which nextpnr rejects as unconstrained IO. The
