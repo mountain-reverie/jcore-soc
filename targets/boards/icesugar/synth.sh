@@ -49,7 +49,7 @@ set -e
 
 python3 tools/fpga/emit_metrics.py --flow ice40 --board icesugar --variant j1 \
   --commit "$COMMIT" --yosys-stat "$OUT/yosys.log" \
-  $([ "$PNR_RC" -eq 0 ] && echo --nextpnr "$OUT/nextpnr.log") \
+  --nextpnr "$OUT/nextpnr.log" \
   --out "$OUT/metrics.json"
 
 # Surface the fit failure to local callers AFTER metrics are written (CI marks the
