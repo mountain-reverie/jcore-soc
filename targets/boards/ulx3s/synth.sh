@@ -64,16 +64,25 @@ COMMIT="${GITHUB_SHA:-$(git rev-parse HEAD)}"
 python3 tools/fpga/emit_metrics.py --board ulx3s --variant "$VARIANT" --commit "$COMMIT" \
   --nextpnr "$OUT/nextpnr.log" --out "$OUT/metrics.json"
 
-# 7. timing gate: fail the build if nextpnr reported a timing violation on any
-#    constrained clock (declared-clock closure). The bitstream + metrics above are
-#    already written, so local inspection still works; CI marks the commit red and
-#    the benchmark job (needs: bitstream) skips it (failing commits don't chart).
-#    Relies on nextpnr always printing "(PASS at N MHz)"/"(FAIL at N MHz)" under
-#    --timing-allow-fail; a nextpnr crash (not a timing miss) fails the pipeline
-#    earlier via pipefail (the `| tee` above) / ecppack, so it cannot false-green.
-if grep -qE '\(FAIL at [0-9.]+ *MHz\)' "$OUT/nextpnr.log"; then
-  echo "TIMING GATE: nextpnr reports a timing violation (see $OUT/nextpnr.log):" >&2
-  grep -E '\(FAIL at [0-9.]+ *MHz\)' "$OUT/nextpnr.log" >&2
+# 7. timing gate: fail the build only if a constrained clock misses its declared
+#    frequency at FINAL (post-route) timing. The bitstream + metrics above are
+#    already written, so local inspection still works.
+#    nextpnr (under --timing-allow-fail) prints the per-clock
+#    "Max frequency ... (PASS/FAIL at N MHz)" report MULTIPLE times — intermediate
+#    estimates after placement and each route iteration, then the final post-route
+#    values. Only the LAST verdict per clock is authoritative (the same "last wins"
+#    rule emit_metrics uses for Fmax); grepping for any "(FAIL at ...)" line
+#    false-positives on a superseded intermediate estimate (e.g. j4-rom reported an
+#    early 19.78 MHz FAIL on sdram_clk but a final 28.77 MHz PASS).
+#    A nextpnr crash (not a timing miss) fails earlier via pipefail / ecppack.
+if ! awk '
+  /Max frequency for clock/ {
+    line = $0; sub(/.*clock '\''/, "", line); sub(/'\''.*/, "", line)
+    last[line] = ($0 ~ /\(FAIL at/) ? "FAIL" : "PASS"
+  }
+  END { bad = 0; for (c in last) if (last[c] == "FAIL") { print "  " c > "/dev/stderr"; bad = 1 } exit bad }
+' "$OUT/nextpnr.log"; then
+  echo "TIMING GATE: a constrained clock misses its declared frequency at final timing (see $OUT/nextpnr.log):" >&2
   exit 1
 fi
-echo "timing OK (all constrained clocks meet their declared frequency)"
+echo "timing OK (all constrained clocks meet their declared frequency at final timing)"
