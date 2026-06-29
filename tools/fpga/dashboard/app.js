@@ -6,11 +6,13 @@
 window.__SIZE__ = null;
 window.__SPEED__ = null;
 
-// 85F resource budgets keyed by the metric base name suffix.
+// Resource budgets keyed by the metric base name suffix.
 var BUDGET = {
   "LUT4": 83640,
   "DP16KD": 208,
   "MULT18X18D": 156,
+  "LC": 5280,
+  "RAM": 30,
 };
 var BOARD_COLOR = ["#1f77b4", "#2ca02c", "#e6b800", "#d62728"]; // assigned per board
 
@@ -47,6 +49,20 @@ function boot() {
     .catch(function (e) { console.error("no benchmark data available", e); });
 }
 
+// Variant suffix: "ulx3s [j4-rom]/LUT4" (after the " · ") -> "j4-rom"; "" if none.
+function variantOf2(name) {
+  var m = /\[([^\]]+)\]\//.exec(name || "");
+  return m ? m[1] : "";
+}
+// Chart key: strip the " [variant]" so all variants of a board+metric group on one chart.
+function baseName2(name) {
+  return (name || "").replace(/\s\[[^\]]+\]\//, "/");
+}
+// Line label within a chart: the variant, or the board when there is no variant.
+function seriesLabel(name, extra) {
+  return variantOf2(name) || boardOf(extra, name);
+}
+
 function boardOf(extra, name) {
   if (extra) return extra;
   // fall back to the "<board>/..." prefix after the " · "
@@ -55,18 +71,19 @@ function boardOf(extra, name) {
   return (tail || "").split("/")[0];
 }
 
-// -> { metricName: { board: [ {x: date, y: value} ] } }
+// -> { baseName: { seriesLabel: [ {x: date, y: value} ] } }
 function seriesByName(data) {
   var out = {};
   if (!data || !data.entries) return out;
   Object.keys(data.entries).forEach(function (suite) {
     data.entries[suite].forEach(function (run) {
       run.benches.forEach(function (b) {
-        var board = boardOf(b.extra, b.name);
-        if (b.unit) METRIC_UNIT[b.name] = b.unit;
-        if (!out[b.name]) out[b.name] = {};
-        if (!out[b.name][board]) out[b.name][board] = [];
-        out[b.name][board].push({ x: run.date, y: b.value });
+        var chart = baseName2(b.name);
+        var line = seriesLabel(b.name, b.extra);
+        if (b.unit) METRIC_UNIT[chart] = b.unit;
+        if (!out[chart]) out[chart] = {};
+        if (!out[chart][line]) out[chart][line] = [];
+        out[chart][line].push({ x: run.date, y: b.value });
       });
     });
   });
@@ -82,11 +99,11 @@ function metricSuffix(name) {
 function lineCard(parent, name, boardMap) {
   var card = document.createElement("div"); card.className = "card";
   var cv = document.createElement("canvas"); card.appendChild(cv); parent.appendChild(card);
-  var boards = Object.keys(boardMap).sort();
-  var datasets = boards.map(function (board, i) {
-    var pts = boardMap[board].slice().sort(function (a, b) { return a.x - b.x; });
+  var lines = Object.keys(boardMap).sort();
+  var datasets = lines.map(function (line, i) {
+    var pts = boardMap[line].slice().sort(function (a, b) { return a.x - b.x; });
     var color = BOARD_COLOR[i % BOARD_COLOR.length];
-    return { label: board, data: pts, borderColor: color, backgroundColor: color,
+    return { label: line, data: pts, borderColor: color, backgroundColor: color,
              tension: 0.2, pointRadius: 3 };
   });
   var budget = BUDGET[metricSuffix(name)];
@@ -94,7 +111,7 @@ function lineCard(parent, name, boardMap) {
     var xs = [];
     datasets.forEach(function (d) { d.data.forEach(function (p) { xs.push(p.x); }); });
     if (xs.length) {
-      datasets.push({ label: "85F budget (" + budget + ")",
+      datasets.push({ label: "budget (" + budget + ")",
         data: [{ x: Math.min.apply(null, xs), y: budget },
                { x: Math.max.apply(null, xs), y: budget }],
         borderColor: "#999", borderDash: [6, 4], pointRadius: 0, fill: false, tension: 0 });
