@@ -1,0 +1,5 @@
+Info: Logic utilisation before packing:
+Info:        ICESTORM_LC:  5443/ 5280   103%
+Info:       ICESTORM_RAM:    17/   30    56%
+Info: Annotating ports with timing budgets for clock 'clk'
+ERROR: Failed to expand region (0, 0) |_> (25, 31) of 5443 ICESTORM_LCs
