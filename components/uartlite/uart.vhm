@@ -10,7 +10,9 @@ use work.uart_pack.all;
 entity uartlite is generic (
    intcfg : integer := 1;
    fclk   : real := 31.25e6;
-   bps    : real := 115.2e3);
+   bps    : real := 115.2e3;
+   rx_fifo_len : integer := UART_RX_FIFO_LEN;
+   tx_fifo_len : integer := UART_TX_FIFO_LEN);
                    port (
    rst    : in  std_logic;
    clk    : in  std_logic;
@@ -24,9 +26,9 @@ end uartlite;
 architecture beh of uartlite is
 
 register variable this : uart_reg_t  reset := UART_REG_RESET;
-signal rxf  : uart_rx_fifo_t;
+signal rxf  : uart_rx_fifo_t(0 to rx_fifo_len-1);
 signal rxfw : uart_rx_fifo_w_t;
-signal txf  : uart_tx_fifo_t;
+signal txf  : uart_tx_fifo_t(0 to tx_fifo_len-1);
 signal txfw : uart_tx_fifo_w_t;
 
 constant uart_baud : natural := integer ( 4096.0 / ( fclk / (bps * 16.0) ) );
@@ -73,7 +75,7 @@ begin
             when START =>
                this.txo := '0';
                this.tx.sr := txf(this.txp.ra);
-               if this.txp.ra = UART_TX_FIFO_LEN-1 then -- pop the tx fifo
+               if this.txp.ra = tx_fifo_len-1 then -- pop the tx fifo
                   this.txp.ra := 0;
                else
                   this.txp.ra := this.txp.ra + 1;
@@ -148,7 +150,7 @@ begin
                   rfc.d  := this.rx.sr;
                   rfc.a  := this.rxp.wa;
                   rfc.we := '1';
-                  if this.rxp.wa = UART_RX_FIFO_LEN-1 then
+                  if this.rxp.wa = rx_fifo_len-1 then
                      this.rxp.wa := 0;
                   else
                      this.rxp.wa := this.rxp.wa + 1;
@@ -225,7 +227,7 @@ begin
          if a.dc = DATA then
             if this.rxp.wa /= this.rxp.ra or this.rx.full = '1' then
                this.y.d := rxf(this.rxp.ra);
-               if this.rxp.ra = UART_RX_FIFO_LEN-1 then
+               if this.rxp.ra = rx_fifo_len-1 then
                   this.rxp.ra := 0;
                else
                   this.rxp.ra := this.rxp.ra + 1;
@@ -253,7 +255,7 @@ begin
                tfc.d  := a.d;
                tfc.a  := this.txp.wa;
                tfc.we := '1';
-               if this.txp.wa = UART_TX_FIFO_LEN-1 then
+               if this.txp.wa = tx_fifo_len-1 then
                   this.txp.wa := 0;
                else
                   this.txp.wa := this.txp.wa + 1;

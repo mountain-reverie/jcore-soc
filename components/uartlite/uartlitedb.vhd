@@ -13,7 +13,9 @@ entity uartlitedb is
   generic (
     intcfg : integer := 1;
     fclk   : real := 31.25e6;
-    bps    : real := 115.2e3);
+    bps    : real := 115.2e3;
+    rx_fifo_len : integer := UART_RX_FIFO_LEN;
+    tx_fifo_len : integer := UART_TX_FIFO_LEN);
   port (
     rst    : in  std_logic;
     clk    : in  std_logic;
@@ -60,7 +62,8 @@ begin
 
   uart : uartlite
     generic map (
-      intcfg => intcfg, fclk => fclk, bps => bps)
+      intcfg => intcfg, fclk => fclk, bps => bps,
+      rx_fifo_len => rx_fifo_len, tx_fifo_len => tx_fifo_len)
     port map (
       clk => clk,
       rst => rst,
