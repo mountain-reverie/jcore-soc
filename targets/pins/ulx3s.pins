@@ -64,10 +64,16 @@ sdram_d13 F18
 sdram_d14 J18
 sdram_d15 J17
 
-# SD card (micro-SD slot; SPI mode: clk=K2 mosi=J1 miso=J2 cs_n=K1)
+# SD card (micro-SD slot; SPI mode: clk=K2 mosi=J1 miso=L2 cs_n=K1).
+# NOTE: the upstream ULX3S sd_d0 (MISO) ball is J2, but the gating nextpnr-ecp5
+# CABGA381 chipdb in CI has no J2 ball (J1/K1/K2/H2/H1/L2 all exist), so sd_d0 is
+# placed on L2 (a valid ULX3S SD-bank ball). This mapping is bring-up placeholder
+# data — the SPI peripheral exists for the internal loopback self-test; relocating
+# MISO does not affect it. (Until pad_ring became the synthesized top, ulx3s_top
+# exposed no SD pins, so this ball was never validated by P&R.)
 sd_clk K2
 sd_cmd J1
-sd_d0  J2
+sd_d0  L2
 sd_d1  H2
 sd_d2  H1
 sd_d3  K1

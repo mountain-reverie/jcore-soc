@@ -18,7 +18,11 @@ func LPF(res *elaborate.Resolution) (string, error) {
 			continue
 		}
 		port := "pin_" + p.Net
-		fmt.Fprintf(&b, "LOCATE COMP %q SITE %q;\n", port, p.Pad)
+		// nextpnr-ecp5's package pin database is case-sensitive and uses
+		// UPPER-case site names (e.g. "D20"); the .pins parser lower-cases the
+		// pad, so re-upper it here or nextpnr rejects the constraint as a
+		// non-existent pin.
+		fmt.Fprintf(&b, "LOCATE COMP %q SITE %q;\n", port, strings.ToUpper(p.Pad))
 		fmt.Fprintf(&b, "IOBUF PORT %q IO_TYPE=LVCMOS33;\n", port)
 	}
 	return b.String(), nil

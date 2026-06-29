@@ -39,7 +39,11 @@ done < "$GEN/cpu_synth_files.list"
 FILES+=(
   lib/hwutils/attr_pkg.vhd
   components/misc/misc_pkg.vhd
-  targets/boards/ulx3s/config.vhd
+  # NB: work.config + work.clk_config are the soc_gen-generated packages
+  # (output/<board>/config/config.vhd + targets/clk_config.vhd), analyzed by the
+  # consumer scripts (sim.sh/synth.sh) BEFORE this FILES list. The old
+  # hand-written stand-in config.vhd is retired: pad_ring/soc/devices need the
+  # full generated CFG_CLK_* set (CFG_CLK_PLLE2_HZ, *_PERIOD_NS, ...).
   targets/data_bus_pkg.vhd
   # M1b: cache + ddr_ram_mux + dma (depend on cpu2j0_pack + data_bus_pack)
   components/ddr2/ddrc_cnt_pkg.vhd
@@ -98,5 +102,15 @@ FILES+=(
   # hand-written one_cpu_m0_direct_fpga; binds cpu_synth_direct for the j2-direct
   # default variant. Must follow the cpus entity + one_cpu_m0 arch + cpu_synth.
   targets/boards/ulx3s/generated/cpus_config.vhd
-  targets/boards/ulx3s/ulx3s_top.vhd
+  # padring entities soc_gen instantiates but does not emit (leaves).
+  targets/boards/ulx3s/reset_sync.vhd
+  targets/boards/ulx3s/aic_irq_gen.vhd
+  # the soc_gen-generated trio (leaf-first: devices <- soc <- pad_ring), now the
+  # synthesized/elaborated board top (replaces the retired hand-written
+  # ulx3s_top.vhd). The ECP5 clkgen arch (clkgen(ecp5)/EHXPLLL) that pad_ring
+  # binds is appended by the consumer script (real primitive for synth, the
+  # tb/ehxpll_sim.vhd stand-in for sim).
+  targets/boards/ulx3s/devices.vhd
+  targets/boards/ulx3s/soc.vhd
+  targets/boards/ulx3s/pad_ring.vhd
 )
