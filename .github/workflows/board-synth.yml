@@ -68,6 +68,7 @@ jobs:
     container:
       image: ghcr.io/${{ github.repository_owner }}/jcore-cpu-ci:latest
     strategy:
+      fail-fast: false   # variants are independent; one failing must not cancel the other's metrics
       matrix:
         include:
           - { board: ulx3s, variant: j2-direct }
