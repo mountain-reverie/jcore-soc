@@ -17,9 +17,12 @@ def read(name):
 
 class TestParseIce40(unittest.TestCase):
     def test_yosys_stat_lc_ram(self):
+        """parse_yosys_stat maps real SB_LUT4/SB_RAM40_4K to canonical ICESTORM_* keys."""
         s = emit_metrics.parse_yosys_stat(read("yosys_stat_ice40.txt"))
+        # SB_LUT4 -> ICESTORM_LC
         self.assertEqual(s["ICESTORM_LC"], 5443)
-        self.assertEqual(s["ICESTORM_RAM"], 17)
+        # SB_RAM40_4K -> ICESTORM_RAM (count is 9 in the fixture)
+        self.assertEqual(s["ICESTORM_RAM"], 9)
 
     def test_nextpnr_ice40_util_and_fmax(self):
         p = emit_metrics.parse_nextpnr_ice40_log(read("nextpnr_ice40.log"))
@@ -34,7 +37,7 @@ class TestBuildIce40(unittest.TestCase):
         names = {m["name"]: m for m in doc["metrics"]}
         self.assertEqual(names["icesugar [j1]/LC"]["value"], 5443)
         self.assertEqual(names["icesugar [j1]/LC"]["dir"], "smaller")
-        self.assertEqual(names["icesugar [j1]/RAM"]["value"], 17)
+        self.assertEqual(names["icesugar [j1]/RAM"]["value"], 9)
         self.assertNotIn("icesugar [j1]/Fmax", names)  # no route -> no Fmax
         self.assertEqual(doc["target"], "ice40-up5k")
 
@@ -44,6 +47,26 @@ class TestBuildIce40(unittest.TestCase):
         names = {m["name"]: m for m in doc["metrics"]}
         self.assertEqual(names["icesugar [j1]/Fmax"]["value"], 18.4)
         self.assertEqual(names["icesugar [j1]/Fmax"]["dir"], "bigger")
+
+    def test_lc_from_pnr_util_when_stat_empty(self):
+        """Real production path: stat={} (no ICESTORM_* from yosys) -> LC comes from
+        nextpnr post-pack utilisation, present even on placement failure (LC=5443, RAM=17)."""
+        parsed_pnr = emit_metrics.parse_nextpnr_ice40_log(read("nextpnr_ice40.log"))
+        doc = emit_metrics.build_ice40({}, parsed_pnr, "icesugar", "c", "j1")
+        names = {m["name"]: m for m in doc["metrics"]}
+        self.assertEqual(names["icesugar [j1]/LC"]["value"], 5443)
+        self.assertEqual(names["icesugar [j1]/RAM"]["value"], 17)
+        # Fmax is parsed from the log even on placement failure
+        self.assertIn("icesugar [j1]/Fmax", names)
+
+    def test_pnr_util_lc_takes_precedence_over_stat(self):
+        """nextpnr post-pack LC is authoritative; stat (pre-pack) value is overridden."""
+        stat_with_different_lc = {"ICESTORM_LC": 9999, "ICESTORM_RAM": 5}
+        pnr = {"util": {"ICESTORM_LC": 5443, "ICESTORM_RAM": 17}, "fmax": {}}
+        doc = emit_metrics.build_ice40(stat_with_different_lc, pnr, "icesugar", "c", "j1")
+        names = {m["name"]: m for m in doc["metrics"]}
+        self.assertEqual(names["icesugar [j1]/LC"]["value"], 5443)  # nextpnr wins
+        self.assertEqual(names["icesugar [j1]/RAM"]["value"], 17)   # nextpnr wins
 
 
 class TestVariantName(unittest.TestCase):

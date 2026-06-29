@@ -68,13 +68,32 @@ def parse_nextpnr_ice40_log(text):
 
 
 def parse_yosys_stat(text):
-    """yosys `stat` (post synth_ice40) -> {cell: count}. Surfaces the ICESTORM_*
-    rows so LC/RAM are available even when nextpnr later fails to place."""
+    """yosys `stat` (post synth_ice40) -> {cell: count}.
+
+    Real ``synth_ice40`` stat emits SB_* cell names, not ICESTORM_* names.
+    We map the two authoritative SB cells to their canonical ICESTORM_* keys so
+    downstream code (build_ice40) can treat yosys-stat as a (secondary) source of
+    LC/RAM counts.  ICESTORM_* rows are also accepted for hypothetical inputs that
+    already carry them.
+    """
+    # SB_* cells emitted by real yosys synth_ice40 -> canonical key
+    SB_MAP = {
+        "SB_LUT4": "ICESTORM_LC",
+        "SB_RAM40_4K": "ICESTORM_RAM",
+        "SB_SPRAM256KA": "ICESTORM_SPRAM",
+    }
     out = {}
     for line in text.splitlines():
+        # Accept canonical ICESTORM_* rows if present
         m = re.search(r"\b(ICESTORM_LC|ICESTORM_RAM|ICESTORM_SPRAM):\s+(\d+)", line)
         if m:
             out[m.group(1)] = int(m.group(2))
+            continue
+        # Map real SB_* rows to canonical keys
+        for sb, canonical in SB_MAP.items():
+            m = re.search(r"\b%s\s+(\d+)" % re.escape(sb), line)
+            if m:
+                out[canonical] = int(m.group(1))
     return out
 
 
@@ -124,9 +143,11 @@ def build_ice40(stat, parsed_pnr, board, commit, variant=None):
     Fall back to nextpnr util so LC counts are available regardless of route."""
     fmax = (parsed_pnr or {}).get("fmax", {})
     pnr_util = (parsed_pnr or {}).get("util", {})
-    # stat (yosys) takes precedence; nextpnr util is the fallback for cells
-    # like ICESTORM_LC that synth_ice40 does not directly emit.
-    combined = {**pnr_util, **stat}
+    # nextpnr post-pack util takes precedence over yosys pre-pack stat for LC/RAM:
+    # nextpnr prints ICESTORM_* utilisation even on placement failure, and the
+    # post-pack count is the authoritative "fit" figure (yosys stat is pre-pack
+    # and may differ from what nextpnr actually uses).
+    combined = {**stat, **pnr_util}
     metrics_ = []
     for cell, label in NEXTPNR_ICE40_BLOCKS:
         if cell in combined:
