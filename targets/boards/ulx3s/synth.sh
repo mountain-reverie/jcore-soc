@@ -29,10 +29,19 @@ done
 # M1b: generate the synth-clean ddr_ram_mux + cache copies (see the script).
 source targets/boards/ulx3s/gen_synth_sources.sh
 
-# 3. file list: the sim list plus the ecp5 clkgen arch (analyzed last so default
-#    binding selects clkgen(ecp5) over clkgen(sim)).
+# 2b. generated clock config (output/ulx3s/config/config.vhd): the FILES list +
+#     the generated trio reference work.config / work.clk_config. The
+#     vhdl_list.txt target generates config.vhd from the board's CONFIG_* vars
+#     (it does not need the socgen jar — the committed trio is synthesized as-is).
+make ulx3s TARGET=vhdl_list.txt
+
+# 3. file list: the generated config + clk_config FIRST, then the ecp5 clkgen
+#    arch pad_ring binds (clkgen(ecp5)/EHXPLLL — the real ECP5 PLL primitive
+#    yosys supplies via synth_ecp5), then the shared FILES list (which now ends
+#    with the generated devices/soc/pad_ring trio — the synthesized board top).
 source targets/boards/ulx3s/filelist.sh   # defines FILES=( ... )
-FILES+=(targets/boards/ulx3s/ulx3s_clkgen_ecp5.vhd)
+FILES=(output/ulx3s/config/config.vhd targets/clk_config.vhd "${FILES[@]}" \
+       targets/boards/ulx3s/ulx3s_clkgen_ecp5.vhd)
 
 # 4. synthesize to ECP5 JSON. --syn-binding: component->same-name-entity default
 #    binding (clkgen/uart). chformal/delete strip VHDL assert cells nextpnr rejects.
@@ -41,7 +50,7 @@ FILES+=(targets/boards/ulx3s/ulx3s_clkgen_ecp5.vhd)
 # nextpnr's timing analyzer rejects). A clean ghdl --synth without --latches
 # therefore also proves no stray latch (hence no comb loop) remains.
 GHDL_BASE="ghdl --std=93 -fexplicit -fsynopsys --syn-binding --workdir=$WORK ${FILES[*]}"
-yosys -m ghdl -p "$GHDL_BASE -e ulx3s_top; synth_ecp5 -top ulx3s_top; check -assert; \
+yosys -m ghdl -p "$GHDL_BASE -e pad_ring; synth_ecp5 -top pad_ring; check -assert; \
   chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/ulx3s.json" \
   2>&1 | tee "$OUT/yosys.log"
 
