@@ -49,14 +49,23 @@ class TestBuildIce40(unittest.TestCase):
         self.assertEqual(names["icesugar [j1]/Fmax"]["dir"], "bigger")
 
     def test_lc_from_pnr_util_when_stat_empty(self):
-        """Real production path: stat={} (no ICESTORM_* from yosys) -> LC comes from
-        nextpnr post-pack utilisation, present even on placement failure (LC=5443, RAM=17)."""
-        parsed_pnr = emit_metrics.parse_nextpnr_ice40_log(read("nextpnr_ice40.log"))
+        """Real iCESugar production path: PLACEMENT failure. yosys stat lacks
+        ICESTORM_* (stat={}); nextpnr prints the utilisation report (LC/RAM) but
+        never reaches routing, so there is NO `Max frequency` line -> LC=5443,
+        RAM=17 present, Fmax absent."""
+        parsed_pnr = emit_metrics.parse_nextpnr_ice40_log(read("nextpnr_ice40_placefail.log"))
         doc = emit_metrics.build_ice40({}, parsed_pnr, "icesugar", "c", "j1")
         names = {m["name"]: m for m in doc["metrics"]}
         self.assertEqual(names["icesugar [j1]/LC"]["value"], 5443)
         self.assertEqual(names["icesugar [j1]/RAM"]["value"], 17)
-        # Fmax is parsed from the log even on placement failure
+        self.assertNotIn("icesugar [j1]/Fmax", names)  # no route -> no Fmax (the iCESugar case)
+
+    def test_timing_fail_log_still_yields_fmax(self):
+        """Distinct from placement failure: a design that PLACED but missed timing
+        prints a `Max frequency` line, so Fmax is surfaced alongside the LC util."""
+        parsed_pnr = emit_metrics.parse_nextpnr_ice40_log(read("nextpnr_ice40.log"))
+        doc = emit_metrics.build_ice40({}, parsed_pnr, "icesugar", "c", "j1")
+        names = {m["name"]: m for m in doc["metrics"]}
         self.assertIn("icesugar [j1]/Fmax", names)
 
     def test_pnr_util_lc_takes_precedence_over_stat(self):
