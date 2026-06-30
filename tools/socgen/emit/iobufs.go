@@ -262,6 +262,8 @@ func ecp5PinStmt(rp *elaborate.ResolvedPin) ([]vhdl.Stmt, error) {
 		return nil, fmt.Errorf("ecp5 pin %q: inout/tristate pads are deferred to Phase 2", rp.Net)
 	case rp.In != "" && rp.Out != "":
 		return nil, fmt.Errorf("ecp5 pin %q: bidirectional pads are deferred to Phase 2", rp.Net)
+	case rp.Out != "" && rp.Signal != "":
+		return nil, fmt.Errorf("ecp5 pin %q: output pad with Signal would create two drivers on the pad", rp.Net)
 	}
 	pin := &vhdl.Ident{Name: "pin_" + rp.Net}
 	var stmts []vhdl.Stmt
