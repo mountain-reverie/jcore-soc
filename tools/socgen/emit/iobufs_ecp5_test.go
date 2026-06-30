@@ -32,6 +32,18 @@ func TestEcp5PinDeviceAndSignalLegsBothEmitted(t *testing.T) {
 	}
 }
 
+func TestEcp5PinOutAndSignalIsError(t *testing.T) {
+	// Out + Signal on an output pad would create two drivers on the pad.
+	rp := &elaborate.ResolvedPin{Net: "bad", Pad: "A1", Out: "gpio_do(0)", Signal: "some_sig", PadDir: "out"}
+	_, err := ecp5PinStmt(rp)
+	if err == nil {
+		t.Error("expected error for Out+Signal output pad, got nil")
+	}
+	if !strings.Contains(err.Error(), "two drivers") {
+		t.Errorf("error should mention two drivers; got: %v", err)
+	}
+}
+
 func TestEcp5PinSingleLegUnchanged(t *testing.T) {
 	cases := []struct {
 		rp   *elaborate.ResolvedPin
