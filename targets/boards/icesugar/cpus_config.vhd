@@ -4,7 +4,7 @@ configuration soc_cpus_config of cpus is
       use entity work.cpu_core(arch);
       for arch
         for u_cpu : cpu
-          use configuration work.cpu_synth_j1;
+          use configuration work.cpu_synth_j1_dsp;
         end for;
       end for;
     end for;

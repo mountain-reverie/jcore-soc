@@ -33,6 +33,10 @@ make icesugar TARGET=soc_gen
 
 # 3. analyze the full design and elaborate the board top.
 source targets/boards/icesugar/filelist.sh   # defines FILES=( ... )
+# SB_MAC16 behavioral model: sim-only stand-in for the iCE40 DSP that
+# mult(ice40dsp) instantiates. Synthesis (synth.sh) leaves SB_MAC16 an unbound
+# component for yosys to map to the real cell, so this is added ONLY here.
+FILES=( components/cpu/core/sb_mac16_sim.vhd "${FILES[@]}" )
 ghdl -a --std=93 -fexplicit -fsynopsys --workdir="$WORK" "${FILES[@]}"
 ghdl -e --std=93 -fexplicit -fsynopsys --syn-binding --workdir="$WORK" pad_ring
 echo "pad_ring elaborated OK"
