@@ -26,6 +26,7 @@ cpu:
   cores: 1
   model: j1
   decode: rom
+  mult: dsp
   copro: false
   cache: none
 
