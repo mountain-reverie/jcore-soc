@@ -7,7 +7,7 @@ import "fmt"
 // without creating an import cycle (emit already imports elaborate).
 const CPUsConfigName = "soc_cpus_config"
 
-// cpuSynth maps (model, decode) to the cpu repo's synth configuration name,
+// cpuSynth maps (model, decode, mult) to the cpu repo's synth configuration name,
 // the generics it must be bound with, and the model/decode-specific source
 // files the synth filelist needs. Paths are cpu-submodule-relative (no
 // components/cpu/ prefix); the consumer (filelist.sh) prefixes them with $CPU/.
@@ -15,7 +15,7 @@ const CPUsConfigName = "soc_cpus_config"
 // cpu_synth config, and the alternate register/mult/shifter architectures the
 // binding selects; they are appended after decode_core (the configuration picks
 // among coexisting architectures), exactly as components/cpu/synth/cpu_synth.sh
-// appends them. Verified by ghdl analysis of each (model, decode) set.
+// appends them. Verified by ghdl analysis of each (model, decode, mult) set.
 //
 // NOTE: core/tlb.vhd is NOT listed here. cpu.vhd directly instantiates
 // work.tlb (entity instantiation inside a `g_mmu : if MMU_ARCH generate`), so
@@ -23,23 +23,25 @@ const CPUsConfigName = "soc_cpus_config"
 // belongs in the static base list ahead of cpu.vhd (matching cpu_synth.sh's
 // base FILES), not in this post-decode_core fragment. filelist.sh carries it in
 // the base array.
-var cpuSynth = map[[2]string]struct {
+var cpuSynth = map[[3]string]struct {
 	cfg      string
 	generics map[string]string
 	files    []string
 }{
-	{"j2", "direct"}: {"cpu_synth_direct", nil, []string{"decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_config.vhd"}},
-	{"j1", "rom"}:    {"cpu_synth_j1", nil, []string{"core/register_file_ebr.vhd", "core/mult_seq.vhd", "core/shifter_seq.vhd", "decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j1_config.vhd"}},
-	{"j4", "direct"}: {"cpu_synth_j4", map[string]string{"PRIV_ARCH": "true", "MMU_ARCH": "true"}, []string{"decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_j4_config.vhd"}},
-	{"j4", "rom"}:    {"cpu_synth_j4_rom", map[string]string{"PRIV_ARCH": "true", "MMU_ARCH": "true"}, []string{"decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j4_rom_config.vhd"}},
+	{"j2", "direct", ""}: {"cpu_synth_direct", nil, []string{"decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_config.vhd"}},
+	{"j1", "rom", ""}:    {"cpu_synth_j1", nil, []string{"core/register_file_ebr.vhd", "core/mult_seq.vhd", "core/shifter_seq.vhd", "decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j1_config.vhd"}},
+	{"j1", "rom", "dsp"}: {"cpu_synth_j1_dsp", nil, []string{"core/register_file_ebr.vhd", "core/mult_ice40dsp.vhd", "core/shifter_seq.vhd", "decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j1_dsp_config.vhd"}},
+	{"j4", "direct", ""}: {"cpu_synth_j4", map[string]string{"PRIV_ARCH": "true", "MMU_ARCH": "true"}, []string{"decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_j4_config.vhd"}},
+	{"j4", "rom", ""}:    {"cpu_synth_j4_rom", map[string]string{"PRIV_ARCH": "true", "MMU_ARCH": "true"}, []string{"decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j4_rom_config.vhd"}},
 }
 
 // CPUSynthConfig returns the cpu_synth configuration name, the generic map to
-// bind it with, and extra filelist sources for a (model, decode) pair.
-func CPUSynthConfig(model, decode string) (string, map[string]string, []string, error) {
-	e, ok := cpuSynth[[2]string{model, decode}]
+// bind it with, and extra filelist sources for a (model, decode, mult) triple.
+// mult is "" for the model's native multiplier, or "dsp" for mult(ice40dsp).
+func CPUSynthConfig(model, decode, mult string) (string, map[string]string, []string, error) {
+	e, ok := cpuSynth[[3]string{model, decode, mult}]
 	if !ok {
-		return "", nil, nil, fmt.Errorf("unsupported cpu model/decode combination %q/%q", model, decode)
+		return "", nil, nil, fmt.Errorf("unsupported cpu model/decode/mult combination %q/%q/%q", model, decode, mult)
 	}
 	return e.cfg, e.generics, e.files, nil
 }

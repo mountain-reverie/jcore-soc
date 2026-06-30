@@ -24,7 +24,7 @@ func CPUsConfig(cpu *design.CPU) (string, string, []string, error) {
 	if cpu.Architecture == "" {
 		return "", "", nil, fmt.Errorf("cpu.architecture is required")
 	}
-	synth, generics, files, err := elaborate.CPUSynthConfig(cpu.Model, cpu.Decode)
+	synth, generics, files, err := elaborate.CPUSynthConfig(cpu.Model, cpu.Decode, cpu.Mult)
 	if err != nil {
 		return "", "", nil, err
 	}
