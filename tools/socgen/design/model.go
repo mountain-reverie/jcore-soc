@@ -294,6 +294,7 @@ type CPU struct {
 	Cores        int    `yaml:"cores"`        // 1 | 2
 	Model        string `yaml:"model"`        // j1 | j2 | j4
 	Decode       string `yaml:"decode"`       // direct | rom
+	Mult         string `yaml:"mult"`         // "" (native) | dsp (iCE40 SB_MAC16)
 	Copro        bool   `yaml:"copro"`
 	Cache        string `yaml:"cache"` // none | i | id
 }
