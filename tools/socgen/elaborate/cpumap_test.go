@@ -21,7 +21,7 @@ func TestCPUSynthConfig(t *testing.T) {
 			"decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j4_rom_config.vhd"}},
 	}
 	for _, c := range cases {
-		cfg, gen, files, err := CPUSynthConfig(c.model, c.decode)
+		cfg, gen, files, err := CPUSynthConfig(c.model, c.decode, "")
 		if err != nil {
 			t.Fatalf("%s/%s: %v", c.model, c.decode, err)
 		}
@@ -49,8 +49,46 @@ func TestCPUSynthConfig(t *testing.T) {
 			}
 		}
 	}
-	if _, _, _, err := CPUSynthConfig("j9", "direct"); err == nil {
+	if _, _, _, err := CPUSynthConfig("j9", "direct", ""); err == nil {
 		t.Error("unknown model must error")
+	}
+}
+
+func TestCPUSynthConfigDSP(t *testing.T) {
+	cfg, generics, files, err := CPUSynthConfig("j1", "rom", "dsp")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg != "cpu_synth_j1_dsp" {
+		t.Fatalf("cfg = %q, want cpu_synth_j1_dsp", cfg)
+	}
+	if generics != nil {
+		t.Fatalf("generics = %v, want nil", generics)
+	}
+	wantFile := func(name string) {
+		for _, f := range files {
+			if f == name {
+				return
+			}
+		}
+		t.Fatalf("files %v missing %q", files, name)
+	}
+	wantFile("core/mult_ice40dsp.vhd")
+	wantFile("synth/cpu_synth_j1_dsp_config.vhd")
+	for _, f := range files {
+		if f == "core/mult_seq.vhd" || f == "synth/cpu_synth_j1_config.vhd" {
+			t.Fatalf("dsp filelist must not contain %q", f)
+		}
+	}
+
+	cfg0, _, files0, err := CPUSynthConfig("j1", "rom", "")
+	if err != nil || cfg0 != "cpu_synth_j1" {
+		t.Fatalf("native j1: cfg=%q err=%v", cfg0, err)
+	}
+	for _, f := range files0 {
+		if f == "core/mult_ice40dsp.vhd" {
+			t.Fatalf("native j1 filelist leaked the dsp mult")
+		}
 	}
 }
 
