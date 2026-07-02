@@ -71,6 +71,8 @@ for f in components/cpu/cache/dcache_ccl components/cpu/cache/dcache_mcl \
          components/misc/gpio2 components/misc/spi2; do
   LD_LIBRARY_PATH='' perl tools/v2p < "$f.vhm" > "$f.vhd"
 done
+LD_LIBRARY_PATH='' perl tools/v2p < targets/cpumreg.vhm > targets/cpumreg.vhd
+LD_LIBRARY_PATH='' perl tools/v2p < components/misc/multi_master_bus_mux.vhm > components/misc/multi_master_bus_mux.vhd
 source targets/boards/ulx3s/gen_synth_sources.sh
 
 # 4. full design analyze + run the self-checking banner testbench.

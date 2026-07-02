@@ -3,7 +3,6 @@ use ieee.std_logic_1164.all;
 use work.cpu2j0_pack.all;
 use work.data_bus_pack.all;
 use work.cpu_core_pack.all;
-use work.memory_pack.all;
 
 -- M0 dual-CPU cpus architecture: ECP5 port of targets/cpus_two_fpga.vhd
 -- (arch two_cpus_fpga). Substitutes bootram_infer(inferred) for memory_fpga
