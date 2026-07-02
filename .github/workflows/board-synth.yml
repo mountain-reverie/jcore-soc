@@ -27,8 +27,14 @@ jobs:
     container:
       image: ghcr.io/${{ github.repository_owner }}/jcore-cpu-ci:latest
     strategy:
+      fail-fast: false
       matrix:
-        board: [ulx3s]
+        # j2-direct = single-core baseline; j2-direct-dual = dual-core functional
+        # SMP (sim.sh sets EXPECT_SMP for *-dual, so the tb requires cpu1's
+        # "CPU1 OK" mailbox report to pass).
+        include:
+          - { board: ulx3s, variant: j2-direct }
+          - { board: ulx3s, variant: j2-direct-dual }
     defaults:
       run:
         shell: bash
@@ -42,7 +48,7 @@ jobs:
         with:
           go-version: "1.26"
       - name: Board testbenches
-        run: ./targets/boards/${{ matrix.board }}/sim.sh
+        run: VARIANT=${{ matrix.variant }} ./targets/boards/${{ matrix.board }}/sim.sh
 
   bitstream:
     needs: sim
