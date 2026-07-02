@@ -97,7 +97,9 @@ FILES+=(
   components/sdram/sdram_ctrl.vhd
   components/sdram/sdram_iocells.vhd
   targets/boards/ulx3s/ulx3s_clkgen.vhd
+  targets/cpumreg.vhd
   targets/boards/ulx3s/cpus_one_m0_arch.vhd
+  targets/boards/ulx3s/cpus_two_m0_arch.vhd
   # soc_gen-generated cpus configuration (soc_cpus_config) replacing the retired
   # hand-written one_cpu_m0_direct_fpga; binds cpu_synth_direct for the j2-direct
   # default variant. Must follow the cpus entity + one_cpu_m0 arch + cpu_synth.
