@@ -86,6 +86,22 @@ function boardOf(extra, name) {
   return (tail || "").split("/")[0];
 }
 
+// Deep-union two { chart: { line: [pts] } } maps, concatenating the point arrays
+// for a chart+line present in both. Used to combine the size and speed suites
+// without one clobbering the other (Object.assign would drop a shared chart key).
+function mergeCharts(a, b) {
+  var out = {};
+  [a, b].forEach(function (src) {
+    Object.keys(src).forEach(function (chart) {
+      if (!out[chart]) out[chart] = {};
+      Object.keys(src[chart]).forEach(function (line) {
+        out[chart][line] = (out[chart][line] || []).concat(src[chart][line]);
+      });
+    });
+  });
+  return out;
+}
+
 // -> { baseName: { seriesLabel: [ {x: date, y: value} ] } }
 function seriesByName(data) {
   var out = {};
@@ -150,7 +166,7 @@ function lineCard(parent, name, boardMap) {
 }
 
 function render() {
-  var all = Object.assign({}, seriesByName(window.__SIZE__), seriesByName(window.__SPEED__));
+  var all = mergeCharts(seriesByName(window.__SIZE__), seriesByName(window.__SPEED__));
   var grids = { ecp5: document.getElementById("trends-ecp5"),
                 ice40: document.getElementById("trends-ice40") };
   var seen = { ecp5: false, ice40: false };
