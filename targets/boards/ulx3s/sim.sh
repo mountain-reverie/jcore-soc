@@ -91,7 +91,12 @@ $GHDL targets/boards/ulx3s/ulx3s_clkgen_ecp5.vhd targets/boards/ulx3s/tb/ehxpll_
 $GHDL components/sdram/sdram_model.vhd
 $GHDL targets/boards/ulx3s/tb/ulx3s_gen_tb.vhd
 ghdl -e --std=93 -fexplicit -fsynopsys --syn-binding --workdir="$WORK" ulx3s_gen_tb
-ghdl -r --std=93 -fexplicit -fsynopsys --syn-binding --workdir="$WORK" ulx3s_gen_tb --stop-time=20ms --assert-level=error
+# Dual-core variants must additionally observe cpu1's "CPU1 OK" mailbox report;
+# EXPECT_SMP makes the tb require it (a dual build that fails to bring up cpu1
+# then times out instead of passing on the cpu0 banner alone).
+SMP_GEN=""
+case "$VARIANT" in j2-direct-dual|j4-rom-dual) SMP_GEN="-gEXPECT_SMP=true" ;; esac
+ghdl -r --std=93 -fexplicit -fsynopsys --syn-binding --workdir="$WORK" ulx3s_gen_tb $SMP_GEN --stop-time=20ms --assert-level=error
 
 # 5. bootram unit testbench (separate work lib: uses the deadbeef test image)
 echo "=== bootram_infer_tb ==="

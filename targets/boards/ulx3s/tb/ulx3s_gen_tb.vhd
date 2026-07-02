@@ -3,7 +3,13 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use work.sdram_pkg.all;
 
-entity ulx3s_gen_tb is end entity;
+entity ulx3s_gen_tb is
+  -- EXPECT_SMP (set for the dual-core variants by sim.sh): additionally require
+  -- cpu1's "CPU1 OK" mailbox report before declaring PASS, so a dual-core build
+  -- that fails to bring up cpu1 fails the test (times out) instead of passing on
+  -- the cpu0 banner alone. Single-core builds leave it false.
+  generic ( EXPECT_SMP : boolean := false );
+end entity;
 
 architecture sim of ulx3s_gen_tb is
   constant CLK_PER : time := 50 ns;            -- 20 MHz (sim bypasses the PLL;
@@ -89,9 +95,15 @@ begin
         n := n + 1;
         buf(n) := character'val(to_integer(unsigned(b)));
       end if;
-      if contains(buf, n, "HS-2J0 SH2 ROM") and contains(buf, n, "SPI LOOPBACK OK") then
-        report "ulx3s_gen_tb PASSED: bootloader started and SPI loopback verified"
-          severity note;
+      if contains(buf, n, "HS-2J0 SH2 ROM") and contains(buf, n, "SPI LOOPBACK OK")
+         and ((not EXPECT_SMP) or contains(buf, n, "CPU1 OK")) then
+        if EXPECT_SMP then
+          report "ulx3s_gen_tb PASSED: bootloader + SPI loopback + cpu1 SMP (CPU1 OK)"
+            severity note;
+        else
+          report "ulx3s_gen_tb PASSED: bootloader started and SPI loopback verified"
+            severity note;
+        end if;
         done <= true;
         wait;
       end if;
