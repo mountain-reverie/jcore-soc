@@ -43,6 +43,13 @@ source targets/boards/ulx3s/filelist.sh   # defines FILES=( ... )
 FILES=(output/ulx3s/config/config.vhd targets/clk_config.vhd "${FILES[@]}" \
        targets/boards/ulx3s/ulx3s_clkgen_ecp5.vhd)
 
+# Fail fast if the generated SoC does not match the requested VARIANT: VARIANT
+# only TAGS the emitted metrics, so a VARIANT that doesn't match the generated
+# cpus_config would mislabel them. (CI regenerates per-variant before this runs;
+# this guards local runs.) cpus_config.vhd is the soc_gen-generated binding.
+VARIANT="${VARIANT:-j2-direct}"
+targets/boards/ulx3s/check_variant.sh targets/boards/ulx3s/cpus_config.vhd "$VARIANT"
+
 # 4. synthesize to ECP5 JSON. --syn-binding: component->same-name-entity default
 #    binding (clkgen/uart). chformal/delete strip VHDL assert cells nextpnr rejects.
 # No --latches: gen_synth_sources.sh rewrites the cache transparent latches as
@@ -68,7 +75,6 @@ ecppack "$OUT/ulx3s.config" "$OUT/ulx3s.bit"
 echo "built $OUT/ulx3s.bit"
 
 # 6. emit synthesis metrics (utilisation + Fmax) for the dashboard.
-VARIANT="${VARIANT:-j2-direct}"
 COMMIT="${GITHUB_SHA:-$(git rev-parse HEAD)}"
 python3 tools/fpga/emit_metrics.py --board ulx3s --variant "$VARIANT" --commit "$COMMIT" \
   --nextpnr "$OUT/nextpnr.log" --out "$OUT/metrics.json"
