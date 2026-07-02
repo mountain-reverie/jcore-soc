@@ -49,6 +49,7 @@ python3 tools/fpga/emit_metrics.py --flow ice40 --board icesugar --variant j1 \
   --nextpnr "$OUT/nextpnr.log" \
   --out "$OUT/metrics.json"
 
-# Surface the fit failure to local callers AFTER metrics are written (CI marks the
-# job continue-on-error; a local build still sees the nonzero exit).
-exit "$PNR_RC"
+# Fit + timing gate. Metrics are already written above, so a failing build still
+# uploads them (CI marks this job's metrics upload if:always). The gate fails the
+# build on a non-fit (over UP5K budget / nextpnr did not place) or a timing miss.
+targets/boards/icesugar/fit_gate.sh "$OUT/nextpnr.log" "$OUT/icesugar.bin"

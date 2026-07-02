@@ -100,7 +100,9 @@ jobs:
   bitstream-icesugar:
     needs: sim
     runs-on: ubuntu-latest
-    continue-on-error: true   # board is ~103% over UP5K; metrics still upload
+    # The iCESugar J1 now fits the UP5K; synth.sh runs a fit+timing gate, so this
+    # job FAILS on a regression (over-budget or timing miss). Metrics still upload
+    # via if:always below, so a regression is charted before the job fails.
     container:
       image: ghcr.io/${{ github.repository_owner }}/jcore-cpu-ci:latest
     defaults:
