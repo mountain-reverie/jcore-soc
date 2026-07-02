@@ -1,6 +1,7 @@
 package elaborate
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -32,13 +33,7 @@ func TestCPUSynthConfig(t *testing.T) {
 			t.Errorf("%s/%s: expected PRIV_ARCH=>true, got %v", c.model, c.decode, gen)
 		}
 		for _, want := range c.wantFiles {
-			found := false
-			for _, f := range files {
-				if f == want {
-					found = true
-				}
-			}
-			if !found {
+			if !slices.Contains(files, want) {
 				t.Errorf("%s/%s: files missing %q; got %v", c.model, c.decode, want, files)
 			}
 		}
@@ -66,29 +61,22 @@ func TestCPUSynthConfigDSP(t *testing.T) {
 		t.Fatalf("generics = %v, want nil", generics)
 	}
 	wantFile := func(name string) {
-		for _, f := range files {
-			if f == name {
-				return
-			}
+		if !slices.Contains(files, name) {
+			t.Fatalf("files %v missing %q", files, name)
 		}
-		t.Fatalf("files %v missing %q", files, name)
 	}
 	wantFile("core/mult_ice40dsp.vhd")
 	wantFile("synth/cpu_synth_j1_dsp_config.vhd")
-	for _, f := range files {
-		if f == "core/mult_seq.vhd" || f == "synth/cpu_synth_j1_config.vhd" {
-			t.Fatalf("dsp filelist must not contain %q", f)
-		}
+	if slices.Contains(files, "core/mult_seq.vhd") || slices.Contains(files, "synth/cpu_synth_j1_config.vhd") {
+		t.Fatalf("dsp filelist must not contain the seq mult/config: %v", files)
 	}
 
 	cfg0, _, files0, err := CPUSynthConfig("j1", "rom", "")
 	if err != nil || cfg0 != "cpu_synth_j1" {
 		t.Fatalf("native j1: cfg=%q err=%v", cfg0, err)
 	}
-	for _, f := range files0 {
-		if f == "core/mult_ice40dsp.vhd" {
-			t.Fatalf("native j1 filelist leaked the dsp mult")
-		}
+	if slices.Contains(files0, "core/mult_ice40dsp.vhd") {
+		t.Fatalf("native j1 filelist leaked the dsp mult: %v", files0)
 	}
 }
 
