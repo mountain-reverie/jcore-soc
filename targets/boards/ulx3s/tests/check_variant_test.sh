@@ -17,5 +17,10 @@ check 0 j2-direct "$FIX/cpus_config_direct.vhd" "direct cfg + j2-direct -> 0"
 check 1 j4-rom    "$FIX/cpus_config_direct.vhd" "direct cfg + j4-rom -> 1 (mismatch)"
 check 0 j4-rom    "$FIX/cpus_config_j4rom.vhd"  "j4rom cfg + j4-rom -> 0"
 check 1 bogus     "$FIX/cpus_config_direct.vhd" "unknown variant -> 1"
+# dual-core variants are symmetric -> bind the same config as their single-core
+# counterpart (j2-direct-dual->cpu_synth_direct, j4-rom-dual->cpu_synth_j4_rom).
+check 0 j2-direct-dual "$FIX/cpus_config_direct.vhd" "direct cfg + j2-direct-dual -> 0"
+check 0 j4-rom-dual    "$FIX/cpus_config_j4rom.vhd"  "j4rom cfg + j4-rom-dual -> 0"
+check 1 j4-rom-dual    "$FIX/cpus_config_direct.vhd" "direct cfg + j4-rom-dual -> 1 (mismatch)"
 
 [ "$fails" -eq 0 ] && echo "ALL PASS" || { echo "$fails FAILED"; exit 1; }

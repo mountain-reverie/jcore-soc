@@ -9,9 +9,13 @@ CFG="${1:?usage: check_variant.sh <cpus_config.vhd> <variant>}"
 VARIANT="${2:?usage: check_variant.sh <cpus_config.vhd> <variant>}"
 
 case "$VARIANT" in
-  j2-direct) expect="cpu_synth_direct" ;;
-  j4-rom)    expect="cpu_synth_j4_rom" ;;
-  *) echo "check_variant: unknown VARIANT '$VARIANT' (known: j2-direct, j4-rom)" >&2; exit 1 ;;
+  j2-direct)      expect="cpu_synth_direct" ;;
+  j4-rom)         expect="cpu_synth_j4_rom" ;;
+  # dual-core variants are symmetric (both cores same decode), so cpus_config
+  # binds the same cpu_synth config as the matching single-core variant.
+  j2-direct-dual) expect="cpu_synth_direct" ;;
+  j4-rom-dual)    expect="cpu_synth_j4_rom" ;;
+  *) echo "check_variant: unknown VARIANT '$VARIANT' (known: j2-direct, j4-rom, j2-direct-dual, j4-rom-dual)" >&2; exit 1 ;;
 esac
 
 if grep -qE "use configuration work\.${expect}([ ;]|$)" "$CFG"; then
