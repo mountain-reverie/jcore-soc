@@ -59,6 +59,8 @@ jobs:
         include:
           - { board: ulx3s, variant: j2-direct, experimental: false }
           - { board: ulx3s, variant: j4-rom,   experimental: true }
+          - { board: ulx3s, variant: j2-direct-dual, experimental: true }
+          - { board: ulx3s, variant: j4-rom-dual,   experimental: true }
     defaults:
       run:
         shell: bash
