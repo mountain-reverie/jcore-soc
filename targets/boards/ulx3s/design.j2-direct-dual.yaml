@@ -1,0 +1,47 @@
+# ULX3S DualJ2 variant: two j2-direct cores (two_cpu_m0 arch), id-cache.
+# Restates only what must change vs base.yaml to ENABLE cpu1.
+#
+# Merge behavior (confirmed from tools/socgen/design/include.go):
+#   - MAP keys: deep-merge — variant key wins; missing keys inherited from base.
+#   - SEQUENCE keys: CONCATENATE — variant list first, base items appended.
+#   - applyZeroSignals is lenient (no-op for already-driven signals), so base's
+#     zero-signals list (icache1_ctrl, cpu1_event_i …) is inherited safely.
+#
+# Therefore:
+#   - peripheral-buses.cpu1: true overrides base's false (map deep-merge).
+#   - devices: lists ONLY aic1; base's [gpio0,aic0,uart0,spi2] are appended.
+#   - top-entities.ddr_ram_mux.ports.icache1_ctrl added via nested map merge.
+#   - zero-signals NOT restated; base list inherited with applyZeroSignals leniency.
+#   Single-core variants (j2-direct, j4-rom) inherit base.yaml unchanged.
+<<: !include base.yaml
+cpu:
+  architecture: two_cpu_m0
+  cores: 2
+  model: j2
+  decode: direct
+  copro: false
+  cache: id
+
+peripheral-buses:
+  cpu1: true
+
+# Only aic1 is new; base's gpio0/aic0/uart0/spi2 are appended by list-concat.
+devices:
+  - class: aic
+    name: aic1
+    base-addr: 0xabcd0500
+    dt-node: false
+    generics:
+      c_busperiod: CFG_CLK_CPU_PERIOD_NS
+    ports:
+      bstb_i: 0
+      back_i: 0
+      enmi_i: 1
+      event_i: cpu1_event_o
+      event_o: cpu1_event_i
+
+# Enable icache1 via nested map deep-merge into ddr_ram_mux.ports.
+top-entities:
+  ddr_ram_mux:
+    ports:
+      icache1_ctrl: CACHE_CTRL_ON
