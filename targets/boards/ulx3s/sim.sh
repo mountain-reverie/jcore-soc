@@ -21,24 +21,37 @@ UNITWORK="${UNITWORK:-/tmp/m0unitwork}"
 cd "$ROOT"
 rm -rf "$WORK" "$UNITWORK"; mkdir -p "$WORK" "$UNITWORK"
 
-# 1. regenerate the SoC + clock config from design.yaml and prove the committed
-#    generated artifacts (the devices/soc/pad_ring trio, build.mk AND the
-#    pin-named ulx3s.lpf) are exactly what socgen still emits — design.yaml is
-#    the source of truth. cp/diff (not git) so the check is immune to in-container
+# VARIANT selects the socgen design (j2-direct, j4-rom, or the dual-core
+# j2-direct-dual/j4-rom-dual variants). j2-direct is the committed default —
+# only for that variant do we assert the committed devices/soc/pad_ring trio
+# (+ build.mk/ulx3s.lpf) is byte-identical to what socgen still emits (the
+# drift check below). Other variants regenerate on demand and are NOT
+# committed, so the drift check is skipped for them.
+VARIANT="${VARIANT:-j2-direct}"
+
+# 1. regenerate the SoC + clock config from design.yaml (variant-selected) and,
+#    for the default j2-direct variant only, prove the committed generated
+#    artifacts (the devices/soc/pad_ring trio, build.mk AND the pin-named
+#    ulx3s.lpf) are exactly what socgen still emits — design.yaml is the
+#    source of truth. cp/diff (not git) so the check is immune to in-container
 #    git ownership.
 BD=targets/boards/ulx3s
-SNAP="$(mktemp -d)"
-for f in devices.vhd soc.vhd pad_ring.vhd build.mk ulx3s.lpf; do cp "$BD/$f" "$SNAP/$f"; done
-make soc_gen BOARDS=ulx3s
-make ulx3s TARGET=vhdl_list.txt
-for f in devices.vhd soc.vhd pad_ring.vhd build.mk ulx3s.lpf; do
-  if ! diff -q "$SNAP/$f" "$BD/$f" >/dev/null; then
-    echo "ERROR: committed $f drifted from design.yaml; re-run 'make soc_gen BOARDS=ulx3s' and commit." >&2
-    diff -u "$SNAP/$f" "$BD/$f" >&2 || true
-    exit 1
-  fi
-done
-rm -rf "$SNAP"
+if [ "$VARIANT" = "j2-direct" ]; then
+  SNAP="$(mktemp -d)"
+  for f in devices.vhd soc.vhd pad_ring.vhd build.mk ulx3s.lpf; do cp "$BD/$f" "$SNAP/$f"; done
+fi
+make ulx3s TARGET=soc_gen VARIANT="$VARIANT"
+make ulx3s TARGET=vhdl_list.txt VARIANT="$VARIANT"
+if [ "$VARIANT" = "j2-direct" ]; then
+  for f in devices.vhd soc.vhd pad_ring.vhd build.mk ulx3s.lpf; do
+    if ! diff -q "$SNAP/$f" "$BD/$f" >/dev/null; then
+      echo "ERROR: committed $f drifted from design.yaml; re-run 'make soc_gen BOARDS=ulx3s' and commit." >&2
+      diff -u "$SNAP/$f" "$BD/$f" >&2 || true
+      exit 1
+    fi
+  done
+  rm -rf "$SNAP"
+fi
 
 # 2. boot image
 make -C targets/boards/ulx3s/rom all

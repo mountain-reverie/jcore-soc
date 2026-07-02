@@ -73,9 +73,18 @@ FILES+=(
   components/cpu/cache/cache_config_fpga.vhd
   components/misc/bus_mux_typecsub.vhd
   components/misc/bus_mux_typec.vhd
+  # dual-core cpus1 bus arbiter (multi_master_bus_mux): devices.vhd
+  # instantiates it (cpus_mux) only in dual variants (peripheral-buses.cpu1),
+  # but analyzing it unconditionally is harmless for single-core variants.
+  components/misc/multi_master_bus_mux.vhd
   targets/boards/ulx3s/generated/ddr_ram_mux.vhd  # soc_gen metadata stripped
   targets/ddr_ram_mux/one_cpu_idcache.vhd
   targets/ddr_ram_mux/one_cpu_idcache_fpga.vhd
+  # dual-core ddr_ram_mux configuration (bound by soc.vhd only in dual
+  # variants via soc_gen's ddr_ram_mux.configuration); analyzed unconditionally
+  # like the one_cpu_* configs above, harmless for single-core variants.
+  targets/ddr_ram_mux/two_cpu_idcache.vhd
+  targets/ddr_ram_mux/two_cpu_idcache_fpga.vhd
   targets/cpu_core_pkg.vhd
   targets/cpu_core.vhd
   targets/cpus.vhd
