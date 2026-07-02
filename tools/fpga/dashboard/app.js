@@ -3,8 +3,8 @@
 // "<board>/..." name). Dashed budget lines for the 85F caps. Adapted+trimmed
 // from jcore-cpu dashboard/app.js (board-keyed, no variant overlay).
 
-window.__SIZE__ = null;
-window.__SPEED__ = null;
+if (window.__SIZE__ === undefined) window.__SIZE__ = null;
+if (window.__SPEED__ === undefined) window.__SPEED__ = null;
 
 // Resource budgets keyed by the metric base name suffix.
 var BUDGET = {
@@ -58,9 +58,24 @@ function variantOf2(name) {
 function baseName2(name) {
   return (name || "").replace(/\s\[[^\]]+\]\//, "/");
 }
+
+// FPGA family from the metric's target prefix ("ecp5-lfe5u-85f · …" -> "ecp5").
+function familyOf(name) {
+  var target = (name || "").split(" · ")[0];
+  if (/^ecp5/.test(target)) return "ecp5";
+  if (/^ice40/.test(target)) return "ice40";
+  return "";
+}
+
 // Line label within a chart: the variant, or the board when there is no variant.
+// Legacy bare-"ulx3s" metrics predate the variant suffix and ARE the j2-direct
+// design, so fold them into the "j2-direct" line -> one continuous series.
 function seriesLabel(name, extra) {
-  return variantOf2(name) || boardOf(extra, name);
+  var v = variantOf2(name);
+  if (v) return v;
+  var board = boardOf(extra, name);
+  if (board === "ulx3s") return "j2-direct";
+  return board;
 }
 
 function boardOf(extra, name) {
@@ -136,38 +151,52 @@ function lineCard(parent, name, boardMap) {
 
 function render() {
   var all = Object.assign({}, seriesByName(window.__SIZE__), seriesByName(window.__SPEED__));
-  var grid = document.getElementById("trends-ecp5");
-  var any = false;
+  var grids = { ecp5: document.getElementById("trends-ecp5"),
+                ice40: document.getElementById("trends-ice40") };
+  var seen = { ecp5: false, ice40: false };
   Object.keys(all).sort().forEach(function (name) {
-    any = true;
+    var fam = familyOf(name);
+    var grid = grids[fam];
+    if (!grid) return;
+    seen[fam] = true;
     lineCard(grid, name, all[name]);
   });
-  if (any) document.getElementById("fpga-section").hidden = false;
+  if (seen.ecp5) document.getElementById("sec-ecp5").hidden = false;
+  if (seen.ice40) document.getElementById("sec-ice40").hidden = false;
   renderLatest(all);
 }
 
 function renderLatest(all) {
-  var rows = {}, boards = {};
+  renderLatestFamily(all, "ecp5", "latest-ecp5");
+  renderLatestFamily(all, "ice40", "latest-ice40");
+}
+
+function renderLatestFamily(all, fam, elId) {
+  var el = document.getElementById(elId);
+  if (!el) return;
+  var rows = {}, cols = {};
   Object.keys(all).forEach(function (name) {
-    Object.keys(all[name]).forEach(function (board) {
-      var pts = all[name][board];
+    if (familyOf(name) !== fam) return;
+    Object.keys(all[name]).forEach(function (line) {
+      var pts = all[name][line];
       if (!pts || !pts.length) return;
       var sorted = pts.slice().sort(function (a, b) { return a.x - b.x; });
       var last = sorted[sorted.length - 1];
-      boards[board] = true;
-      (rows[name] = rows[name] || {})[board] = last.y;
+      cols[line] = true;
+      (rows[name] = rows[name] || {})[line] = last.y;
     });
   });
-  var blist = Object.keys(boards).sort();
+  var clist = Object.keys(cols).sort();
+  if (!clist.length) { el.innerHTML = ""; return; }
   var html = "<table border=1 cellpadding=4 style='border-collapse:collapse'><tr><th>metric</th>" +
-    blist.map(function (b) { return "<th>" + htmlEsc(b) + "</th>"; }).join("") + "</tr>";
+    clist.map(function (c) { return "<th>" + htmlEsc(c) + "</th>"; }).join("") + "</tr>";
   Object.keys(rows).sort().forEach(function (name) {
     html += "<tr><td>" + htmlEsc(name) + "</td>" +
-      blist.map(function (b) { return "<td>" + (rows[name][b] != null ? rows[name][b] : "—") + "</td>"; }).join("") +
+      clist.map(function (c) { return "<td>" + (rows[name][c] != null ? rows[name][c] : "—") + "</td>"; }).join("") +
       "</tr>";
   });
   html += "</table>";
-  document.getElementById("latest").innerHTML = html;
+  el.innerHTML = html;
 }
 
 boot();

@@ -15,18 +15,25 @@
 </head>
 <body>
   <h1>jcore-soc board synthesis metrics</h1>
-  <p class="muted">Per-commit ECP5 (LFE5U-85F) utilisation &amp; Fmax from yosys + nextpnr-ecp5.
-    Dashed lines are the 85F resource budgets. Raw data:
+  <p class="muted">Per-commit FPGA utilisation &amp; Fmax from yosys + nextpnr,
+    grouped by device family. Dashed lines are the per-device resource budgets.
+    Raw data:
     <a href="./bench-size/benchmark-data.json">size</a> ·
     <a href="./bench-speed/benchmark-data.json">speed</a>.</p>
 
-  <section id="fpga-section" hidden>
+  <section id="sec-ecp5" hidden>
     <h2>FPGA — ECP5 (LFE5U-85F)</h2>
     <div id="trends-ecp5" class="grid"></div>
+    <h3>Latest values</h3>
+    <div id="latest-ecp5"></div>
   </section>
 
-  <h2>Latest values</h2>
-  <div id="latest"></div>
+  <section id="sec-ice40" hidden>
+    <h2>FPGA — iCE40 (UP5K)</h2>
+    <div id="trends-ice40" class="grid"></div>
+    <h3>Latest values</h3>
+    <div id="latest-ice40"></div>
+  </section>
 
   <script src="./app.js" defer></script>
 </body>
