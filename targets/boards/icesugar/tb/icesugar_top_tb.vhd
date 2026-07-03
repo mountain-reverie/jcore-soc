@@ -21,6 +21,8 @@ architecture sim of icesugar_top_tb is
   signal ser_tx : std_logic;
   signal ledr_n, ledg_n, ledb_n : std_logic;
   signal mdi0_p, mdi0_n : std_logic;
+  -- eth_rx MDI input: idle (no RX traffic driven yet -- see Task 7).
+  signal mdi1_p : std_logic := '0';
   signal done   : boolean := false;
   signal eth_ok : boolean := false;
 
@@ -58,7 +60,7 @@ begin
   uut : entity work.pad_ring(impl)
     port map (pin_clk => clk, pin_ser_rx => ser_rx, pin_ser_tx => ser_tx,
               pin_ledr_n => ledr_n, pin_ledg_n => ledg_n, pin_ledb_n => ledb_n,
-              pin_mdi0_p => mdi0_p, pin_mdi0_n => mdi0_n);
+              pin_mdi0_p => mdi0_p, pin_mdi0_n => mdi0_n, pin_mdi1_p => mdi1_p);
 
   clk <= not clk after CLK_PER/2 when not done else '0';
 

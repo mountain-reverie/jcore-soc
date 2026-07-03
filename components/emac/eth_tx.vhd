@@ -14,6 +14,14 @@
 --   0x808 write     = TX_LEN  : frame length in bytes
 --   0x80C write bit0= TX_GO   : start transmission
 --   0x810 read  bit0= busy    : 1 while a transmission is in progress
+--
+--   0x900 read  bit0= frame_ready, bit1= overrun : RX_STATUS
+--   0x904 read       = rx frame length in bytes  : RX_LEN
+--   0x908 read       = next 32-bit word of the received frame, big-endian;
+--                       each read auto-increments the RX read-word pointer
+--                       so successive reads walk the frame : RX_DATA
+--   0x90C write bit0= pulse eth_rx.ack (release the frame buffer) and reset
+--                      the RX read-word pointer to 0        : RX_ACK
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -31,6 +39,8 @@ entity eth_tx is
     mdi_p   : out std_logic;
     mdi_n   : out std_logic;
     tx_done : out std_logic;
+    rx_in   : in  std_logic;                 -- 10BASE-T RX MDI (LVDS pad input)
+    rx_irq  : out std_logic;                 -- clk domain, 1-cycle pulse
     clk_eth : in  std_logic);                -- ~20 MHz PHY-domain clock
 end entity;
 
@@ -42,6 +52,11 @@ architecture rtl of eth_tx is
   constant A_TX_LEN  : std_logic_vector(11 downto 0) := x"808";
   constant A_TX_GO   : std_logic_vector(11 downto 0) := x"80C";
   constant A_BUSY    : std_logic_vector(11 downto 0) := x"810";
+
+  constant A_RX_STATUS : std_logic_vector(11 downto 0) := x"900";
+  constant A_RX_LEN    : std_logic_vector(11 downto 0) := x"904";
+  constant A_RX_DATA   : std_logic_vector(11 downto 0) := x"908";
+  constant A_RX_ACK    : std_logic_vector(11 downto 0) := x"90C";
 
   -- Dual-clock frame buffer, split into 4 byte-lane RAMs (one SB_RAM40 each).
   -- Lane i holds byte i of each 32-bit word (big-endian: lane0 = first byte
@@ -78,6 +93,14 @@ architecture rtl of eth_tx is
   type lane_q_t is array (0 to 3) of std_logic_vector(7 downto 0);
   signal rd_lane_q : lane_q_t := (others => (others => '0'));
   signal rd_bsel_r : std_logic_vector(1 downto 0) := (others => '0');
+
+  -- clk (12 MHz) domain: eth_rx interface
+  signal rx_word_ptr  : unsigned(9 downto 0) := (others => '0');  -- word pointer
+  signal rx_rd_word   : std_logic_vector(31 downto 0);
+  signal rx_frame_rdy : std_logic;
+  signal rx_len       : unsigned(11 downto 0);
+  signal rx_ack       : std_logic := '0';
+  signal rx_overrun   : std_logic;
 
 begin
 
@@ -121,6 +144,9 @@ begin
         wr_ptr <= wr_ptr + 4;
       end if;
 
+      -- RX_ACK is a 1-cycle pulse into eth_rx.ack; default low each cycle.
+      rx_ack <= '0';
+
       if db_i.en = '1' and db_i.wr = '1' then
         case db_i.a(11 downto 0) is
           when A_RST_PTR =>
@@ -134,6 +160,11 @@ begin
               go_tgl  <= not go_tgl;
               go_pend <= '1';
             end if;
+          when A_RX_ACK =>
+            if db_i.d(0) = '1' then
+              rx_ack      <= '1';
+              rx_word_ptr <= (others => '0');
+            end if;
           when others => null;
         end case;
       end if;
@@ -142,19 +173,37 @@ begin
         case db_i.a(11 downto 0) is
           when A_BUSY =>
             rdata_r(0) <= busy_sync or go_pend;
+          when A_RX_STATUS =>
+            rdata_r(0) <= rx_frame_rdy;
+            rdata_r(1) <= rx_overrun;
+          when A_RX_LEN =>
+            rdata_r(11 downto 0) <= std_logic_vector(rx_len);
+          when A_RX_DATA =>
+            -- eth_rx buffer read is registered (1-cycle latency behind
+            -- rd_word_addr, mirrored from the TX-side SB_RAM40 read port
+            -- above): rx_rd_word reflects rx_word_ptr as it was presented
+            -- on the previous cycle. Advancing the pointer here (same
+            -- cycle as the read) presents the next word one cycle ahead of
+            -- when software's *next* A_RX_DATA read will land, so back-to-
+            -- back reads with no intervening bus cycle can observe one
+            -- cycle of latency skew; exercised/confirmed in the Task-7 sim.
+            rdata_r <= rx_rd_word;
+            rx_word_ptr <= rx_word_ptr + 1;
           when others => null;
         end case;
       end if;
 
       if rst = '1' then
-        wr_ptr    <= (others => '0');
-        tx_len_r  <= (others => '0');
-        go_tgl    <= '0';
-        go_pend   <= '0';
-        tx_done   <= '0';
-        busy_meta <= '0';
-        busy_sync <= '0';
-        busy_prev <= '0';
+        wr_ptr      <= (others => '0');
+        tx_len_r    <= (others => '0');
+        go_tgl      <= '0';
+        go_pend     <= '0';
+        tx_done     <= '0';
+        busy_meta   <= '0';
+        busy_sync   <= '0';
+        busy_prev   <= '0';
+        rx_word_ptr <= (others => '0');
+        rx_ack      <= '0';
       end if;
     end if;
   end process;
@@ -240,5 +289,22 @@ begin
       done     => phy_done,
       mdi_p    => mdi_p,
       mdi_n    => mdi_n);
+
+  ------------------------------------------------------------------
+  -- 10BASE-T RX framer/buffer/CDC (clk / clk_eth)
+  ------------------------------------------------------------------
+  rx: entity work.eth_rx
+    port map (
+      clk          => clk,
+      clk_eth      => clk_eth,
+      rst          => rst,
+      rx_in        => rx_in,
+      rd_word_addr => rx_word_ptr,
+      rd_word      => rx_rd_word,
+      frame_ready  => rx_frame_rdy,
+      rx_len       => rx_len,
+      ack          => rx_ack,
+      overrun      => rx_overrun,
+      rx_irq       => rx_irq);
 
 end architecture;
