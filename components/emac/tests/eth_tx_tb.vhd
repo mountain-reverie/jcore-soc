@@ -1,15 +1,18 @@
 -- Self-checking testbench for eth_tx (the CPU-bus TX device wrapping the
--- Manchester PHY, an inferred dual-clock buffer, and the SB_PLL40_CORE model).
+-- Manchester PHY and an inferred dual-clock buffer). eth_tx no longer owns a
+-- PLL -- clk_eth is a plain input port fed by the board's ice_clkgen
+-- (SB_PLL40_2_PAD PORTB) in real designs -- so this tb drives both clocks
+-- directly with independent generators.
 --
 -- Drives db_i at 12 MHz: reset the write pointer, write a known frame as 32-bit
 -- big-endian words to TX_DATA, set TX_LEN, pulse TX_GO. Captures mdi_p/mdi_n and
 -- Manchester-decodes it reusing the eth_tx_phy_tb convention (second half-bit's
--- mdi_p = bit value, bytes LSB-first). The DUT's PLL model free-runs a
--- deterministic 20 MHz clk_eth (edges at 25 ns + k*50 ns) so the PHY slot timing
--- is reconstructed from the first non-idle line transition after TX_GO.
+-- mdi_p = bit value, bytes LSB-first). clk_eth is driven by a free-running
+-- deterministic 20 MHz generator (edges at 25 ns + k*50 ns) so the PHY slot
+-- timing is reconstructed from the first non-idle line transition after TX_GO.
 --
--- Elaborate/run with --syn-binding so the SB_PLL40_CORE component binds to the
--- behavioural model in sb_pll40_core_sim.vhd.
+-- No PLL model / --syn-binding needed: eth_tx instantiates no unbound
+-- components (only eth_tx_phy, a plain entity).
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -37,6 +40,7 @@ architecture sim of eth_tx_tb is
   constant WORD1 : std_logic_vector(31 downto 0) := x"3456789A";
 
   signal clk     : std_logic := '0';
+  signal clk_eth : std_logic := '0';
   signal rst     : std_logic := '1';
   signal db_i    : cpu_data_o_t := NULL_DATA_O;
   signal db_o    : cpu_data_i_t;
@@ -58,13 +62,25 @@ begin
   dut: entity work.eth_tx
     port map (
       clk => clk, rst => rst, db_i => db_i, db_o => db_o,
-      mdi_p => mdi_p, mdi_n => mdi_n, tx_done => tx_done);
+      mdi_p => mdi_p, mdi_n => mdi_n, tx_done => tx_done,
+      clk_eth => clk_eth);
 
   clk_proc: process
   begin
     while not sim_done loop
       clk <= '0'; wait for CLK12/2;
       clk <= '1'; wait for CLK12/2;
+    end loop;
+    wait;
+  end process;
+
+  -- Independent 20 MHz clk_eth generator (models the board's ice_clkgen
+  -- SB_PLL40_2_PAD PORTB output; no PLL model needed in sim).
+  clk_eth_proc: process
+  begin
+    while not sim_done loop
+      clk_eth <= '0'; wait for PETH/2;
+      clk_eth <= '1'; wait for PETH/2;
     end loop;
     wait;
   end process;
