@@ -5,6 +5,7 @@ targets/boards/ulx3s/rom/main.bin
 targets/boards/*/build/
 
 docs/superpowers
+.superpowers
 
 # ULX3S M1b: synth-clean VHDL copies generated for the ghdl-yosys flow
 # (ddr_ram_mux soc_gen metadata stripped; cache transparent latches -> negedge FFs)
