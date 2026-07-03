@@ -27,6 +27,59 @@ static void puts_uart(const char *p)
 		putc_uart(*p++);
 }
 
+/* eth_tx @ 0xABCD1000 (DEVICE_ETH0_ADDR in board.h): 10BASE-T Manchester TX.
+   Registers are byte-bus offsets within the 4 KiB-aligned device window. */
+#define ETH_BASE   0xABCD1000u
+#define ETH_DATA   (*(volatile unsigned int *)(ETH_BASE + 0x800u))
+#define ETH_RSTPTR (*(volatile unsigned int *)(ETH_BASE + 0x804u))
+#define ETH_LEN    (*(volatile unsigned int *)(ETH_BASE + 0x808u))
+#define ETH_GO     (*(volatile unsigned int *)(ETH_BASE + 0x80Cu))
+#define ETH_STATUS (*(volatile unsigned int *)(ETH_BASE + 0x810u))
+
+/* IEEE 802.3 CRC-32 (reflected, poly 0xEDB88320), over dest..payload;
+   the result is appended little-endian per 802.3. */
+static unsigned int eth_crc32(const unsigned char *p, unsigned int n)
+{
+	unsigned int c = 0xFFFFFFFFu, i, j;
+	for (i = 0; i < n; i++) {
+		c ^= p[i];
+		for (j = 0; j < 8; j++)
+			c = (c >> 1) ^ (0xEDB88320u & (~((c & 1u) - 1u)));
+	}
+	return ~c;
+}
+
+/* Send a raw frame: 'body' = dest+src+type+payload (no preamble/FCS).
+   FRAME_MAX sized for the short boot-time test frame, not a full 1518B
+   Ethernet MTU -- the 2 KiB EBR boot has no room for a 1526-byte stack
+   buffer. Bump if a larger test frame is ever needed. */
+#define FRAME_MAX 64u
+static void eth_send(const unsigned char *body, unsigned int body_len)
+{
+	unsigned char frame[FRAME_MAX];   /* preamble(7)+SFD(1)+body+FCS(4) */
+	unsigned int i, n = 0, fcs;
+	for (i = 0; i < 7; i++)
+		frame[n++] = 0x55u;   /* preamble */
+	frame[n++] = 0xD5u;           /* SFD */
+	for (i = 0; i < body_len; i++)
+		frame[n++] = body[i];
+	fcs = eth_crc32(body, body_len);
+	frame[n++] = fcs & 0xffu; frame[n++] = (fcs >> 8) & 0xffu;
+	frame[n++] = (fcs >> 16) & 0xffu; frame[n++] = (fcs >> 24) & 0xffu;
+	/* load buffer as 32-bit words (pad to a multiple of 4; big-endian store
+	   => wire order) then transmit n bytes. */
+	while (ETH_STATUS & 1u)
+		;                      /* wait not busy */
+	ETH_RSTPTR = 1u;
+	for (i = 0; i < ((n + 3u) & ~3u); i += 4u)
+		ETH_DATA = ((unsigned)frame[i] << 24) | ((unsigned)frame[i + 1] << 16)
+			 | ((unsigned)frame[i + 2] << 8) | frame[i + 3];
+	ETH_LEN = n;
+	ETH_GO  = 1u;
+	while (ETH_STATUS & 1u)
+		;                      /* poll busy until done */
+}
+
 #define SPRAM_BASE  0x10000000u
 #define SPRAM_WORDS (128u*1024u/4u)   /* 32768 words */
 
@@ -63,6 +116,18 @@ void main(void)
 	}
 	spram_routine();     /* executes out of SPRAM -> prints "FROM SPRAM" */
 	spram_memtest();     /* proves all 128 KB read/write */
+
+	/* build + transmit a broadcast test frame over eth_tx (10BASE-T) */
+	{
+		static const unsigned char test_frame[] = {
+			0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,   /* dest: broadcast */
+			0x02, 0x00, 0x00, 0x00, 0x00, 0x01,   /* src MAC */
+			0x88, 0xB5,                            /* ethertype (experimental) */
+			'J', '1'                               /* payload */
+		};
+		eth_send(test_frame, sizeof(test_frame));
+		puts_uart("ETH TX\r\n");
+	}
 
 	/* visible heartbeat: toggle the LED forever (the banner above is what the
 	   sim testbench checks; the blink is for on-hardware sanity). */
