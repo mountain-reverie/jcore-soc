@@ -19,6 +19,7 @@ architecture sim of eth_rx_phy_tb is
   signal carrier   : std_logic;
 
   signal sim_done  : boolean := false;
+  signal nlp_phase : boolean := false;  -- true while lone-NLP stimulus is being driven
 
   -- frame: 7x preamble (0x55) + SFD (0xD5) + 4 data bytes
   type byte_arr is array (natural range <>) of std_logic_vector(7 downto 0);
@@ -57,6 +58,25 @@ begin
     wait for 200 ns;
     rst <= '0';
     wait for 100 ns;
+
+    -- ---------------------------------------------------------------------
+    -- Lone NLP (Normal Link Pulse) rejection: a link partner idling sends
+    -- a single isolated pulse roughly every 16 ms, NOT a sustained
+    -- transition train. Each pulse produces at most 2 edges (rise, fall),
+    -- far short of LOCK_EDGES=6, so carrier must never assert. Drive two
+    -- such isolated pulses, widely spaced, before the real frame.
+    -- ---------------------------------------------------------------------
+    nlp_phase <= true;
+    rx_in <= '1';
+    wait for 100 ns;             -- short NLP pulse width
+    rx_in <= '0';
+    wait for 3 us;                -- long idle between link pulses (>> NO_EDGE_TIMEOUT)
+
+    rx_in <= '1';
+    wait for 100 ns;
+    rx_in <= '0';
+    wait for 3 us;
+    nlp_phase <= false;
 
     for byte_i in FRAME'range loop
       for bit_i in 0 to 7 loop
@@ -105,6 +125,7 @@ begin
     variable carrier_seen_high : boolean := false;
     variable match_found       : boolean := false;
     variable total_bits        : integer := 0;
+    variable nlp_carrier_bad   : boolean := false;
   begin
     -- build expected bit stream: bytes FRAME(7..11), LSB-first within
     -- each byte, earliest byte's bit0 at the MSB end of the window so a
@@ -121,7 +142,11 @@ begin
     while not sim_done loop
       wait until rising_edge(clk_eth);
 
-      if carrier = '1' then
+      if nlp_phase and carrier = '1' then
+        nlp_carrier_bad := true;
+      end if;
+
+      if (not nlp_phase) and carrier = '1' then
         carrier_seen_high := true;
       end if;
 
@@ -134,6 +159,10 @@ begin
       end if;
     end loop;
 
+    assert not nlp_carrier_bad
+      report "eth_rx_phy_tb: carrier asserted during lone-NLP stimulus (false carrier on link pulse)"
+      severity error;
+
     assert carrier_seen_high
       report "eth_rx_phy_tb: carrier never asserted" severity error;
 
@@ -144,7 +173,7 @@ begin
       report "eth_rx_phy_tb: FAILED (expected SFD+data bit sequence not found in recovered stream)"
       severity error;
 
-    if carrier_seen_high and carrier = '0' and match_found then
+    if (not nlp_carrier_bad) and carrier_seen_high and carrier = '0' and match_found then
       report "eth_rx_phy_tb PASSED" severity note;
     end if;
 
