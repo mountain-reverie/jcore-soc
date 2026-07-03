@@ -50,6 +50,8 @@ FILES+=(
   # EBR boot RAM (all memory) + its boot image.
   $BRD/boot_image_pkg.vhd
   components/memory/bootram_infer.vhd
+  components/memory/spram_128k.vhd
+  components/memory/dev_ddr_spram.vhd
   # Peripherals served by the generated devices.vhd: uartlite + gpio2 + the
   # multi-master peripheral bus mux.
   components/uartlite/uart_pkg.vhd

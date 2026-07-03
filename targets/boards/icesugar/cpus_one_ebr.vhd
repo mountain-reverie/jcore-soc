@@ -9,8 +9,9 @@ use work.cpu_core_pack.all;
 -- SDRAM: ALL memory (instruction + data) is served from bootram_infer (inferred
 -- iCE40 EBR). The SuperH reset vector is 0x00000000, which decode_core_*_addr
 -- maps to DEV_SRAM, so the boot RAM serves the reset fetch and all subsequent
--- code/data. The DEV_DDR slots of the core buses are tied to an idle response
--- (no device present) and the cpus entity's external DDR ports are driven NULL.
+-- code/data. The DEV_DDR slots of the core buses are served by an iCE40 UP5K
+-- SPRAM (128 KB) main-RAM instance (dev_ddr_spram); the cpus entity's
+-- external DDR ports are still driven NULL (SPRAM is internal to this arch).
 -- The single J1 core has no coprocessor (COPRO_DECODE => false). All cpu1_*
 -- outputs are tied off (single-core board).
 architecture one_cpu_ebr of cpus is
@@ -41,13 +42,17 @@ begin
   cpu0_periph_dbus_o <= data_bus_o(DEV_PERIPH);
   data_bus_i(DEV_PERIPH) <= cpu0_periph_dbus_i;
 
-  -- No DDR/SDRAM on iCESugar: tie the cpus entity's DDR ports to NULL and feed
-  -- the core's DEV_DDR slots an idle (un-acked) response. The core never
-  -- accesses DEV_DDR (code+data live in the DEV_SRAM boot RAM).
+  -- No external DDR/SDRAM on iCESugar: tie the cpus entity's DDR ports to
+  -- NULL (nothing leaves this arch on those ports).
   cpu0_ddr_ibus_o <= NULL_INST_O;
   cpu0_ddr_dbus_o <= NULL_DATA_O;
-  instr_bus_i(DEV_DDR) <= (d => (others => '0'), ack => '0');
-  data_bus_i(DEV_DDR)  <= (d => (others => '0'), ack => '0');
+
+  -- iCE40 UP5K SPRAM (128 KB) serves the DEV_DDR region as main RAM. Single
+  -- port -> dev_ddr_spram arbitrates the instruction and data masters.
+  ddr_spram : entity work.dev_ddr_spram
+    port map (clk => clk,
+              ibus_i => instr_bus_o(DEV_DDR), ibus_o => instr_bus_i(DEV_DDR),
+              dbus_i => data_bus_o(DEV_DDR),  dbus_o => data_bus_i(DEV_DDR));
 
   -- Single-core board: tie off all cpu1_* outputs.
   cpu1_periph_dbus_o <= NULL_DATA_O;

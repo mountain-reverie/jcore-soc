@@ -36,15 +36,19 @@ source targets/boards/icesugar/filelist.sh   # defines FILES=( ... )
 # SB_MAC16 behavioral model: sim-only stand-in for the iCE40 DSP that
 # mult(ice40dsp) instantiates. Synthesis (synth.sh) leaves SB_MAC16 an unbound
 # component for yosys to map to the real cell, so this is added ONLY here.
-FILES=( components/cpu/core/sb_mac16_sim.vhd "${FILES[@]}" )
-ghdl -a --std=93 -fexplicit -fsynopsys --workdir="$WORK" "${FILES[@]}"
-ghdl -e --std=93 -fexplicit -fsynopsys --syn-binding --workdir="$WORK" pad_ring
+# -C (--mb-comments) allows the multi-byte Unicode arrows/quotes used in
+# sb_mac16_sim.vhd's comments; current GHDL (6.0.0) rejects them under
+# --std=93 without it, on every ghdl invocation (analyze/elaborate/run) that
+# touches this file.
+FILES=( components/cpu/core/sb_mac16_sim.vhd components/memory/sb_spram256ka_sim.vhd "${FILES[@]}" )
+ghdl -a --std=93 -fexplicit -fsynopsys -C --workdir="$WORK" "${FILES[@]}"
+ghdl -e --std=93 -fexplicit -fsynopsys -C --syn-binding --workdir="$WORK" pad_ring
 echo "pad_ring elaborated OK"
 
 # 4. top-level banner testbench: drive 12 MHz, decode ser_tx, assert the banner.
 echo "=== icesugar_top_tb ==="
-ghdl -a --std=93 -fexplicit -fsynopsys --workdir="$WORK" \
+ghdl -a --std=93 -fexplicit -fsynopsys -C --workdir="$WORK" \
     targets/boards/icesugar/tb/icesugar_top_tb.vhd
-ghdl -e --std=93 -fexplicit -fsynopsys --syn-binding --workdir="$WORK" icesugar_top_tb
-ghdl -r --std=93 -fexplicit -fsynopsys --syn-binding --workdir="$WORK" icesugar_top_tb \
+ghdl -e --std=93 -fexplicit -fsynopsys -C --syn-binding --workdir="$WORK" icesugar_top_tb
+ghdl -r --std=93 -fexplicit -fsynopsys -C --syn-binding --workdir="$WORK" icesugar_top_tb \
     --stop-time=5ms --assert-level=error
