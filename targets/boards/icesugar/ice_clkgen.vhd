@@ -7,10 +7,10 @@ use ieee.std_logic_1164.all;
 -- inside eth_tx (which conflicted with this one for the same PLL bel).
 --   clk_out (PLLOUTGLOBALA) = 12 MHz fixed reference passthrough -- CPU clock,
 --     bit-identical in rate/phase relationship to the old plain passthrough.
---   clk_eth (PLLOUTGLOBALB) = ~20 MHz PLLOUT_SELECT_PORTB output -- Ethernet
+--   clk_eth (PLLOUTGLOBALB) = ~40 MHz PLLOUT_SELECT_PORTB output -- Ethernet
 --     PHY clock (eth_tx.clk_eth).
--- PLL params from `icepll -i 12 -o 20`:
---   DIVR=0 DIVF=52 DIVQ=5 FILTER_RANGE=1 (achieved 19.875 MHz, FEEDBACK SIMPLE)
+-- PLL params from `icepll -i 12 -o 40`:
+--   DIVR=0 DIVF=52 DIVQ=4 FILTER_RANGE=1 (achieved 39.750 MHz, FEEDBACK SIMPLE)
 -- rst_out is a power-on reset held for a few cycles then released, gated by
 -- the PLL LOCK signal, synchronized to clk_out.
 entity ice_clkgen is
@@ -54,7 +54,7 @@ begin
       PLLOUT_SELECT_PORTB => "GENCLK",
       DIVR                => "0000",     -- 0
       DIVF                => "0110100",  -- 52
-      DIVQ                => "101",      -- 5
+      DIVQ                => "100",      -- 4
       FILTER_RANGE        => "001")      -- 1
     port map (
       PACKAGEPIN    => clk_in,

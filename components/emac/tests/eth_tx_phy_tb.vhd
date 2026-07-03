@@ -13,7 +13,7 @@ end entity;
 
 architecture sim of eth_tx_phy_tb is
 
-  constant CLK_PERIOD : time := 50 ns;  -- 20 MHz
+  constant CLK_PERIOD : time := 25 ns;  -- 40 MHz
   constant NBYTES     : integer := 8;
 
   type rom_t is array (0 to NBYTES-1) of std_logic_vector(7 downto 0);
@@ -42,10 +42,11 @@ architecture sim of eth_tx_phy_tb is
   signal sim_done : boolean := false;
 
   -- Cycle-count-based gapless check: busy_cycles counts the clk_eth edges
-  -- during which busy='1'. With the prefetch/no-LOAD-gap design this must
-  -- equal exactly (2-cycle PREFETCH pipeline fill) + (16 cycles/byte * NBYTES)
-  -- + (1 TPIDL cycle); any stray held cycle (the old bug) would inflate this
-  -- count and desynchronize done's arrival time relative to t0.
+  -- during which busy='1'. With the prefetch/no-LOAD-gap design, retimed to
+  -- 2 clk_eth cycles/half-bit at 40 MHz, this must equal exactly (4-cycle
+  -- PREFETCH pipeline fill) + (32 cycles/byte * NBYTES) + (2 TPIDL cycles);
+  -- any stray held cycle (the old bug) would inflate this count and
+  -- desynchronize done's arrival time relative to t0.
   signal busy_cycles : integer := 0;
   signal busy_s      : std_logic;
 
@@ -74,7 +75,7 @@ begin
       mdi_p    => mdi_p,
       mdi_n    => mdi_n);
 
-  -- 20 MHz clock
+  -- 40 MHz clock
   clk_proc: process
   begin
     while not sim_done loop
@@ -119,19 +120,22 @@ begin
     t0 := now;
     tx_start <= '0';
 
-    -- Manchester decode, per byte i, per bit j (LSB-first):
-    --   S_i = 4 + 16*i   (first SEND half-bit slot of byte i; 2-cycle
-    --                      PREFETCH pipeline fill before byte0's first
-    --                      half-bit, then exactly 16 gapless half-bit slots
-    --                      per byte -- no LOAD gap between bytes anymore)
-    --   bit j of byte i's second half-bit slot = S_i + 2*j + 1
+    -- Manchester decode, per byte i, per bit j (LSB-first), with the 2
+    -- clk_eth-cycles-per-half-bit retiming (40 MHz clk_eth, 10 Mbps wire):
+    --   S_i = 8 + 32*i   (raw clk_eth edge index, relative to t0, at which
+    --                      byte i's second half-bit of bit 0 becomes valid;
+    --                      4-cycle PREFETCH pipeline fill before byte0's
+    --                      first half-bit, then exactly 32 gapless clk_eth
+    --                      cycles [16 half-bit slots x 2 cycles] per byte)
+    --   bit j of byte i's second half-bit slot becomes valid at S_i + 4*j
     --   decoded bit = mdi_p sampled mid-slot at that offset (second half's
     --   polarity equals the bit value, matching the RTL's
-    --   diff <= b & (not b) assignment on the second half-bit).
+    --   diff <= b & (not b) assignment on the second half-bit); the value
+    --   holds for 2 raw cycles so sampling at +0.5 cycles is safely mid-slot.
     for i in 0 to NBYTES-1 loop
-      si := 4 + 16*i;
+      si := 8 + 32*i;
       for j in 0 to 7 loop
-        wait for (t0 + (real(si + 2*j) + 0.5) * CLK_PERIOD) - now;
+        wait for (t0 + (real(si + 4*j) + 0.5) * CLK_PERIOD) - now;
         bitval := mdi_p;
         assert mdi_p /= mdi_n
           report "eth_tx_phy_tb: illegal differential state (both/neither driven) "
@@ -157,10 +161,10 @@ begin
     -- Gapless check: total busy-cycle count must match the analytical
     -- prediction exactly. Any extra held cycle (e.g. a reintroduced LOAD
     -- state / Manchester hold bug) would inflate this count.
-    assert busy_cycles = 2 + 16*NBYTES + 1
+    assert busy_cycles = 4 + 32*NBYTES + 2
       report "eth_tx_phy_tb: gapless check failed - busy_cycles="
              & integer'image(busy_cycles) & " expected "
-             & integer'image(2 + 16*NBYTES + 1)
+             & integer'image(4 + 32*NBYTES + 2)
              & " (a stray held cycle would break gapless Manchester timing)"
       severity error;
 
