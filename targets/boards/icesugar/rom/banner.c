@@ -115,9 +115,14 @@ void main(void)
 		while ((unsigned int)dst < (unsigned int)_spram_end) *dst++ = *src++;
 	}
 	spram_routine();     /* executes out of SPRAM -> prints "FROM SPRAM" */
-	spram_memtest();     /* proves all 128 KB read/write */
 
-	/* build + transmit a broadcast test frame over eth_tx (10BASE-T) */
+	/* build + transmit a broadcast test frame over eth_tx (10BASE-T).
+	   Sent BEFORE the SPRAM sweep (below): the sweep covers 128 KB and takes
+	   long enough in sim that pushing the TX past it risks running the frame
+	   outside the testbench's --stop-time window. Sending here keeps it well
+	   within the window and, completing well inside eth_tx_phy's NLP idle
+	   period, avoids any ambiguity in the tb's Manchester decoder between
+	   the real frame and an idle link pulse. */
 	{
 		static const unsigned char test_frame[] = {
 			0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,   /* dest: broadcast */
@@ -128,6 +133,8 @@ void main(void)
 		eth_send(test_frame, sizeof(test_frame));
 		puts_uart("ETH TX\r\n");
 	}
+
+	spram_memtest();     /* proves all 128 KB read/write */
 
 	/* visible heartbeat: toggle the LED forever (the banner above is what the
 	   sim testbench checks; the blink is for on-hardware sanity). */

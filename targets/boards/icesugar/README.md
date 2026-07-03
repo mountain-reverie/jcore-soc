@@ -13,6 +13,7 @@ the Lattice iCE40 UP5K (SG48 package, 5280 LUTs, 30 EBR blocks, 4 SPRAMs).
 | Memory | EBR boot ROM (2 KB) + 128 KB SPRAM main RAM (4× `SB_SPRAM256KA` on `DEV_DDR` `0x10000000`) |
 | UART | 1× (UART-lite over FTDI, 115200 baud) |
 | GPIO | 3× LEDs (active-low RGB) |
+| Ethernet | 1× 10BASE-T TX (`eth_tx` @ `0xABCD1000`, PMOD, see below) |
 
 The `cpu` block in `design.yaml` uses `model: j1` with the EBR + SPRAM
 `cpus` architecture (`cpus_one_ebr.vhd`): the boot ROM and reset vector
@@ -127,16 +128,87 @@ docker run --rm \
 | icepack | ASC → BIN bitstream packing |
 | iceprog | Flash programming (not in CI) |
 
+## Ethernet (10BASE-T TX)
+
+`eth_tx` is a software-driven 10BASE-T Manchester transmitter: the CPU builds
+the whole on-wire frame (preamble + SFD + payload + FCS) in a RAM buffer and
+pokes a `GO` bit; the device serializes it out over a differential MDI pair.
+There is no MAC/PHY chip on iCESugar — the FPGA drives the twisted pair
+directly (10BASE-T signal levels only; add an external isolation
+transformer/line driver for a real link).
+
+**PMOD / pins** (verified against `targets/boards/icesugar/icesugar.pcf`,
+socgen-generated from `design.yaml`'s `mdi0_p`/`mdi0_n` net names):
+
+| Signal | Package pin | Note |
+|--------|--------------|------|
+| `mdi0_p` | 37 | differential MDI+ |
+| `mdi0_n` | 36 | differential MDI− |
+
+**Register map** (device window base `0xABCD1000` = `DEVICE_ETH0_ADDR` in
+`board.h`; offsets verified against `components/emac/eth_tx.vhd`'s address
+decode and `targets/boards/icesugar/rom/banner.c`'s `ETH_*` defines):
+
+| Offset | Access | Name | Description |
+|--------|--------|------|--------------|
+| `0x800` | write | `TX_DATA` | append one 32-bit word to the frame buffer (big-endian: `d(31:24)` is the lowest-address byte on the wire); write pointer auto-increments by 4 |
+| `0x804` | write, bit0 | `TX_RSTPTR` | reset the write pointer to 0 |
+| `0x808` | write | `TX_LEN` | frame length in bytes (post-preamble/SFD, i.e. total bytes loaded via `TX_DATA`) |
+| `0x80C` | write, bit0 | `TX_GO` | start transmission |
+| `0x810` | read, bit0 | `TX_STATUS` | `busy` — 1 while a transmission is in progress |
+
+**Software model** (`rom/banner.c`'s `eth_send()`): build preamble (7×`0x55`)
++ SFD (`0xD5`) + body (dest/src/ethertype/payload) + IEEE 802.3 CRC-32 FCS
+(reflected, poly `0xEDB88320`, appended little-endian) into a local buffer,
+poll `TX_STATUS` until not busy, reset the write pointer (`TX_RSTPTR`), push
+the buffer 32 bits at a time via `TX_DATA`, set `TX_LEN`, pulse `TX_GO`, then
+poll `TX_STATUS` again until the transmission completes.
+
+**Clocking**: `eth_tx` runs its bus-facing registers in the 12 MHz `clk`
+domain and instantiates its own `SB_PLL40_CORE` (12→20 MHz, `REFERENCECLK`
+fed from `clk`) to drive the Manchester serializer (`eth_tx_phy`) at 20 MHz;
+a 2-FF synchronizer crosses `busy`/`done` back into the 12 MHz domain (see
+`components/emac/eth_tx.vhd`).
+
+**Verified in simulation**: `sim.sh` / `icesugar_top_tb` decode the
+`pin_mdi0_p`/`pin_mdi0_n` pins with a Manchester decoder and assert the
+on-wire frame (all 28 bytes, including the CRC-32 FCS) matches the known
+boot-time test frame (broadcast dest, dummy src, ethertype `0x88B5`,
+payload `"J1"`) — see `tb/icesugar_top_tb.vhd`.
+
+**Known fit issue**: on real UP5K silicon (`synth.sh`), the sole
+`SB_PLL40_CORE` hard-macro instantiated by `eth_tx` currently fails to place
+— `pin_clk` (pin 35, the on-board 12 MHz oscillator) occupies the same I/O
+tile as the UP5K's only PLL bel, which conflicts even though `REFERENCECLK`
+is fed via fabric routing rather than that pad directly. This is a
+pin-planning issue pre-dating this section (from the `eth_tx`/pin-assignment
+tasks), **not** an LC-budget issue, and is **not yet fixed** — flagged here
+as a follow-up requiring either a different oscillator/PLL pin plan or an
+`SB_PLL40_PAD`-based redesign. Functional simulation is unaffected.
+
+**Follow-ups (not yet implemented)**:
+- RX path (no `eth_rx`/PHY-input device yet).
+- AIC (interrupt controller) hookup for `tx_done` — the port exists
+  (`eth_tx`'s `tx_done`) but is currently left unconnected/polled only.
+- Resolve the PLL/pin placement conflict above so the design fits and routes
+  on real UP5K hardware.
+
 ## Known Constraints / Status
 
 The GHDL simulation (`sim.sh`) **passes** — the J1 SoC is functionally correct
-(boots from EBR, emits the UART banner). The physical UP5K fit is currently
-**~3% over** on logic and is a tracked follow-up.
+(boots from EBR, emits the UART banner, runs from SPRAM, and now transmits +
+the tb verifies a 10BASE-T Manchester frame over `mdi0_p`/`mdi0_n`).
 
-Current synth fit (after the optimizations below):
+The physical UP5K fit, with `eth_tx` now in the design, currently **fails to
+place at all**: `synth.sh` / nextpnr-ice40 reports `SB_LUT4` usage of 4837
+cells (below the 5280 `ICESTORM_LC` budget on its own), but PLL placement
+aborts before a full place & route completes — see "Known fit issue" in the
+Ethernet section above. `ICESTORM_LC`/timing are therefore not reported by
+nextpnr for this build (packing fails before those stats are printed); the
+pre-`eth_tx` baseline numbers below are retained for reference:
 
-- ICESTORM_LC: **5443 / 5280 (103%)** — ~163 LC over; nextpnr-ice40 cannot place
-- ICESTORM_RAM: **17 / 30 (56%)** — fits
+- ICESTORM_LC (pre-`eth_tx` baseline): **5443 / 5280 (103%)** — ~163 LC over; nextpnr-ice40 could not place
+- ICESTORM_RAM (pre-`eth_tx` baseline): **17 / 30 (56%)** — fits
 - `$assert` cells: handled (stripped in `synth.sh`)
 
 ### Optimizations already applied (893 LC reclaimed, 6336 → 5443)
