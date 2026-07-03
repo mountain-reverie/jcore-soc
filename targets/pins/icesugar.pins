@@ -14,3 +14,13 @@ ledb_n 39
 # building hardware (see task-4-report.md).
 mdi0_p 37
 mdi0_n 36
+
+# PMOD2 header (pins P2_3 / P2_10): 10BASE-T eth_rx MDI1 differential pair.
+# Confirmed hardware LVDS pair: UP5K SG48 chipdb (chipdb-5k.txt, .pins sg48)
+# places pins 42 and 38 in the same IO tile (x=8,y=31), io index 0/1 -- a
+# true differential IOB pair. Only the P pin is wired in RTL; instantiate
+# SB_IO with IO_STANDARD="SB_LVDS_INPUT" on it (N pin, 38, is the implicit
+# hardware complement -- do not also declare it as a separate net). See
+# task-1-report.md for the chipdb evidence and nextpnr probe.
+# Same PMOD2-header-not-yet-confirmed caveat as mdi0 above applies.
+mdi1_p 42
