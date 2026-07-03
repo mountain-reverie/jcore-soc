@@ -41,7 +41,25 @@ architecture sim of eth_tx_phy_tb is
 
   signal sim_done : boolean := false;
 
+  -- Cycle-count-based gapless check: busy_cycles counts the clk_eth edges
+  -- during which busy='1'. With the prefetch/no-LOAD-gap design this must
+  -- equal exactly (2-cycle PREFETCH pipeline fill) + (16 cycles/byte * NBYTES)
+  -- + (1 TPIDL cycle); any stray held cycle (the old bug) would inflate this
+  -- count and desynchronize done's arrival time relative to t0.
+  signal busy_cycles : integer := 0;
+  signal busy_s      : std_logic;
+
 begin
+
+  busy_s <= busy;
+  count_proc: process (clk_eth) is
+  begin
+    if rising_edge(clk_eth) then
+      if busy_s = '1' then
+        busy_cycles <= busy_cycles + 1;
+      end if;
+    end if;
+  end process;
 
   dut: entity work.eth_tx_phy
     port map (
@@ -68,15 +86,15 @@ begin
     wait;
   end process;
 
-  -- Byte-source ROM: a simple asynchronous (combinational) lookup buffer.
-  -- rd_addr settles a full clk_eth period before the DUT's LOAD state
-  -- samples rd_data (LOAD always runs exactly one clk_eth cycle after
-  -- byte_idx/rd_addr changes), so rd_data is stable well in advance of
-  -- LOAD's read -- satisfying the "rd_data valid the cycle after rd_addr"
-  -- contract without needing extra registered latency in this stub.
-  rom_proc: process (rd_addr)
+  -- Byte-source ROM: REGISTERED read, matching a real iCE40 SB_RAM40 EBR
+  -- (rd_data valid one clk_eth cycle after rd_addr is presented). The DUT
+  -- prefetches byte_idx+1 continuously through the whole 16-cycle SEND of
+  -- the current byte, giving ample margin to absorb this latency.
+  rom_proc: process (clk_eth) is
   begin
-    rd_data <= ROM(to_integer(rd_addr) mod NBYTES);
+    if rising_edge(clk_eth) then
+      rd_data <= ROM(to_integer(rd_addr) mod NBYTES);
+    end if;
   end process;
 
   -- Stimulus + self-checking decode.
@@ -102,17 +120,18 @@ begin
     tx_start <= '0';
 
     -- Manchester decode, per byte i, per bit j (LSB-first):
-    --   S_i = 2 + 17*i   (first SEND half-bit slot of byte i; derived from
-    --                      1 idle-transition slot + 1 LOAD slot before byte0,
-    --                      and 16 bit-slots + 1 LOAD slot per subsequent byte)
+    --   S_i = 4 + 16*i   (first SEND half-bit slot of byte i; 2-cycle
+    --                      PREFETCH pipeline fill before byte0's first
+    --                      half-bit, then exactly 16 gapless half-bit slots
+    --                      per byte -- no LOAD gap between bytes anymore)
     --   bit j of byte i's second half-bit slot = S_i + 2*j + 1
     --   decoded bit = mdi_p sampled mid-slot at that offset (second half's
     --   polarity equals the bit value, matching the RTL's
     --   diff <= b & (not b) assignment on the second half-bit).
     for i in 0 to NBYTES-1 loop
-      si := 2 + 17*i;
+      si := 4 + 16*i;
       for j in 0 to 7 loop
-        wait for (t0 + (real(si + 2*j + 1) + 0.5) * CLK_PERIOD) - now;
+        wait for (t0 + (real(si + 2*j) + 0.5) * CLK_PERIOD) - now;
         bitval := mdi_p;
         assert mdi_p /= mdi_n
           report "eth_tx_phy_tb: illegal differential state (both/neither driven) "
@@ -133,6 +152,16 @@ begin
       severity error;
     assert busy = '0'
       report "eth_tx_phy_tb: busy did not deassert after done"
+      severity error;
+
+    -- Gapless check: total busy-cycle count must match the analytical
+    -- prediction exactly. Any extra held cycle (e.g. a reintroduced LOAD
+    -- state / Manchester hold bug) would inflate this count.
+    assert busy_cycles = 2 + 16*NBYTES + 1
+      report "eth_tx_phy_tb: gapless check failed - busy_cycles="
+             & integer'image(busy_cycles) & " expected "
+             & integer'image(2 + 16*NBYTES + 1)
+             & " (a stray held cycle would break gapless Manchester timing)"
       severity error;
 
     report "eth_tx_phy_tb PASSED" severity note;

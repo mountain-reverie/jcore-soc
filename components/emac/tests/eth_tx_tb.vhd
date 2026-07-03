@@ -88,13 +88,16 @@ begin
   end process;
 
   stim: process
-    -- one-cycle 32-bit write
+    -- 32-bit write: db_o.ack is combinational (db_o.ack <= db_i.en, per the
+    -- uart.vhd/pio.vhd/gpio2.vhd convention), so poll/wait for it instead of
+    -- assuming a fixed cycle count -- this actually exercises ack timing.
     procedure bus_write(addr : std_logic_vector(11 downto 0);
                         data : std_logic_vector(31 downto 0)) is
     begin
       wait until rising_edge(clk);
       db_i.en <= '1'; db_i.wr <= '1'; db_i.rd <= '0';
       db_i.we <= "1111"; db_i.a <= x"00000" & addr; db_i.d <= data;
+      wait until db_o.ack = '1';       -- combinational ack acknowledges the request
       wait until rising_edge(clk);
       db_i.en <= '0'; db_i.wr <= '0'; db_i.we <= "0000";
     end procedure;
@@ -105,7 +108,8 @@ begin
       wait until rising_edge(clk);
       db_i.en <= '1'; db_i.rd <= '1'; db_i.wr <= '0';
       db_i.a  <= x"00000" & addr;
-      wait until rising_edge(clk);   -- sampled here; rdata_r updated after
+      wait until db_o.ack = '1';       -- combinational ack acknowledges the request
+      wait until rising_edge(clk);     -- rdata_r registers the read data on this edge
       db_i.en <= '0'; db_i.rd <= '0';
       wait until rising_edge(clk);
       result := db_o.d;
@@ -133,11 +137,13 @@ begin
 
     -- wait until the first data half-bit is captured
     wait until got_first;
-    -- t_first is the start of the first SEND slot (phy_tb si=2 slot).
-    -- sample(i,j) = t_first + (17*i + 2*j + 1.5)*PETH ; bit = mdi_p (LSB-first)
+    -- t_first is the start of the first SEND slot (phy_tb si=4 slot, i.e.
+    -- byte0/bit0's first half-bit -- the gapless redesign runs exactly 16
+    -- half-bit slots per byte, no LOAD gap between bytes).
+    -- sample(i,j) = t_first + (16*i + 2*j + 1.5)*PETH ; bit = mdi_p (LSB-first)
     for i in 0 to NBYTES-1 loop
       for j in 0 to 7 loop
-        wait for (t_first + (real(17*i + 2*j) + 1.5) * PETH) - now;
+        wait for (t_first + (real(16*i + 2*j) + 1.5) * PETH) - now;
         assert mdi_p /= mdi_n
           report "eth_tx_tb: illegal differential state at byte "
                  & integer'image(i) & " bit " & integer'image(j)
