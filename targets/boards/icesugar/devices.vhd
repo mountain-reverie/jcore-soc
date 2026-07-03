@@ -15,6 +15,7 @@ use work.cpu2j0_pack.all;
 use work.data_bus_pack.all;
 entity devices is
     port (
+        clk_eth : in std_logic;
         clk_sys : in std_logic;
         cpu0_periph_dbus_i : out cpu_data_i_t;
         cpu0_periph_dbus_o : in cpu_data_o_t;
@@ -70,6 +71,7 @@ begin
     eth0 : entity work.eth_tx(rtl)
         port map (
             clk => clk_sys,
+            clk_eth => clk_eth,
             db_i => devs_bus_o(DEV_ETH0),
             db_o => devs_bus_i(DEV_ETH0),
             mdi_n => mdi0_n,

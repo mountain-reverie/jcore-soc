@@ -14,6 +14,7 @@ use work.clk_config.all;
 use work.cpu2j0_pack.all;
 entity soc is
     port (
+        clk_eth : in std_logic;
         clk_sys : in std_logic;
         gpio_do : out std_logic_vector(2 downto 0);
         mdi0_n : out std_logic;
@@ -77,6 +78,7 @@ begin
         );
     devices : entity work.devices(impl)
         port map (
+            clk_eth => clk_eth,
             clk_sys => clk_sys,
             cpu0_periph_dbus_i => cpu0_periph_dbus_i,
             cpu0_periph_dbus_o => cpu0_periph_dbus_o,

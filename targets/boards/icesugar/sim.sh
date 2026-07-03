@@ -40,7 +40,7 @@ source targets/boards/icesugar/filelist.sh   # defines FILES=( ... )
 # sb_mac16_sim.vhd's comments; current GHDL (6.0.0) rejects them under
 # --std=93 without it, on every ghdl invocation (analyze/elaborate/run) that
 # touches this file.
-FILES=( components/cpu/core/sb_mac16_sim.vhd components/memory/sb_spram256ka_sim.vhd components/emac/sb_pll40_core_sim.vhd "${FILES[@]}" )
+FILES=( components/cpu/core/sb_mac16_sim.vhd components/memory/sb_spram256ka_sim.vhd components/emac/sb_pll40_2_pad_sim.vhd "${FILES[@]}" )
 ghdl -a --std=93 -fexplicit -fsynopsys -C --workdir="$WORK" "${FILES[@]}"
 ghdl -e --std=93 -fexplicit -fsynopsys -C --syn-binding --workdir="$WORK" pad_ring
 echo "pad_ring elaborated OK"

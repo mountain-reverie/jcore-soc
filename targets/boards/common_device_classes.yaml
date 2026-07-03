@@ -173,6 +173,7 @@ eth_tx:
   desc: Minimal 10BASE-T Ethernet transmit
   entity: eth_tx
   left-addr-bit: 11
+  ports: { clk_eth: clk_eth }
   regs:
     - { name: tx_data,   width: 4, addr: 0x800 }
     - { name: tx_rstptr, width: 4, addr: 0x804 }

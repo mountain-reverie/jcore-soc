@@ -19,7 +19,7 @@ padring-entities:
   # ports and pad_ring wires clkgen -> soc.
   clkgen:
     entity: ice_clkgen
-    ports: { clk_in: clk, clk_out: clk_sys, rst_out: reset }
+    ports: { clk_in: clk, clk_out: clk_sys, clk_eth: clk_eth, rst_out: reset }
 
 cpu:
   architecture: one_cpu_ebr
@@ -48,7 +48,7 @@ devices:
   - class: eth_tx
     name: eth0
     base-addr: 0xabcd1000
-    ports: { mdi_p: mdi0_p, mdi_n: mdi0_n, tx_done: eth0_tx_done }
+    ports: { mdi_p: mdi0_p, mdi_n: mdi0_n, tx_done: eth0_tx_done, clk_eth: clk_eth }
 
 # Single J1 master: drop cpu1's peripheral bus so socgen connects the one master
 # directly (no multi_master_bus_mux) — saves LCs on the UP5K.
