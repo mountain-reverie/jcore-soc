@@ -13,6 +13,20 @@ entity spram_128k is
 end entity;
 
 architecture rtl of spram_128k is
+  component SB_SPRAM256KA is
+    port (
+      DATAIN     : in  std_logic_vector(15 downto 0);
+      ADDRESS    : in  std_logic_vector(13 downto 0);
+      MASKWREN   : in  std_logic_vector(3 downto 0);
+      WREN       : in  std_logic;
+      CHIPSELECT : in  std_logic;
+      CLOCK      : in  std_logic;
+      STANDBY    : in  std_logic;
+      SLEEP      : in  std_logic;
+      POWEROFF   : in  std_logic;
+      DATAOUT    : out std_logic_vector(15 downto 0));
+  end component;
+
   signal word_a : std_logic_vector(13 downto 0);
   signal bank   : std_logic;
   -- per-bank chip selects and per-16-bit-half MASKWREN
@@ -31,17 +45,17 @@ begin
   mask_hi <= (we(3), we(3), we(2), we(2));
 
   -- Bank 0
-  b0_lo : entity work.SB_SPRAM256KA port map (
+  b0_lo : SB_SPRAM256KA port map (
     DATAIN=>dw(15 downto 0), ADDRESS=>word_a, MASKWREN=>mask_lo, WREN=>en,
     CHIPSELECT=>cs0, CLOCK=>clk, STANDBY=>'0', SLEEP=>'0', POWEROFF=>'1', DATAOUT=>dout0_lo);
-  b0_hi : entity work.SB_SPRAM256KA port map (
+  b0_hi : SB_SPRAM256KA port map (
     DATAIN=>dw(31 downto 16), ADDRESS=>word_a, MASKWREN=>mask_hi, WREN=>en,
     CHIPSELECT=>cs0, CLOCK=>clk, STANDBY=>'0', SLEEP=>'0', POWEROFF=>'1', DATAOUT=>dout0_hi);
   -- Bank 1
-  b1_lo : entity work.SB_SPRAM256KA port map (
+  b1_lo : SB_SPRAM256KA port map (
     DATAIN=>dw(15 downto 0), ADDRESS=>word_a, MASKWREN=>mask_lo, WREN=>en,
     CHIPSELECT=>cs1, CLOCK=>clk, STANDBY=>'0', SLEEP=>'0', POWEROFF=>'1', DATAOUT=>dout1_lo);
-  b1_hi : entity work.SB_SPRAM256KA port map (
+  b1_hi : SB_SPRAM256KA port map (
     DATAIN=>dw(31 downto 16), ADDRESS=>word_a, MASKWREN=>mask_hi, WREN=>en,
     CHIPSELECT=>cs1, CLOCK=>clk, STANDBY=>'0', SLEEP=>'0', POWEROFF=>'1', DATAOUT=>dout1_hi);
 
