@@ -32,7 +32,6 @@ architecture rtl of eth_rx_phy is
   -- Input synchronizer + edge detect
   -- ---------------------------------------------------------------------
   signal rx_m1, rx_s, rx_prev : std_logic := '0';
-  signal edge                 : std_logic;
 
   -- ---------------------------------------------------------------------
   -- Squelch / carrier detect
@@ -110,7 +109,6 @@ begin
       rx_m1 <= rx_in;
       rx_s  <= rx_m1;
       rx_prev <= rx_s;
-      edge <= rx_s xor rx_prev;
 
       -- -----------------------------------------------------------------
       -- Squelch / carrier-detect
