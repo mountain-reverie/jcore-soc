@@ -54,6 +54,6 @@ begin
 
   -- instruction response (16-bit half selected by a(1)); big-endian SH-2:
   -- a(1)=0 -> upper half (bits 31:16), a(1)=1 -> lower half (bits 15:0).
-  ibus_o.d   <= sp_dr(31 downto 16) when r_instr_hi = '0' else sp_dr(15 downto 0);
+  ibus_o.d   <= sp_dr(15 downto 0) when r_instr_hi = '0' else sp_dr(31 downto 16);
   ibus_o.ack <= r_instr_ack;
 end architecture;
