@@ -50,10 +50,12 @@ static unsigned int eth_crc32(const unsigned char *p, unsigned int n)
 }
 
 /* Send a raw frame: 'body' = dest+src+type+payload (no preamble/FCS).
-   FRAME_MAX sized for the short boot-time test frame, not a full 1518B
-   Ethernet MTU -- the 2 KiB EBR boot has no room for a 1526-byte stack
-   buffer. Bump if a larger test frame is ever needed. */
-#define FRAME_MAX 64u
+   FRAME_MAX sized to cover the boot-time test frame plus a standard ICMP
+   echo (14 eth + 20 IP + 8 ICMP hdr + 56 default ping payload = 98 B body,
+   +8 preamble/SFD +4 FCS = 110 B), not a full 1518B Ethernet MTU -- the
+   2 KiB EBR boot has no room for a 1526-byte stack buffer. Bump if a
+   larger frame is ever needed. */
+#define FRAME_MAX 144u
 static void eth_send(const unsigned char *body, unsigned int body_len)
 {
 	unsigned char frame[FRAME_MAX];   /* preamble(7)+SFD(1)+body+FCS(4) */
@@ -80,6 +82,177 @@ static void eth_send(const unsigned char *body, unsigned int body_len)
 		;                      /* poll busy until done */
 }
 
+/* eth_rx registers (Task 5), same 4 KiB device window as eth_tx above. */
+#define ETH_RX_STATUS (*(volatile unsigned int *)(ETH_BASE + 0x900u)) /* bit0 ready, bit1 overrun */
+#define ETH_RX_LEN    (*(volatile unsigned int *)(ETH_BASE + 0x904u))
+#define ETH_RX_DATA   (*(volatile unsigned int *)(ETH_BASE + 0x908u)) /* auto-inc word, big-endian */
+#define ETH_RX_ACK    (*(volatile unsigned int *)(ETH_BASE + 0x90Cu)) /* wr bit0=1: release + rewind ptr */
+
+/* Read the pending frame (if any) into buf (up to max bytes). Returns the
+   received length, or 0 if no frame is ready. Each ETH_RX_DATA access here
+   is its own C volatile load -> its own bus cycle, satisfying the hardware's
+   "one bus cycle between reads" requirement; do not hand-unroll these. */
+static unsigned int eth_recv(unsigned char *buf, unsigned int max)
+{
+	unsigned int n, i, w;
+	if (!(ETH_RX_STATUS & 1u))
+		return 0;
+	n = ETH_RX_LEN;
+	if (n > max)
+		n = max;
+	for (i = 0; i < n; i += 4) {
+		w = ETH_RX_DATA;
+		buf[i] = w >> 24;
+		if (i + 1 < n) buf[i + 1] = w >> 16;
+		if (i + 2 < n) buf[i + 2] = w >> 8;
+		if (i + 3 < n) buf[i + 3] = w;
+	}
+	ETH_RX_ACK = 1u;   /* release the buffer + rewind read pointer for next frame */
+	return n;
+}
+
+/* Our identity for the ARP/ICMP responder. */
+static const unsigned char OUR_MAC[6] = { 0x02, 0x00, 0x00, 0x00, 0x00, 0x01 };
+static const unsigned char OUR_IP[4]  = { 192, 168, 1, 10 };
+
+/* 16-bit one's-complement checksum (RFC 1071) over an arbitrary byte range,
+   with an optional running sum to fold in (used to add the pseudo header or
+   to redo just part of a buffer). p need not be aligned or even length. */
+static unsigned int cksum_add(const unsigned char *p, unsigned int n, unsigned int sum)
+{
+	unsigned int i;
+	for (i = 0; i + 1 < n; i += 2)
+		sum += ((unsigned int)p[i] << 8) | p[i + 1];
+	if (i < n)
+		sum += (unsigned int)p[i] << 8;   /* odd trailing byte, high half */
+	return sum;
+}
+
+static unsigned short cksum_fold(unsigned int sum)
+{
+	while (sum >> 16)
+		sum = (sum & 0xffffu) + (sum >> 16);
+	return (unsigned short)~sum;
+}
+
+static unsigned short ip_cksum(const unsigned char *hdr, unsigned int hlen)
+{
+	return cksum_fold(cksum_add(hdr, hlen, 0));
+}
+
+static void put16(unsigned char *p, unsigned int v)
+{
+	p[0] = (unsigned char)(v >> 8);
+	p[1] = (unsigned char)v;
+}
+
+static unsigned int get16(const unsigned char *p)
+{
+	return ((unsigned int)p[0] << 8) | p[1];
+}
+
+/* Handle one received frame: 'frame' starts at dest MAC (no preamble/SFD,
+   the hardware strips those), 'len' includes the trailing 4-byte FCS.
+   Answers ARP requests for OUR_IP and ICMP echo requests to OUR_IP. */
+static void eth_handle(const unsigned char *frame, unsigned int len)
+{
+	unsigned int ethertype;
+
+	if (len < 18)
+		return;   /* too short to hold even an Ethernet header + FCS */
+
+	/* Optional FCS check: CRC-32 over dest..payload (len-4 bytes) must match
+	   the trailing 4 bytes (wire order = little-endian of the CRC result). */
+	{
+		unsigned int fcs = eth_crc32(frame, len - 4);
+		unsigned int rx_fcs = (unsigned int)frame[len - 4]
+			| ((unsigned int)frame[len - 3] << 8)
+			| ((unsigned int)frame[len - 2] << 16)
+			| ((unsigned int)frame[len - 1] << 24);
+		if (fcs != rx_fcs)
+			return;
+	}
+
+	ethertype = get16(frame + 12);
+
+	/* ---- ARP request -> ARP reply ---- */
+	if (ethertype == 0x0806u && len >= 4 + 42) {
+		unsigned int opcode = get16(frame + 20);
+		const unsigned char *tpa = frame + 38;   /* ARP target protocol addr */
+		if (opcode == 1 &&
+		    tpa[0] == OUR_IP[0] && tpa[1] == OUR_IP[1] &&
+		    tpa[2] == OUR_IP[2] && tpa[3] == OUR_IP[3]) {
+			unsigned char reply[42];
+			const unsigned char *req_mac = frame + 6;    /* ARP sender HA */
+			const unsigned char *req_ip  = frame + 28;   /* ARP sender PA */
+			unsigned int i;
+
+			for (i = 0; i < 6; i++) reply[i] = req_mac[i];        /* eth dst */
+			for (i = 0; i < 6; i++) reply[6 + i] = OUR_MAC[i];    /* eth src */
+			put16(reply + 12, 0x0806u);                            /* ethertype */
+
+			put16(reply + 14, 1);       /* htype = Ethernet */
+			put16(reply + 16, 0x0800u); /* ptype = IPv4 */
+			reply[18] = 6;              /* hlen */
+			reply[19] = 4;              /* plen */
+			put16(reply + 20, 2);       /* opcode = reply */
+			for (i = 0; i < 6; i++) reply[22 + i] = OUR_MAC[i];   /* sender HA */
+			for (i = 0; i < 4; i++) reply[28 + i] = OUR_IP[i];    /* sender PA */
+			for (i = 0; i < 6; i++) reply[32 + i] = req_mac[i];   /* target HA */
+			for (i = 0; i < 4; i++) reply[38 + i] = req_ip[i];    /* target PA */
+
+			eth_send(reply, 42);
+		}
+		return;
+	}
+
+	/* ---- ICMP echo request -> echo reply ---- */
+	if (ethertype == 0x0800u && len >= 4 + 34) {
+		unsigned int ihl = (frame[14] & 0x0fu) * 4u;    /* IPv4 IHL in bytes */
+		unsigned int ip_proto = frame[23];
+		unsigned int body_len = len - 4;                /* frame w/o FCS */
+		if (ihl >= 20 && 14 + ihl + 8 <= body_len && ip_proto == 1 &&
+		    frame[14 + ihl] == 8 /* ICMP echo request */ &&
+		    frame[30] == OUR_IP[0] && frame[31] == OUR_IP[1] &&
+		    frame[32] == OUR_IP[2] && frame[33] == OUR_IP[3]) {
+			/* eth_send() adds preamble(8)+FCS(4) on top of body_len, and its
+			   internal frame[] is FRAME_MAX bytes -- cap here so we never
+			   hand it something it can't hold. */
+			unsigned char pkt[FRAME_MAX - 12u];
+			unsigned int icmp_off = 14 + ihl;
+			unsigned int icmp_len = body_len - icmp_off;
+			unsigned int i, sum;
+
+			if (body_len > sizeof(pkt))
+				return;   /* ping payload too large for our scratch/eth_send buffers */
+
+			for (i = 0; i < body_len; i++)
+				pkt[i] = frame[i];
+
+			/* swap eth addrs */
+			for (i = 0; i < 6; i++) { pkt[i] = frame[6 + i]; pkt[6 + i] = OUR_MAC[i]; }
+			/* swap IP addrs */
+			for (i = 0; i < 4; i++) {
+				pkt[26 + i] = frame[30 + i];   /* new src = old dst (us) */
+				pkt[30 + i] = frame[26 + i];   /* new dst = old src (requester) */
+			}
+			/* ICMP: type 0 (echo reply), code unchanged, recompute checksum */
+			pkt[icmp_off] = 0;                 /* type = echo reply */
+			pkt[icmp_off + 1] = frame[icmp_off + 1]; /* code, unchanged */
+			put16(pkt + icmp_off + 2, 0);       /* zero checksum before recompute */
+			sum = cksum_add(pkt + icmp_off, icmp_len, 0);
+			put16(pkt + icmp_off + 2, cksum_fold(sum));
+
+			/* IPv4 header checksum: zero field, recompute over header only */
+			put16(pkt + 24, 0);
+			put16(pkt + 24, ip_cksum(pkt + 14, ihl));
+
+			eth_send(pkt, body_len);
+		}
+		return;
+	}
+}
+
 #define SPRAM_BASE  0x10000000u
 #define SPRAM_WORDS (128u*1024u/4u)   /* 32768 words */
 
@@ -102,6 +275,11 @@ static void spram_memtest(void)
 	for (i = 0u; i < SPRAM_WORDS; i++) if (p[i] != i * 2654435761u) bad++;
 	puts_uart(bad ? "SPRAM MEMTEST FAIL\r\n" : "SPRAM MEMTEST OK\r\n");
 }
+
+/* Static (not on-stack): the boot stack is tiny, and 256 B would be a
+   sizable chunk of it. Sized for ARP (42 B) or a small ping (~98 B) with
+   headroom; eth_recv() truncates anything larger. */
+static unsigned char rxbuf[256];
 
 void main(void)
 {
@@ -136,10 +314,14 @@ void main(void)
 
 	spram_memtest();     /* proves all 128 KB read/write */
 
-	/* visible heartbeat: toggle the LED forever (the banner above is what the
-	   sim testbench checks; the blink is for on-hardware sanity). */
+	/* visible heartbeat + eth RX poll: toggle the LED forever (the banner
+	   above is what the sim testbench checks; the blink is for on-hardware
+	   sanity), answering ARP/ICMP-echo as frames arrive. */
 	for (;;) {
 		volatile unsigned int d;
+		unsigned int n = eth_recv(rxbuf, sizeof(rxbuf));
+		if (n)
+			eth_handle(rxbuf, n);
 		GPIO_TOGGLE = 0x01u;
 		for (d = 0; d < 200000u; d++)
 			;
