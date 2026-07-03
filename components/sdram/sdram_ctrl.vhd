@@ -113,7 +113,18 @@ begin
               sa := sdram_addr(req.a);
               lbank <= sa.bank; lrow <= sa.row; lcol <= sa.col;
               lbst <= bst; lwr <= req.wr;
-              wcnt <= 0; wcol <= sa.col;
+              wcnt <= 0;
+              -- A read always returns the aligned 32-bit word as two beats and the
+              -- CPU selects the sub-word (align_read_data). sdram_addr puts the
+              -- byte-1 (halfword) bit into col(0), so an *uncached* sub-word read
+              -- (a(1)=1) would start one column high -> misaligned data. Force the
+              -- read column word-aligned. Writes keep col(0): a sub-word write
+              -- targets that exact 16-bit column with its own byte enables (dqm).
+              if req.wr = '0' then
+                wcol <= sa.col(SDR_COL_BITS - 1 downto 1) & '0';
+              else
+                wcol <= sa.col;
+              end if;
               setcmd(CMD_ACT); r_cmd.ba <= sa.bank; r_cmd.a <= sa.row;
               tmr <= T_RCD;
               if req.wr = '1' then after_st <= S_WR0; else after_st <= S_RD0; end if;
