@@ -2,5 +2,7 @@ set_io pin_clk 35
 set_io pin_ledb_n 39
 set_io pin_ledg_n 40
 set_io pin_ledr_n 41
+set_io pin_mdi0_n 36
+set_io pin_mdi0_p 37
 set_io pin_ser_rx 4
 set_io pin_ser_tx 6

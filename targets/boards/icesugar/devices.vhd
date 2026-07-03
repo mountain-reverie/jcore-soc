@@ -21,6 +21,8 @@ entity devices is
         cpu1_periph_dbus_i : out cpu_data_i_t;
         cpu1_periph_dbus_o : in cpu_data_o_t;
         gpio_do : out std_logic_vector(2 downto 0);
+        mdi0_n : out std_logic;
+        mdi0_p : out std_logic;
         reset : in std_logic;
         uart0_rx : in std_logic;
         uart0_tx : out std_logic
@@ -70,8 +72,8 @@ begin
             clk => clk_sys,
             db_i => devs_bus_o(DEV_ETH0),
             db_o => devs_bus_i(DEV_ETH0),
-            mdi_n => open,
-            mdi_p => open,
+            mdi_n => mdi0_n,
+            mdi_p => mdi0_p,
             rst => reset,
             tx_done => open
         );

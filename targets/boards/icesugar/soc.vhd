@@ -16,6 +16,8 @@ entity soc is
     port (
         clk_sys : in std_logic;
         gpio_do : out std_logic_vector(2 downto 0);
+        mdi0_n : out std_logic;
+        mdi0_p : out std_logic;
         reset : in std_logic;
         uart0_rx : in std_logic;
         uart0_tx : out std_logic
@@ -81,6 +83,8 @@ begin
             cpu1_periph_dbus_i => cpu1_periph_dbus_i,
             cpu1_periph_dbus_o => cpu1_periph_dbus_o,
             gpio_do => gpio_do,
+            mdi0_n => mdi0_n,
+            mdi0_p => mdi0_p,
             reset => reset,
             uart0_rx => uart0_rx,
             uart0_tx => uart0_tx
