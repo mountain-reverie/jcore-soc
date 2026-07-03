@@ -1,10 +1,11 @@
 -- eth_tx : 10BASE-T Manchester TX device.
 --
 -- CPU-bus (cpu2j0_pack) attached device running in the 12 MHz clk domain.
--- Instantiates an SB_PLL40_CORE (12->20 MHz, unbound at synth / behavioural in
--- sim via components/emac/sb_pll40_core_sim.vhd) to drive the 20 MHz clk_eth
--- domain, an inferred dual-clock frame buffer (32-bit write @clk / 8-bit read
--- @clk_eth, big-endian on the wire), and the eth_tx_phy Manchester serializer.
+-- The 20 MHz clk_eth domain (dual-clock frame buffer: 32-bit write @clk /
+-- 8-bit read @clk_eth, big-endian on the wire) is driven by a clk_eth input
+-- port fed by the board clock generator (ice_clkgen, SB_PLL40_2_PAD PORTB) --
+-- the UP5K has a single PLL bel, which must be shared with the 12 MHz CPU
+-- clock passthrough, so the PLL can no longer live inside this device.
 --
 -- Register map (device-local byte offsets, decoded on db_i.a(11 downto 0)):
 --   0x800 write     = TX_DATA : append 32-bit word to buffer, wr ptr += 4 bytes
@@ -13,9 +14,6 @@
 --   0x808 write     = TX_LEN  : frame length in bytes
 --   0x80C write bit0= TX_GO   : start transmission
 --   0x810 read  bit0= busy    : 1 while a transmission is in progress
---
--- PLL params from `icepll -i 12 -o 20`:
---   DIVR=0 DIVF=52 DIVQ=5 FILTER_RANGE=1 (achieved 19.875 MHz, FEEDBACK SIMPLE)
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -32,27 +30,11 @@ entity eth_tx is
     db_o    : out cpu_data_i_t;              -- to CPU
     mdi_p   : out std_logic;
     mdi_n   : out std_logic;
-    tx_done : out std_logic);
+    tx_done : out std_logic;
+    clk_eth : in  std_logic);                -- ~20 MHz PHY-domain clock
 end entity;
 
 architecture rtl of eth_tx is
-
-  component SB_PLL40_CORE is
-    generic (
-      FEEDBACK_PATH : string := "SIMPLE";
-      PLLOUT_SELECT : string := "GENCLK";
-      DIVR          : std_logic_vector(3 downto 0) := "0000";
-      DIVF          : std_logic_vector(6 downto 0) := "0000000";
-      DIVQ          : std_logic_vector(2 downto 0) := "000";
-      FILTER_RANGE  : std_logic_vector(2 downto 0) := "000");
-    port (
-      REFERENCECLK : in  std_logic;
-      PLLOUTCORE   : out std_logic;
-      PLLOUTGLOBAL : out std_logic;
-      RESETB       : in  std_logic;
-      BYPASS       : in  std_logic;
-      LOCK         : out std_logic);
-  end component;
 
   -- Address offsets
   constant A_TX_DATA : std_logic_vector(11 downto 0) := x"800";
@@ -60,10 +42,6 @@ architecture rtl of eth_tx is
   constant A_TX_LEN  : std_logic_vector(11 downto 0) := x"808";
   constant A_TX_GO   : std_logic_vector(11 downto 0) := x"80C";
   constant A_BUSY    : std_logic_vector(11 downto 0) := x"810";
-
-  -- PLL / clk_eth
-  signal clk_eth   : std_logic;
-  signal pll_lock  : std_logic;
 
   -- Dual-clock frame buffer, split into 4 byte-lane RAMs (one SB_RAM40 each).
   -- Lane i holds byte i of each 32-bit word (big-endian: lane0 = first byte
@@ -102,25 +80,6 @@ architecture rtl of eth_tx is
   signal rd_bsel_r : std_logic_vector(1 downto 0) := (others => '0');
 
 begin
-
-  ------------------------------------------------------------------
-  -- PLL: 12 MHz -> 20 MHz
-  ------------------------------------------------------------------
-  pll: SB_PLL40_CORE
-    generic map (
-      FEEDBACK_PATH => "SIMPLE",
-      PLLOUT_SELECT => "GENCLK",
-      DIVR          => "0000",     -- 0
-      DIVF          => "0110100",  -- 52
-      DIVQ          => "101",      -- 5
-      FILTER_RANGE  => "001")      -- 1
-    port map (
-      REFERENCECLK => clk,
-      PLLOUTCORE   => open,
-      PLLOUTGLOBAL => clk_eth,
-      RESETB       => '1',
-      BYPASS       => '0',
-      LOCK         => pll_lock);
 
   ------------------------------------------------------------------
   -- 12 MHz register / bus process + buffer write port

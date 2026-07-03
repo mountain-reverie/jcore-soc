@@ -26,6 +26,7 @@ entity pad_ring is
 end;
 architecture impl of pad_ring is
     signal clk : std_logic;
+    signal clk_eth : std_logic;
     signal clk_sys : std_logic;
     signal gpio_do : std_logic_vector(2 downto 0);
     signal mdi0_n : std_logic;
@@ -36,6 +37,7 @@ architecture impl of pad_ring is
 begin
     soc : entity work.soc(impl)
         port map (
+            clk_eth => clk_eth,
             clk_sys => clk_sys,
             gpio_do => gpio_do,
             mdi0_n => mdi0_n,
@@ -46,6 +48,7 @@ begin
         );
     clkgen : entity work.ice_clkgen(rtl)
         port map (
+            clk_eth => clk_eth,
             clk_in => clk,
             clk_out => clk_sys,
             rst_out => reset
