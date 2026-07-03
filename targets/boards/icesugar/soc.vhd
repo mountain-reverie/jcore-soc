@@ -15,7 +15,7 @@ use work.cpu2j0_pack.all;
 entity soc is
     port (
         clk_sys : in std_logic;
-        gpio_do : out std_logic_vector(7 downto 0);
+        gpio_do : out std_logic_vector(2 downto 0);
         reset : in std_logic;
         uart0_rx : in std_logic;
         uart0_tx : out std_logic

@@ -30,7 +30,7 @@ COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 # $assert) that nextpnr-ice40 rejects before writing the json it consumes.
 # stat output is captured in yosys.log so emit_metrics.py can read LC/RAM counts
 # even when nextpnr later fails to place.
-yosys -m ghdl -p "$GHDL_BASE -e pad_ring; synth_ice40 -top pad_ring; \
+yosys -m ghdl -p "$GHDL_BASE -e pad_ring; synth_ice40 -top pad_ring -abc2; \
   check -assert; chformal -remove; delete t:\$check t:\$print; stat; \
   write_json $OUT/icesugar.json" 2>&1 | tee "$OUT/yosys.log"
 

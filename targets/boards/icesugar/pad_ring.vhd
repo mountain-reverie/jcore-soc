@@ -25,7 +25,7 @@ end;
 architecture impl of pad_ring is
     signal clk : std_logic;
     signal clk_sys : std_logic;
-    signal gpio_do : std_logic_vector(7 downto 0);
+    signal gpio_do : std_logic_vector(2 downto 0);
     signal reset : std_logic;
     signal uart0_rx : std_logic;
     signal uart0_tx : std_logic;
