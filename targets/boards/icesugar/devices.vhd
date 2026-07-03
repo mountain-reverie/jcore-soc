@@ -20,14 +20,14 @@ entity devices is
         cpu0_periph_dbus_o : in cpu_data_o_t;
         cpu1_periph_dbus_i : out cpu_data_i_t;
         cpu1_periph_dbus_o : in cpu_data_o_t;
-        gpio_do : out std_logic_vector(7 downto 0);
+        gpio_do : out std_logic_vector(2 downto 0);
         reset : in std_logic;
         uart0_rx : in std_logic;
         uart0_tx : out std_logic
     );
 end;
 architecture impl of devices is
-    signal gpio_di : std_logic_vector(7 downto 0);
+    signal gpio_di : std_logic_vector(2 downto 0);
     type device_t is (NONE, DEV_GPIO0, DEV_UART0);
     signal active_dev : device_t;
     type data_bus_i_t is array (device_t'left to device_t'right) of cpu_data_i_t;
@@ -62,7 +62,7 @@ begin
     -- Instantiate devices
     gpio0 : entity work.gpio2(arch)
         generic map (
-            width => 8
+            width => 3
         )
         port map (
             clk => clk_sys,
@@ -77,8 +77,8 @@ begin
     uart0 : entity work.uartlitedb(arch)
         generic map (
             fclk => CFG_CLK_CPU_FREQ_HZ,
-            rx_fifo_len => 2,
-            tx_fifo_len => 2
+            rx_fifo_len => 1,
+            tx_fifo_len => 1
         )
         port map (
             clk => clk_sys,
