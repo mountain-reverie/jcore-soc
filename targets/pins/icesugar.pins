@@ -7,3 +7,10 @@ ser_tx 6
 ledr_n 41
 ledg_n 40
 ledb_n 39
+
+# PMOD2 header (pins P2_4 / P2_9): 10BASE-T eth_tx MDI0 differential pair.
+# Header choice is not confirmed against the physical PMOD-ETHERNET module
+# wiring -- verify PMOD2 is the header the module is plugged into before
+# building hardware (see task-4-report.md).
+mdi0_p 37
+mdi0_n 36

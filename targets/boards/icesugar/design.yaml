@@ -69,3 +69,5 @@ pins:
     - { match: ledr_n, out: { name: "gpio_do(0)", invert: true } }
     - { match: ledg_n, out: { name: "gpio_do(1)", invert: true } }
     - { match: ledb_n, out: { name: "gpio_do(2)", invert: true } }
+    - { match: mdi0_p, out: { name: mdi0_p } }
+    - { match: mdi0_n, out: { name: mdi0_n } }
