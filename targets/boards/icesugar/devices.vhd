@@ -28,7 +28,7 @@ entity devices is
 end;
 architecture impl of devices is
     signal gpio_di : std_logic_vector(2 downto 0);
-    type device_t is (NONE, DEV_GPIO0, DEV_UART0);
+    type device_t is (NONE, DEV_ETH0, DEV_GPIO0, DEV_UART0);
     signal active_dev : device_t;
     type data_bus_i_t is array (device_t'left to device_t'right) of cpu_data_i_t;
     type data_bus_o_t is array (device_t'left to device_t'right) of cpu_data_o_t;
@@ -38,13 +38,18 @@ architecture impl of devices is
     begin
         -- Assumes addr(31 downto 28) = x"a".
         -- Address decoding closer to CPU checks those bits.
-        if addr(27 downto 9) = "1011110011010000000" then
-            if addr(8 downto 4) = "00000" then
-                -- ABCD0000-ABCD000F
-                return DEV_GPIO0;
-            elsif addr(8 downto 4) = "10000" then
-                -- ABCD0100-ABCD010F
-                return DEV_UART0;
+        if addr(27 downto 13) = "101111001101000" then
+            if addr(12 downto 9) = "0000" then
+                if addr(8 downto 4) = "00000" then
+                    -- ABCD0000-ABCD000F
+                    return DEV_GPIO0;
+                elsif addr(8 downto 4) = "10000" then
+                    -- ABCD0100-ABCD010F
+                    return DEV_UART0;
+                end if;
+            elsif addr(12) = '1' then
+                -- ABCD1000-ABCD1FFF
+                return DEV_ETH0;
             end if;
         end if;
         return NONE;
@@ -60,6 +65,16 @@ begin
     end generate;
     devs_bus_i(NONE) <= loopback_bus(devs_bus_o(NONE));
     -- Instantiate devices
+    eth0 : entity work.eth_tx(rtl)
+        port map (
+            clk => clk_sys,
+            db_i => devs_bus_o(DEV_ETH0),
+            db_o => devs_bus_i(DEV_ETH0),
+            mdi_n => open,
+            mdi_p => open,
+            rst => reset,
+            tx_done => open
+        );
     gpio0 : entity work.gpio2(arch)
         generic map (
             width => 3

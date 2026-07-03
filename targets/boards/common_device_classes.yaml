@@ -169,6 +169,17 @@ i2c:
     - { name: ctrl2 }
     - { name: data, type: mem, width: 20 }
 
+eth_tx:
+  desc: Minimal 10BASE-T Ethernet transmit
+  entity: eth_tx
+  left-addr-bit: 11
+  regs:
+    - { name: tx_data,   width: 4, addr: 0x800 }
+    - { name: tx_rstptr, width: 4, addr: 0x804 }
+    - { name: tx_len,    width: 4, addr: 0x808 }
+    - { name: tx_go,     width: 4, addr: 0x80c }
+    - { name: tx_status, width: 4, addr: 0x810, mode: read }
+
 emac:
   entity: eth_mac_rmii
   configuration: eth_mac_rmii_fpga

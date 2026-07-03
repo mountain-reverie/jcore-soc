@@ -8,8 +8,19 @@
 #define DRAM_BASE 0x10000000
 
 // Memory mapped peripherals
+#define DEVICE_ETH0_ADDR  0xabcd1000
 #define DEVICE_GPIO0_ADDR 0xabcd0000
 #define DEVICE_UART0_ADDR 0xabcd0100
+
+struct eth_tx_regs {
+  uint32_t ignore0[512];
+  uint32_t tx_data;
+  uint32_t tx_rstptr;
+  uint32_t tx_len;
+  uint32_t tx_go;
+  uint32_t tx_status; // read-only
+};
+#define DEVICE_ETH0 ((volatile struct eth_tx_regs *) DEVICE_ETH0_ADDR)
 
 struct gpio2_regs {
   uint32_t value;

@@ -38,9 +38,13 @@
 
 	soc@abcd0000 {
 		compatible = "simple-bus";
-		ranges = <0x0 0xabcd0000 0x110>;
+		ranges = <0x0 0xabcd0000 0x2000>;
 		#address-cells = <1>;
 		#size-cells = <1>;
+
+		eth_tx {
+			reg = <0x1000 0x1000>; // ABCD1000-ABCD1FFF
+		};
 
 		gpio2 {
 			compatible = "jcore,gpio2";
