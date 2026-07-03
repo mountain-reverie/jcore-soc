@@ -19,6 +19,7 @@ entity soc is
         gpio_do : out std_logic_vector(2 downto 0);
         mdi0_n : out std_logic;
         mdi0_p : out std_logic;
+        mdi1 : in std_logic;
         reset : in std_logic;
         uart0_rx : in std_logic;
         uart0_tx : out std_logic
@@ -87,6 +88,7 @@ begin
             gpio_do => gpio_do,
             mdi0_n => mdi0_n,
             mdi0_p => mdi0_p,
+            mdi1 => mdi1,
             reset => reset,
             uart0_rx => uart0_rx,
             uart0_tx => uart0_tx

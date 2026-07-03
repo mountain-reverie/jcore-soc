@@ -24,6 +24,7 @@ entity devices is
         gpio_do : out std_logic_vector(2 downto 0);
         mdi0_n : out std_logic;
         mdi0_p : out std_logic;
+        mdi1 : in std_logic;
         reset : in std_logic;
         uart0_rx : in std_logic;
         uart0_tx : out std_logic
@@ -77,6 +78,8 @@ begin
             mdi_n => mdi0_n,
             mdi_p => mdi0_p,
             rst => reset,
+            rx_in => mdi1,
+            rx_irq => open,
             tx_done => open
         );
     gpio0 : entity work.gpio2(arch)

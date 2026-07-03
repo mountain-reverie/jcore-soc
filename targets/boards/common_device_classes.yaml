@@ -180,6 +180,10 @@ eth_tx:
     - { name: tx_len,    width: 4, addr: 0x808 }
     - { name: tx_go,     width: 4, addr: 0x80c }
     - { name: tx_status, width: 4, addr: 0x810, mode: read }
+    - { name: rx_status, width: 4, addr: 0x900, mode: read }
+    - { name: rx_len,    width: 4, addr: 0x904, mode: read }
+    - { name: rx_data,   width: 4, addr: 0x908, mode: read }
+    - { name: rx_ack,    width: 4, addr: 0x90c }
 
 emac:
   entity: eth_mac_rmii

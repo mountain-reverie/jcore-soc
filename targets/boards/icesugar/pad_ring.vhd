@@ -20,6 +20,7 @@ entity pad_ring is
         pin_ledr_n : out std_logic;
         pin_mdi0_n : out std_logic;
         pin_mdi0_p : out std_logic;
+        pin_mdi1_p : in std_logic;
         pin_ser_rx : in std_logic;
         pin_ser_tx : out std_logic
     );
@@ -31,6 +32,7 @@ architecture impl of pad_ring is
     signal gpio_do : std_logic_vector(2 downto 0);
     signal mdi0_n : std_logic;
     signal mdi0_p : std_logic;
+    signal mdi1 : std_logic;
     signal reset : std_logic;
     signal uart0_rx : std_logic;
     signal uart0_tx : std_logic;
@@ -42,6 +44,7 @@ begin
             gpio_do => gpio_do,
             mdi0_n => mdi0_n,
             mdi0_p => mdi0_p,
+            mdi1 => mdi1,
             reset => reset,
             uart0_rx => uart0_rx,
             uart0_tx => uart0_tx
@@ -59,6 +62,7 @@ begin
     pin_ledr_n <= not gpio_do(0);
     pin_mdi0_n <= mdi0_n;
     pin_mdi0_p <= mdi0_p;
+    mdi1 <= pin_mdi1_p;
     uart0_rx <= pin_ser_rx;
     pin_ser_tx <= uart0_tx;
 end;

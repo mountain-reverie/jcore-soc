@@ -19,6 +19,11 @@ struct eth_tx_regs {
   uint32_t tx_len;
   uint32_t tx_go;
   uint32_t tx_status; // read-only
+  uint32_t ignore1[59];
+  uint32_t rx_status; // read-only
+  uint32_t rx_len; // read-only
+  uint32_t rx_data; // read-only
+  uint32_t rx_ack;
 };
 #define DEVICE_ETH0 ((volatile struct eth_tx_regs *) DEVICE_ETH0_ADDR)
 
