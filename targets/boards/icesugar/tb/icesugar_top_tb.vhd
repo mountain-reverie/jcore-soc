@@ -11,11 +11,40 @@ entity icesugar_top_tb is end entity;
 architecture sim of icesugar_top_tb is
   constant CLK_PER : time := 1 sec / 12_000_000;   -- 12 MHz oscillator
   constant BIT_PER : time := 1 sec / 115200;       -- one UART bit at ~115200 baud
+  -- eth_tx_phy's clk_eth is the sim-only SB_PLL40_CORE model's free-running
+  -- 20 MHz (25 ns half-period, see sb_pll40_core_sim.vhd) -- one Manchester
+  -- half-bit slot is exactly one clk_eth cycle, same convention as
+  -- eth_tx_phy_tb.
+  constant HALF_BIT : time := 50 ns;
   signal clk    : std_logic := '0';
   signal ser_rx : std_logic := '1';
   signal ser_tx : std_logic;
   signal ledr_n, ledg_n, ledb_n : std_logic;
+  signal mdi0_p, mdi0_n : std_logic;
   signal done   : boolean := false;
+  signal eth_ok : boolean := false;
+
+  -- Known test frame sent by banner.c's eth_send(): preamble(7)+SFD(1)+
+  -- dest(6)+src(6)+ethertype(2)+payload(2)+FCS(4) = 28 bytes. The FCS is the
+  -- IEEE 802.3 CRC-32 (reflected, poly 0xEDB88320, init/final invert) over
+  -- dest..payload, appended little-endian; since the test frame's body is a
+  -- fixed compile-time constant, its CRC is also a fixed constant -- so we
+  -- precompute it here (matches banner.c's eth_crc32 exactly) and assert
+  -- decoded bytes equal it, rather than only checking "FCS is nonzero". This
+  -- is strictly stronger: it also fault-catches wire order / CRC-poly bugs.
+  constant NFRAME : integer := 28;
+  type frame_t is array (0 to NFRAME - 1) of std_logic_vector(7 downto 0);
+  constant EXPECT_FRAME : frame_t := (
+    0 => x"55", 1 => x"55", 2 => x"55", 3 => x"55",
+    4 => x"55", 5 => x"55", 6 => x"55",             -- preamble x7
+    7 => x"D5",                                      -- SFD
+    8 => x"FF", 9 => x"FF", 10 => x"FF",
+    11 => x"FF", 12 => x"FF", 13 => x"FF",           -- dest: broadcast
+    14 => x"02", 15 => x"00", 16 => x"00",
+    17 => x"00", 18 => x"00", 19 => x"01",           -- src MAC
+    20 => x"88", 21 => x"B5",                        -- ethertype
+    22 => x"4A", 23 => x"31",                        -- payload "J1"
+    25 => x"E1", 24 => x"27", 26 => x"78", 27 => x"5A"); -- FCS (LE), CRC32=0x5A78E127
 
   function contains(buf : string; n : integer; sub : string) return boolean is
   begin
@@ -28,9 +57,65 @@ architecture sim of icesugar_top_tb is
 begin
   uut : entity work.pad_ring(impl)
     port map (pin_clk => clk, pin_ser_rx => ser_rx, pin_ser_tx => ser_tx,
-              pin_ledr_n => ledr_n, pin_ledg_n => ledg_n, pin_ledb_n => ledb_n);
+              pin_ledr_n => ledr_n, pin_ledg_n => ledg_n, pin_ledb_n => ledb_n,
+              pin_mdi0_p => mdi0_p, pin_mdi0_n => mdi0_n);
 
   clk <= not clk after CLK_PER/2 when not done else '0';
+
+  -- Manchester decoder on the top-level differential MDI pins.
+  --
+  -- eth_tx_phy idles the pair at "00" (both low) and periodically emits a
+  -- single-clk_eth-cycle NLP (normal link pulse, diff="10") every
+  -- NLP_PERIOD cycles -- including one right at reset release, since
+  -- nlp_cnt resets to 0. A real frame instead drives the pair continuously
+  -- non-"00" (alternating "01"/"10") for the whole frame duration (never
+  -- idle mid-frame). So: on any "00"->non-"00" edge, wait long enough to
+  -- distinguish a single-cycle NLP blip (reverts to "00" after 1 clk_eth
+  -- cycle = HALF_BIT) from a real frame (still driven at 1.5*HALF_BIT) --
+  -- if it already reverted, it was an NLP pulse; loop and keep watching.
+  eth_decode : process
+    variable t0    : time;
+    variable got   : frame_t;
+    variable bitv  : std_logic;
+    variable j     : integer;
+  begin
+    loop
+      wait until mdi0_p = '1' or mdi0_n = '1';
+      t0 := now;
+      wait for HALF_BIT + HALF_BIT/2;
+      if mdi0_p = '0' and mdi0_n = '0' then
+        next;   -- spurious NLP pulse; keep scanning
+      end if;
+      exit;
+    end loop;
+
+    -- Real frame: t0 is the start of half-bit slot 0 (first half of the
+    -- first preamble bit). Per-bit j (LSB-first within each byte), the
+    -- second half-bit (slot 2*j+1) carries the bit value -- same convention
+    -- as eth_tx_phy_tb (mdi_p sampled mid-slot; second half's polarity ==
+    -- bit value, matching the RTL's diff <= b & (not b) on the second
+    -- half-bit).
+    for i in 0 to NFRAME - 1 loop
+      for j in 0 to 7 loop
+        wait for (t0 + (real(16*i + 2*j + 1) + 0.5) * HALF_BIT) - now;
+        bitv := mdi0_p;
+        assert mdi0_p /= mdi0_n
+          report "icesugar_top_tb: illegal MDI differential state at byte "
+                 & integer'image(i) & " bit " & integer'image(j)
+          severity error;
+        got(i)(j) := bitv;
+      end loop;
+    end loop;
+
+    assert got = EXPECT_FRAME
+      report "icesugar_top_tb: decoded ethernet frame mismatch" severity error;
+    if got = EXPECT_FRAME then
+      report "icesugar_top_tb: ETH FRAME OK (decoded+CRC-verified 28-byte frame matches)"
+        severity note;
+      eth_ok <= true;
+    end if;
+    wait;
+  end process;
 
   -- UART receiver: decode ser_tx into a string; succeed once the banner has
   -- appeared. Sample at the bit centre, LSB first, 8N1.
@@ -52,7 +137,10 @@ begin
         buf(n) := character'val(to_integer(unsigned(b)));
       end if;
       if contains(buf, n, "SPRAM MEMTEST OK") then
-        report "icesugar_top_tb PASSED: FROM SPRAM + SPRAM MEMTEST OK seen"
+        if not eth_ok then
+          wait until eth_ok;
+        end if;
+        report "icesugar_top_tb PASSED: FROM SPRAM + SPRAM MEMTEST OK + ETH FRAME OK"
           severity note;
         done <= true;
         wait;
@@ -66,7 +154,7 @@ begin
 
   watchdog : process begin
     wait for 150 ms;
-    assert done report "TIMEOUT: SPRAM MEMTEST OK not seen on ser_tx" severity failure;
+    assert done report "TIMEOUT: SPRAM MEMTEST OK / ETH FRAME OK not seen" severity failure;
     wait;
   end process;
 end architecture;
