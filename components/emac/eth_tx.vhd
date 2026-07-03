@@ -77,7 +77,6 @@ architecture rtl of eth_tx is
   signal busy_meta : std_logic := '0';
   signal busy_sync : std_logic := '0';
   signal busy_prev : std_logic := '0';
-  signal ack_r     : std_logic := '0';
   signal rdata_r   : std_logic_vector(31 downto 0) := (others => '0');
 
   -- clk_eth (20 MHz) domain
@@ -85,12 +84,14 @@ architecture rtl of eth_tx is
   signal go_s      : std_logic := '0';
   signal go_prev   : std_logic := '0';
   signal tx_start  : std_logic := '0';
+  signal tx_start_d: std_logic := '0';  -- tx_start delayed 1 cycle, feeds the phy
+  signal tx_len_eth: unsigned(11 downto 0) := (others => '0');
   signal phy_busy  : std_logic;
   signal phy_done  : std_logic;
   signal rd_addr   : unsigned(11 downto 0);
   signal rd_data   : std_logic_vector(7 downto 0);
-  signal rd_word   : std_logic_vector(31 downto 0);
-  signal rd_bsel   : std_logic_vector(1 downto 0);
+  signal rd_word_r : std_logic_vector(31 downto 0) := (others => '0');
+  signal rd_bsel_r : std_logic_vector(1 downto 0) := (others => '0');
 
 begin
 
@@ -135,7 +136,6 @@ begin
       end if;
 
       -- default bus response
-      ack_r <= db_i.en;
       rdata_r <= (others => '0');
 
       if db_i.en = '1' and db_i.wr = '1' then
@@ -171,7 +171,6 @@ begin
         tx_len_r  <= (others => '0');
         go_tgl    <= '0';
         go_pend   <= '0';
-        ack_r     <= '0';
         tx_done   <= '0';
         busy_meta <= '0';
         busy_sync <= '0';
@@ -180,7 +179,9 @@ begin
     end if;
   end process;
 
-  db_o.ack <= ack_r;
+  -- Combinational ack (mirrors uart.vhd / pio.vhd / spi2.vhd / gpio2.vhd
+  -- convention): the device never stalls the bus.
+  db_o.ack <= db_i.en;
   db_o.d   <= rdata_r;
 
   ------------------------------------------------------------------
@@ -195,27 +196,49 @@ begin
       go_prev <= go_s;
       tx_start <= go_s xor go_prev;
 
+      -- tx_len_r (clk domain) is latched into the clk_eth domain right here,
+      -- on the synchronized tx_start pulse, instead of being read directly
+      -- by the phy (which would be an unsynchronized multi-bit CDC). This
+      -- relies on software ordering: TX_LEN is written before TX_GO, and the
+      -- GO toggle-sync above already adds a couple of clk_eth cycles of
+      -- margin, so tx_len_r is guaranteed stable by the time tx_start pulses.
+      if tx_start = '1' then
+        tx_len_eth <= tx_len_r;
+      end if;
+      -- tx_start_d is tx_start delayed one more clk_eth cycle: it feeds the
+      -- phy so tx_len_eth (latched above, valid only from the cycle *after*
+      -- tx_start) is already stable by the time the phy consumes it.
+      tx_start_d <= tx_start;
+
       if rst = '1' then
-        go_meta  <= '0';
-        go_s     <= '0';
-        go_prev  <= '0';
-        tx_start <= '0';
+        go_meta    <= '0';
+        go_s       <= '0';
+        go_prev    <= '0';
+        tx_start   <= '0';
+        tx_start_d <= '0';
+        tx_len_eth <= (others => '0');
       end if;
     end if;
   end process;
 
-  -- Combinational (async) read: the eth_tx_phy expects rd_data valid in the
-  -- same cycle rd_addr is applied (the Task-1 ROM stub was asynchronous), so a
-  -- registered read would arrive one cycle late. byte-addressed, big-endian.
-  rd_word <= mem(to_integer(rd_addr(11 downto 2)));
-  rd_bsel <= std_logic_vector(rd_addr(1 downto 0));
+  -- Registered read (models the real EBR: rd_data valid one clk_eth cycle
+  -- after rd_addr is presented), written as a clocked process so synthesis
+  -- (yosys synth_ice40) prefers SB_RAM40 inference over distributed LUT RAM.
+  -- The eth_tx_phy prefetches accordingly (see eth_tx_phy.vhd).
+  ram_rd_proc: process (clk_eth) is
+  begin
+    if rising_edge(clk_eth) then
+      rd_word_r <= mem(to_integer(rd_addr(11 downto 2)));
+      rd_bsel_r <= std_logic_vector(rd_addr(1 downto 0));
+    end if;
+  end process;
 
   -- big-endian byte mux: byte 0 (lowest addr) = d(31:24)
-  with rd_bsel select
-    rd_data <= rd_word(31 downto 24) when "00",
-               rd_word(23 downto 16) when "01",
-               rd_word(15 downto  8) when "10",
-               rd_word( 7 downto  0) when others;
+  with rd_bsel_r select
+    rd_data <= rd_word_r(31 downto 24) when "00",
+               rd_word_r(23 downto 16) when "01",
+               rd_word_r(15 downto  8) when "10",
+               rd_word_r( 7 downto  0) when others;
 
   ------------------------------------------------------------------
   -- Manchester serializer PHY (20 MHz)
@@ -224,8 +247,8 @@ begin
     port map (
       clk_eth  => clk_eth,
       rst      => rst,
-      tx_start => tx_start,
-      tx_len   => tx_len_r,
+      tx_start => tx_start_d,
+      tx_len   => tx_len_eth,
       rd_addr  => rd_addr,
       rd_data  => rd_data,
       busy     => phy_busy,
