@@ -53,15 +53,12 @@ architecture impl of soc is
     signal cpu1_mem_lock : std_logic;
     signal cpu1_periph_dbus_i : cpu_data_i_t;
     signal cpu1_periph_dbus_o : cpu_data_o_t;
-    signal dcache0_ctrl : cache_ctrl_t;
-    signal dcache1_ctrl : cache_ctrl_t;
     signal ddr_burst : std_logic;
     signal ddr_bus_ack_r : std_logic;
     signal ddr_bus_i : cpu_data_i_t;
     signal ddr_bus_o : cpu_data_o_t;
     signal debug_i : cpu_debug_i_t;
     signal dma_dbus_o : bus_ddr_o_t;
-    signal icache1_ctrl : cache_ctrl_t;
 begin
     aic_irq_gen : entity work.aic_irq_gen(rtl)
         port map (
@@ -123,8 +120,8 @@ begin
             cpu1_ibus_i => cpu1_ddr_ibus_i,
             cpu1_ibus_o => cpu1_ddr_ibus_o,
             cpu1_mem_lock => cpu1_mem_lock,
-            dcache0_ctrl => dcache0_ctrl,
-            dcache1_ctrl => dcache1_ctrl,
+            dcache0_ctrl => CACHE_CTRL_ON,
+            dcache1_ctrl => CACHE_CTRL_ON,
             ddr_burst => ddr_burst,
             ddr_bus_ack_r => ddr_bus_ack_r,
             ddr_bus_i => ddr_bus_i,
@@ -132,7 +129,7 @@ begin
             dma_dbus_i => open,
             dma_dbus_o => dma_dbus_o,
             icache0_ctrl => CACHE_CTRL_ON,
-            icache1_ctrl => icache1_ctrl,
+            icache1_ctrl => CACHE_CTRL_ON,
             rst => reset
         );
     sdram_ctrl : entity work.sdram_ctrl(rtl)
@@ -171,9 +168,6 @@ begin
     -- Zero out unused signals
     cache01sel_ctrl_temp <= '0';
     cpu1_event_i <= (en => '0', cmd => INTERRUPT, vec => (others => '0'), msk => '0', lvl => (others => '0'));
-    dcache0_ctrl <= (en => '0', inv => '0');
-    dcache1_ctrl <= (en => '0', inv => '0');
     debug_i <= (en => '0', cmd => BREAK, ir => (others => '0'), d => (others => '0'), d_en => '0');
     dma_dbus_o <= (en => '0', a => (others => '0'), d => (others => '0'), wr => '0', we => (others => '0'), burst32 => '0', burst16 => '0', bgrp => '0');
-    icache1_ctrl <= (en => '0', inv => '0');
 end;

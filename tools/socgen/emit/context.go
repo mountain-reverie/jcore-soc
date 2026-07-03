@@ -157,7 +157,41 @@ func topContext(res *elaborate.Resolution) []vhdl.Node {
 	// ambiguous mark may be owned only by a padring entity (e.g. dr_data_*_t lives
 	// on ddr_iocells, a padring entity), so both pools must seed disambiguation.
 	owners := append(boundEntities(res.TopEntities), boundEntities(res.PadringEntities)...)
-	return append(stdContext(), workUses(packagesScoped(res.Library, signalMarks(res), owners))...)
+	pkgs := packagesScoped(res.Library, signalMarks(res), owners)
+	// A constant tied directly to a top/padring-entity port (e.g. CACHE_CTRL_ON
+	// on the ddr_ram_mux cache-control ports) is emitted verbatim and contributes
+	// no signal mark, so its declaring package must be pulled in explicitly.
+	for _, pkg := range constantActualPackages(res) {
+		pkgs = mergeSortedPkg(pkgs, pkg)
+	}
+	return append(stdContext(), workUses(pkgs)...)
+}
+
+// constantActualPackages returns the sorted, distinct work packages that declare
+// the constants tied directly to top/padring-entity ports.
+func constantActualPackages(res *elaborate.Resolution) []string {
+	if res.Library == nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	collect := func(ents map[string]*elaborate.ResolvedEntity) {
+		for _, re := range ents {
+			for _, p := range re.Ports {
+				if p.Kind != elaborate.KindValue || p.Value == nil {
+					continue
+				}
+				if pkg := res.Library.ConstantPackage(p.Value.Text); pkg != "" && !seen[pkg] {
+					seen[pkg] = true
+					out = append(out, pkg)
+				}
+			}
+		}
+	}
+	collect(res.TopEntities)
+	collect(res.PadringEntities)
+	sort.Strings(out)
+	return out
 }
 
 // padringContext is topContext plus the unisim library/use, appended after the
