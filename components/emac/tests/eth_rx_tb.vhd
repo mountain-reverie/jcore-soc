@@ -39,7 +39,18 @@ architecture sim of eth_rx_tb is
   constant PREAMBLE_SFD : byte_arr := (
     x"55", x"55", x"55", x"55", x"55", x"55", x"55", x"D5");
 
-  procedure send_frame(signal rx_in : out std_logic) is
+  -- Distinct payload (same length as FBODY) used for the un-acked-frame
+  -- race test below, so a corrupted/spliced buffer (bytes from both
+  -- frames mixed together) is distinguishable from either frame's clean
+  -- content.
+  constant FBODY2 : byte_arr := (
+    x"11", x"22", x"33", x"44", x"55", x"66",  -- dest MAC
+    x"02", x"AA", x"BB", x"CC", x"DD", x"EE",  -- src MAC
+    x"08", x"00",                              -- ethertype (IPv4)
+    x"CA", x"FE", x"BA", x"BE", x"F0", x"0D",  -- payload
+    x"90", x"91", x"92", x"93");               -- FCS (dummy)
+
+  procedure send_frame_body(signal rx_in : out std_logic; frame_body : byte_arr) is
     variable b : std_logic;
   begin
     for byte_i in PREAMBLE_SFD'range loop
@@ -51,9 +62,9 @@ architecture sim of eth_rx_tb is
         wait for HALF_BIT;
       end loop;
     end loop;
-    for byte_i in FBODY'range loop
+    for byte_i in frame_body'range loop
       for bit_i in 0 to 7 loop
-        b := FBODY(byte_i)(bit_i);
+        b := frame_body(byte_i)(bit_i);
         rx_in <= not b;
         wait for HALF_BIT;
         rx_in <= b;
@@ -61,6 +72,11 @@ architecture sim of eth_rx_tb is
       end loop;
     end loop;
     rx_in <= '0';
+  end procedure;
+
+  procedure send_frame(signal rx_in : out std_logic) is
+  begin
+    send_frame_body(rx_in, FBODY);
   end procedure;
 
 begin
@@ -101,6 +117,18 @@ begin
     -- Frame 2
     send_frame(rx_in);
     wait for 5 us;
+
+    -- ---------------------------------------------------------------
+    -- Frame 3 / Frame 4: un-acked-frame race. Frame 3 is sent and left
+    -- un-acked; frame 4 (different payload, FBODY2) starts right after.
+    -- The check process below acks frame 3 *while frame 4 is mid-flight*
+    -- to exercise the CDC race that Fix 1 (frame_drop latched once at
+    -- frame start) protects against.
+    -- ---------------------------------------------------------------
+    send_frame(rx_in);        -- frame 3 (FBODY)
+    wait for 2 us;             -- clear carrier gap so frame 3 completes cleanly
+    send_frame_body(rx_in, FBODY2); -- frame 4, sent while frame 3 is un-acked
+    wait for 20 us;
 
     wait;
   end process;
@@ -227,6 +255,92 @@ begin
 
     assert frame_ready = '0'
       report "eth_rx_tb: frame_ready did not clear after ack (frame 2)" severity error;
+    if frame_ready /= '0' then
+      any_fail := true;
+    end if;
+
+    -- ---------------------------------------------------------------
+    -- Frame 3 / Frame 4: un-acked-frame race (Fix 1 regression test).
+    -- Frame 3 completes and asserts frame_ready; frame 4 (FBODY2) starts
+    -- transmitting before frame 3 is acked. We deliberately ack frame 3
+    -- *mid-way* through frame 4's reception -- crossing the clk_eth/clk
+    -- CDC partway through frame 4 -- and require a CLEAN outcome: frame 4
+    -- must be dropped in full (overrun set, no new frame_ready), and the
+    -- buffer must still hold frame 3's untouched content, never a splice
+    -- of FBODY/FBODY2 bytes.
+    -- ---------------------------------------------------------------
+    wait until frame_ready = '1' for 60 us;
+    assert frame_ready = '1'
+      report "eth_rx_tb: frame_ready never asserted (frame 3)" severity error;
+    if frame_ready /= '1' then
+      any_fail := true;
+    end if;
+
+    assert to_integer(rx_len) = FBODY'length
+      report "eth_rx_tb: rx_len mismatch (frame 3)" severity error;
+    if to_integer(rx_len) /= FBODY'length then
+      any_fail := true;
+    end if;
+
+    assert overrun = '0'
+      report "eth_rx_tb: unexpected overrun before frame 3/4 race" severity error;
+    if overrun /= '0' then
+      any_fail := true;
+    end if;
+
+    -- Deliberately wait roughly mid-way into frame 4's transmission
+    -- (frame 4 takes ~25.6 us to send) before acking frame 3, so the ack
+    -- crosses the CDC into clk_eth while frame 4's S_DATA is in progress.
+    wait for 12 us;
+    ack <= '1';
+    wait until rising_edge(clk);
+    ack <= '0';
+
+    -- Frame 4 should be dropped cleanly: overrun latches, and frame_ready
+    -- must NOT rise again for frame 4 (it was dropped, not delivered).
+    wait for 30 us;
+
+    assert overrun = '1'
+      report "eth_rx_tb: overrun not set after un-acked frame 3/4 race (frame 4 not cleanly dropped)"
+      severity error;
+    if overrun /= '1' then
+      any_fail := true;
+    end if;
+
+    assert frame_ready = '0'
+      report "eth_rx_tb: frame_ready unexpectedly asserted for dropped frame 4"
+      severity error;
+    if frame_ready /= '0' then
+      any_fail := true;
+    end if;
+
+    -- Read back the buffer: it must still hold frame 3's clean, unspliced
+    -- content (FBODY), never any FBODY2 bytes mixed in.
+    for w in 0 to nwords - 1 loop
+      rd_word_addr <= to_unsigned(w, 10);
+      wait until rising_edge(clk);
+      wait until rising_edge(clk);
+      exp_word := rd_word;
+      byte0 := exp_word(31 downto 24);
+      byte1 := exp_word(23 downto 16);
+      byte2 := exp_word(15 downto  8);
+      byte3 := exp_word( 7 downto  0);
+      idx := w * 4;
+      if idx     <= FBODY'high then rd_bytes(idx)     := byte0; end if;
+      if idx + 1 <= FBODY'high then rd_bytes(idx + 1) := byte1; end if;
+      if idx + 2 <= FBODY'high then rd_bytes(idx + 2) := byte2; end if;
+      if idx + 3 <= FBODY'high then rd_bytes(idx + 3) := byte3; end if;
+    end loop;
+
+    for i in FBODY'range loop
+      assert rd_bytes(i) = FBODY(i)
+        report "eth_rx_tb: buffer corrupted/spliced after un-acked frame 3/4 race at index " &
+               integer'image(i)
+        severity error;
+      if rd_bytes(i) /= FBODY(i) then
+        any_fail := true;
+      end if;
+    end loop;
 
     if not any_fail then
       report "eth_rx_tb PASSED" severity note;

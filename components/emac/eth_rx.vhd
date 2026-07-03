@@ -58,6 +58,10 @@ architecture rtl of eth_rx is
   constant SFD_BYTE : std_logic_vector(7 downto 0) := x"D5";
 
   constant BYTE_ADDR_BITS : integer := 11; -- byte counter width (up to 2048 bytes)
+  constant CNT_BITS       : integer := 16; -- byte_cnt width: wide enough that it
+                                            -- never wraps back into the valid
+                                            -- [0, BUF_WORDS*4) range for any
+                                            -- realistic (even jabber-length) frame
 
   -- ---------------------------------------------------------------------
   -- eth_rx_phy instance
@@ -74,11 +78,20 @@ architecture rtl of eth_rx is
   signal state       : fsm_t := S_IDLE;
   signal shreg       : std_logic_vector(7 downto 0) := (others => '0');
   signal bit_cnt     : unsigned(2 downto 0) := (others => '0'); -- 0..7 within current byte
-  signal byte_cnt     : unsigned(BYTE_ADDR_BITS-1 downto 0) := (others => '0'); -- bytes written since SFD
+  signal byte_cnt     : unsigned(CNT_BITS-1 downto 0) := (others => '0'); -- bytes seen since SFD
+                                                                            -- (wide: see CNT_BITS)
 
   signal frame_done_tgl  : std_logic := '0'; -- toggles on each completed frame (clk_eth)
   signal frame_len_eth   : unsigned(11 downto 0) := (others => '0');
   signal overrun_r       : std_logic := '0';
+
+  -- Per-frame accept/drop decision, latched once at frame start (S_ALIGN ->
+  -- S_DATA, i.e. on SFD match) from the pending_ack value at that instant.
+  -- Sampling once (instead of re-checking pending_ack every byte) avoids the
+  -- mid-frame-ack race where an ack crossing the CDC partway through a frame
+  -- would otherwise splice together dropped-then-accepted bytes of the same
+  -- frame. A frame is thus either written in full or dropped in full.
+  signal frame_drop      : std_logic := '0';
 
   -- ---------------------------------------------------------------------
   -- Byte-lane RX buffer, 4x SB_RAM40-shaped arrays
@@ -101,7 +114,6 @@ architecture rtl of eth_rx is
   -- clk domain: buffer read port
   type lane_q_t is array (0 to 3) of std_logic_vector(7 downto 0);
   signal rd_lane_q : lane_q_t := (others => (others => '0'));
-  signal rd_bsel_r : std_logic_vector(1 downto 0) := (others => '0');
 
   -- ---------------------------------------------------------------------
   -- CDC: clk_eth -> clk (frame_done_tgl -> frame_ready)
@@ -115,7 +127,7 @@ architecture rtl of eth_rx is
   -- CDC: clk -> clk_eth (ack -> ack_tgl -> clear/re-arm)
   -- ---------------------------------------------------------------------
   signal ack_tgl  : std_logic := '0'; -- clk domain, toggles on each ack pulse
-  signal ack_meta, ack_s, ack_prev : std_logic := '0'; -- clk_eth domain synchronizer
+  signal ack_meta, ack_s : std_logic := '0'; -- clk_eth domain synchronizer
 
 begin
 
@@ -149,7 +161,6 @@ begin
       -- 2-FF sync of the clk-domain ack toggle
       ack_meta <= ack_tgl;
       ack_s    <= ack_meta;
-      ack_prev <= ack_s;
 
       carrier_prev <= carrier;
 
@@ -174,9 +185,14 @@ begin
             -- for the rest of the frame (bit_cnt reset to 0 in S_DATA).
             shreg <= bit_o & shreg(7 downto 1); -- LSB-first: newest bit -> MSB, shift right
             if (bit_o & shreg(7 downto 1)) = SFD_BYTE then
-              state    <= S_DATA;
-              bit_cnt  <= (others => '0');
-              byte_cnt <= (others => '0');
+              state      <= S_DATA;
+              bit_cnt    <= (others => '0');
+              byte_cnt   <= (others => '0');
+              -- Latch the accept/drop decision for this frame once, here,
+              -- at frame start -- see frame_drop declaration above. This is
+              -- immune to pending_ack changing (via a mid-frame ack
+              -- crossing the CDC) later in the same frame.
+              frame_drop <= pending_ack;
             end if;
           end if;
 
@@ -184,10 +200,19 @@ begin
           if carrier = '0' then
             -- end of frame: latch length, raise frame-complete (unless a
             -- previous completed frame is still un-acked -> overrun).
-            if pending_ack = '1' then
+            if frame_drop = '1' then
               overrun_r <= '1';
             else
-              frame_len_eth  <= resize(byte_cnt, 12);
+              -- Saturate at 12 bits: byte_cnt (now 16 bits, see CNT_BITS)
+              -- can in principle exceed 4095 for a pathological/jabber
+              -- frame that keeps carrier asserted well past the buffer end;
+              -- report the field's max value rather than silently
+              -- truncating/wrapping frame_len_eth in that case.
+              if byte_cnt > to_unsigned(4095, byte_cnt'length) then
+                frame_len_eth <= (others => '1');
+              else
+                frame_len_eth <= resize(byte_cnt, 12);
+              end if;
               frame_done_tgl <= not frame_done_tgl;
             end if;
             state <= S_IDLE;
@@ -217,9 +242,9 @@ begin
         frame_done_tgl <= '0';
         frame_len_eth  <= (others => '0');
         overrun_r      <= '0';
+        frame_drop     <= '0';
         ack_meta       <= '0';
         ack_s          <= '0';
-        ack_prev       <= '0';
       end if;
     end if;
   end process;
@@ -234,8 +259,11 @@ begin
   -- Writes only proceed when: in S_DATA, a full byte has just been
   -- assembled (bit_cnt about to wrap from 7 to 0 while bit_valid='1'),
   -- there is room left in the buffer, and the current frame is not being
-  -- dropped for overrun (pending_ack='0' -- checked so a frame that will
-  -- be discarded at its end doesn't clobber a not-yet-read buffer).
+  -- dropped for overrun. The drop decision (frame_drop) is latched ONCE per
+  -- frame at SFD-match time (see frame_drop declaration/assignment above),
+  -- not re-evaluated per byte -- so a frame is always either written in
+  -- full or dropped in full, even if the previous frame gets acked
+  -- (clearing pending_ack) partway through this frame's reception.
   -- Common per-byte write-enable + word index, shared by the four
   -- per-lane write processes below. Each lane gets its OWN plain
   -- (case-free) `if rising_edge... if <cond> then mem(idx) <= data; end
@@ -246,7 +274,7 @@ begin
   -- whole buffer to expand into flip-flops instead of block RAM; the
   -- same applies to selecting *which* memory to write via a case).
   wr_en <= '1' when (state = S_DATA and bit_valid = '1' and bit_cnt = to_unsigned(7, 3)
-                      and pending_ack = '0' and to_integer(byte_cnt) < BUF_WORDS * 4)
+                      and frame_drop = '0' and to_integer(byte_cnt) < BUF_WORDS * 4)
                else '0';
   wr_byte <= bit_o & shreg(7 downto 1);
   wr_word_idx <= to_integer(byte_cnt) / 4;
