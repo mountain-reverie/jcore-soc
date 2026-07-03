@@ -25,9 +25,16 @@ architecture rtl of dev_ddr_spram is
   signal r_instr_ack : std_logic := '0';
   signal r_instr_hi  : std_logic := '0';     -- a(1): pick high 16-bit half
 begin
-  -- data-priority arbiter
-  data_go  <= dbus_i.en;
-  instr_go <= ibus_i.en and not dbus_i.en;
+  -- data-priority arbiter. Each request must produce exactly ONE ack pulse.
+  -- The CPU holds en asserted from the cycle it issues a request until the
+  -- cycle it samples ack='1' (the actual bus deassertion of en only becomes
+  -- visible a cycle later). Without qualifying on "not yet acked", en staying
+  -- high during that extra cycle would re-trigger a second RAM access and a
+  -- second, spurious ack pulse for the same logical request -- corrupting the
+  -- N+1 handshake and confusing whoever is waiting on a single ack. Gate each
+  -- go signal so it only fires once per outstanding request (until en drops).
+  data_go  <= dbus_i.en and not r_data_ack;
+  instr_go <= ibus_i.en and not dbus_i.en and not r_instr_ack;
 
   -- drive the single SPRAM port from the winner
   sp_en <= data_go or instr_go;
@@ -54,6 +61,6 @@ begin
 
   -- instruction response (16-bit half selected by a(1)); big-endian SH-2:
   -- a(1)=0 -> upper half (bits 31:16), a(1)=1 -> lower half (bits 15:0).
-  ibus_o.d   <= sp_dr(15 downto 0) when r_instr_hi = '0' else sp_dr(31 downto 16);
+  ibus_o.d   <= sp_dr(31 downto 16) when r_instr_hi = '0' else sp_dr(15 downto 0);
   ibus_o.ack <= r_instr_ack;
 end architecture;

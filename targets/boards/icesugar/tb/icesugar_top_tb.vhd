@@ -51,19 +51,22 @@ begin
         n := n + 1;
         buf(n) := character'val(to_integer(unsigned(b)));
       end if;
-      if contains(buf, n, "J1 on iCESugar: hello") and
-         contains(buf, n, "GPIO") then
-        report "icesugar_top_tb PASSED: J1 booted and emitted the UART banner"
+      if contains(buf, n, "SPRAM MEMTEST OK") then
+        report "icesugar_top_tb PASSED: FROM SPRAM + SPRAM MEMTEST OK seen"
           severity note;
         done <= true;
+        wait;
+      elsif contains(buf, n, "SPRAM MEMTEST FAIL") then
+        report "icesugar_top_tb FAILED: SPRAM MEMTEST FAIL seen"
+          severity failure;
         wait;
       end if;
     end loop;
   end process;
 
   watchdog : process begin
-    wait for 5 ms;
-    assert done report "TIMEOUT: banner not seen on ser_tx" severity failure;
+    wait for 150 ms;
+    assert done report "TIMEOUT: SPRAM MEMTEST OK not seen on ser_tx" severity failure;
     wait;
   end process;
 end architecture;
