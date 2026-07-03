@@ -168,4 +168,18 @@ func (l *Library) IsConstant(name string) bool {
 	return ok && s.Kind == "constant"
 }
 
+// ConstantPackage returns the name of the work package that declares the named
+// constant, or "" if name is not a known constant. Used to pull in the `use`
+// clause for a constant tied directly to a top-entity port (e.g. CACHE_CTRL_ON).
+func (l *Library) ConstantPackage(name string) string {
+	if l == nil {
+		return ""
+	}
+	s, ok := l.index[lower(name)]
+	if !ok || s.Kind != "constant" {
+		return ""
+	}
+	return s.Package
+}
+
 func lower(s string) string { return strings.ToLower(s) }

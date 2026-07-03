@@ -16,9 +16,15 @@ top-entities:
 
   ddr_ram_mux:
     ports:
-      # icache enabled (hardwired on, as the hand-written board does — the
-      # one_cpu_idcache path needs it to serve SDRAM instruction fetches).
+      # Caches hardwired on (there is no cache-control device on this ECP5 board;
+      # the ECP5 target always runs with I- and D-caches enabled). Both cores'
+      # I-caches serve SDRAM instruction fetches; both D-caches serve SDRAM data
+      # so sub-word (mov.w/mov.b) loads take the cache read path (the uncached
+      # SDRAM sub-word read path mis-justifies the halfword).
       icache0_ctrl: CACHE_CTRL_ON
+      icache1_ctrl: CACHE_CTRL_ON
+      dcache0_ctrl: CACHE_CTRL_ON
+      dcache1_ctrl: CACHE_CTRL_ON
 
   aic_irq_gen:
     entity: aic_irq_gen
@@ -113,14 +119,11 @@ peripheral-buses:
 merge-signals:
   clk_sys: [clk_mem]
 
-# v1: caches disabled (no cache_ctrl device yet — hand-written hardwires icache
-# on; deferred refinement), CPU1 unused, buttons not yet wired to gpio/AIC.
+# Caches hardwired on above (no cache_ctrl device on this ECP5 board). CPU1
+# unused on single-core variants, buttons not yet wired to gpio/AIC.
 zero-signals:
   - dma_dbus_o
   - debug_i
-  - icache1_ctrl
-  - dcache0_ctrl
-  - dcache1_ctrl
   - cache01sel_ctrl_temp
   - cpu1_event_i
 
