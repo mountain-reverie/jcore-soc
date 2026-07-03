@@ -27,11 +27,42 @@ static void puts_uart(const char *p)
 		putc_uart(*p++);
 }
 
+#define SPRAM_BASE  0x10000000u
+#define SPRAM_WORDS (128u*1024u/4u)   /* 32768 words */
+
+extern unsigned int _spram_load[], _spram_start[], _spram_end[];
+
+/* Runs from SPRAM (proves instruction fetch from SPRAM works). */
+static void __attribute__((section(".spram"), noinline))
+spram_routine(void)
+{
+	puts_uart("FROM SPRAM\r\n");
+}
+
+/* Write a marching pattern across all 128 KB and read it back. Bounded so the
+   sim completes within the testbench window. */
+static void spram_memtest(void)
+{
+	volatile unsigned int *p = (volatile unsigned int *)SPRAM_BASE;
+	unsigned int i, bad = 0u;
+	for (i = 0u; i < SPRAM_WORDS; i++) p[i] = i * 2654435761u;   /* Knuth hash */
+	for (i = 0u; i < SPRAM_WORDS; i++) if (p[i] != i * 2654435761u) bad++;
+	puts_uart(bad ? "SPRAM MEMTEST FAIL\r\n" : "SPRAM MEMTEST OK\r\n");
+}
+
 void main(void)
 {
 	puts_uart("J1 on iCESugar: hello\r\n");
 	GPIO_DATA = 0x01u;            /* light LED via gpio2 d_o(0) */
 	puts_uart("GPIO\r\n");
+
+	/* copy the .spram routine (LMA in EBR) up to SPRAM, then execute it there */
+	{
+		unsigned int *dst = _spram_start, *src = _spram_load;
+		while ((unsigned int)dst < (unsigned int)_spram_end) *dst++ = *src++;
+	}
+	spram_routine();     /* executes out of SPRAM -> prints "FROM SPRAM" */
+	spram_memtest();     /* proves all 128 KB read/write */
 
 	/* visible heartbeat: toggle the LED forever (the banner above is what the
 	   sim testbench checks; the blink is for on-hardware sanity). */
