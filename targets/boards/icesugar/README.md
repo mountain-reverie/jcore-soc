@@ -10,13 +10,18 @@ the Lattice iCE40 UP5K (SG48 package, 5280 LUTs, 30 EBR blocks, 4 SPRAMs).
 | FPGA | iCE40 UP5K, SG48 |
 | CPU | J-Core J1 (32-bit SuperH ISA compatible) |
 | Clock | 12 MHz (direct from on-board oscillator, no PLL) |
-| Memory | EBR-only (on-chip block RAM, no SDRAM) |
+| Memory | EBR boot ROM (2 KB) + 128 KB SPRAM main RAM (4× `SB_SPRAM256KA` on `DEV_DDR` `0x10000000`) |
 | UART | 1× (UART-lite over FTDI, 115200 baud) |
 | GPIO | 3× LEDs (active-low RGB) |
 
-The `cpu` block in `design.yaml` uses `model: j1` with an EBR-only
-`cpus` architecture (`cpus_one_ebr.vhd`) — no DDR/SDRAM controller is
-instantiated, keeping the design small enough for the UP5K.
+The `cpu` block in `design.yaml` uses `model: j1` with the EBR + SPRAM
+`cpus` architecture (`cpus_one_ebr.vhd`): the boot ROM and reset vector
+live in inferred EBR at `0x0`, and the UP5K's four `SB_SPRAM256KA` blocks
+(128 KB) are wired to the `DEV_DDR` region via `dev_ddr_spram` (a
+single-port arbiter that shares the SPRAM between the instruction-fetch and
+data buses). At boot the ROM copies a routine from EBR up to SPRAM and
+executes it there, so programs can run from the 128 KB SPRAM rather than the
+small EBR. No external DDR/SDRAM is used.
 
 ## Files
 
