@@ -8,8 +8,10 @@
 -- big-endian words to TX_DATA, set TX_LEN, pulse TX_GO. Captures mdi_p/mdi_n and
 -- Manchester-decodes it reusing the eth_tx_phy_tb convention (second half-bit's
 -- mdi_p = bit value, bytes LSB-first). clk_eth is driven by a free-running
--- deterministic 20 MHz generator (edges at 25 ns + k*50 ns) so the PHY slot
+-- deterministic 40 MHz generator (edges at 12.5 ns + k*25 ns) so the PHY slot
 -- timing is reconstructed from the first non-idle line transition after TX_GO.
+-- The PHY now runs 2 clk_eth cycles per half-bit (40 MHz clk_eth, still
+-- 10 Mbps / 50 ns half-bit on the wire).
 --
 -- No PLL model / --syn-binding needed: eth_tx instantiates no unbound
 -- components (only eth_tx_phy, a plain entity).
@@ -24,7 +26,7 @@ end entity;
 architecture sim of eth_tx_tb is
 
   constant CLK12 : time := 83333 ps;   -- ~12 MHz CPU bus clock
-  constant PETH  : time := 50 ns;      -- 20 MHz clk_eth period (PLL model)
+  constant PETH  : time := 25 ns;      -- 40 MHz clk_eth period (PLL model)
   -- Not a multiple of 4: exercises partial-word / byte-lane-boundary
   -- handling in the 4-lane RAM read (frame length 6 stops mid-word-1, i.e.
   -- only lanes 0/1 of the second word are ever read).
@@ -74,7 +76,7 @@ begin
     wait;
   end process;
 
-  -- Independent 20 MHz clk_eth generator (models the board's ice_clkgen
+  -- Independent 40 MHz clk_eth generator (models the board's ice_clkgen
   -- SB_PLL40_2_PAD PORTB output; no PLL model needed in sim).
   clk_eth_proc: process
   begin
@@ -156,13 +158,14 @@ begin
 
     -- wait until the first data half-bit is captured
     wait until got_first;
-    -- t_first is the start of the first SEND slot (phy_tb si=4 slot, i.e.
-    -- byte0/bit0's first half-bit -- the gapless redesign runs exactly 16
-    -- half-bit slots per byte, no LOAD gap between bytes).
-    -- sample(i,j) = t_first + (16*i + 2*j + 1.5)*PETH ; bit = mdi_p (LSB-first)
+    -- t_first is the start of the first SEND slot (phy_tb si=8 slot, i.e.
+    -- byte0/bit0's first half-bit -- the gapless redesign runs exactly 32
+    -- clk_eth cycles per byte [16 half-bit slots x 2 cycles/half-bit], no
+    -- LOAD gap between bytes).
+    -- sample(i,j) = t_first + (32*i + 4*j + 2.5)*PETH ; bit = mdi_p (LSB-first)
     for i in 0 to NBYTES-1 loop
       for j in 0 to 7 loop
-        wait for (t_first + (real(16*i + 2*j) + 1.5) * PETH) - now;
+        wait for (t_first + (real(32*i + 4*j + 2) + 0.5) * PETH) - now;
         assert mdi_p /= mdi_n
           report "eth_tx_tb: illegal differential state at byte "
                  & integer'image(i) & " bit " & integer'image(j)

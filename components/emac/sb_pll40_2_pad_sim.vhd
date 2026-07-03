@@ -10,8 +10,8 @@
 --     PLLOUT_SELECT — it always mirrors PACKAGEPIN), used here as the 12 MHz
 --     CPU clock, unchanged from the plain passthrough this replaces.
 --   PLLOUTGLOBALB / PLLOUTCOREB : PLLOUT_SELECT_PORTB-configured PLL output,
---     used here as the ~20 MHz Ethernet PHY clock. This model free-runs an
---     independent ~20 MHz clock (25 ns half-period) rather than actually
+--     used here as the ~40 MHz Ethernet PHY clock. This model free-runs an
+--     independent ~40 MHz clock (12.5 ns half-period) rather than actually
 --     multiplying PACKAGEPIN, same simplification as the old
 --     sb_pll40_core_sim.vhd it replaces.
 -- LOCK asserts a few us after reset. The DIVR/DIVF/DIVQ/FILTER_RANGE and
@@ -39,24 +39,24 @@ entity SB_PLL40_2_PAD is
 end entity;
 
 architecture behave of SB_PLL40_2_PAD is
-  signal clk20 : std_logic := '0';
+  signal clk40 : std_logic := '0';
 begin
   -- Port A: fixed reference passthrough (12 MHz CPU clock, unchanged).
   PLLOUTGLOBALA <= PACKAGEPIN;
   PLLOUTCOREA   <= PACKAGEPIN;
 
-  -- Port B: free-running ~20 MHz (25 ns half period), independent of
+  -- Port B: free-running ~40 MHz (12.5 ns half period), independent of
   -- PACKAGEPIN -- same simplification as the old SB_PLL40_CORE sim model.
   gen: process
   begin
-    clk20 <= '0';
-    wait for 25 ns;
-    clk20 <= '1';
-    wait for 25 ns;
+    clk40 <= '0';
+    wait for 12.5 ns;
+    clk40 <= '1';
+    wait for 12.5 ns;
   end process;
 
-  PLLOUTGLOBALB <= clk20;
-  PLLOUTCOREB   <= clk20;
+  PLLOUTGLOBALB <= clk40;
+  PLLOUTCOREB   <= clk40;
 
   lock_proc: process
   begin
