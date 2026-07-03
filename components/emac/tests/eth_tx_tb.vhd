@@ -22,12 +22,15 @@ architecture sim of eth_tx_tb is
 
   constant CLK12 : time := 83333 ps;   -- ~12 MHz CPU bus clock
   constant PETH  : time := 50 ns;      -- 20 MHz clk_eth period (PLL model)
-  constant NBYTES : integer := 8;
+  -- Not a multiple of 4: exercises partial-word / byte-lane-boundary
+  -- handling in the 4-lane RAM read (frame length 6 stops mid-word-1, i.e.
+  -- only lanes 0/1 of the second word are ever read).
+  constant NBYTES : integer := 6;
 
   type rom_t is array (0 to NBYTES-1) of std_logic_vector(7 downto 0);
   constant ROM : rom_t := (
     0 => x"55", 1 => x"AB", 2 => x"CD", 3 => x"12",
-    4 => x"34", 5 => x"56", 6 => x"78", 7 => x"9A");
+    4 => x"34", 5 => x"56");
 
   -- Frame as big-endian 32-bit words (byte0 = d(31:24)).
   constant WORD0 : std_logic_vector(31 downto 0) := x"55ABCD12";
@@ -129,7 +132,7 @@ begin
     bus_write(x"804", x"00000001");   -- reset write pointer
     bus_write(x"800", WORD0);         -- TX_DATA word 0
     bus_write(x"800", WORD1);         -- TX_DATA word 1
-    bus_write(x"808", x"00000008");   -- TX_LEN = 8 bytes
+    bus_write(x"808", x"00000006");   -- TX_LEN = 6 bytes (not a multiple of 4)
 
     -- enable line-detection just before GO, then fire GO
     detect_en <= true;

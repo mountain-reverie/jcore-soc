@@ -65,9 +65,16 @@ architecture rtl of eth_tx is
   signal clk_eth   : std_logic;
   signal pll_lock  : std_logic;
 
-  -- Dual-clock frame buffer (32-bit words)
-  type mem_t is array (0 to BUF_WORDS-1) of std_logic_vector(31 downto 0);
-  signal mem : mem_t := (others => (others => '0'));
+  -- Dual-clock frame buffer, split into 4 byte-lane RAMs (one SB_RAM40 each).
+  -- Lane i holds byte i of each 32-bit word (big-endian: lane0 = first byte
+  -- on the wire, i.e. d(31:24)). Each lane is BUF_WORDS deep x 8 bits wide,
+  -- with a clocked write port (@clk) and a clocked registered read port
+  -- (@clk_eth) -- the symmetric-geometry shape yosys maps onto SB_RAM40.
+  type lane_t is array (0 to BUF_WORDS-1) of std_logic_vector(7 downto 0);
+  signal mem_lane0 : lane_t;
+  signal mem_lane1 : lane_t;
+  signal mem_lane2 : lane_t;
+  signal mem_lane3 : lane_t;
 
   -- clk (12 MHz) domain register state
   signal wr_ptr    : unsigned(11 downto 0) := (others => '0');  -- byte pointer
@@ -90,7 +97,8 @@ architecture rtl of eth_tx is
   signal phy_done  : std_logic;
   signal rd_addr   : unsigned(11 downto 0);
   signal rd_data   : std_logic_vector(7 downto 0);
-  signal rd_word_r : std_logic_vector(31 downto 0) := (others => '0');
+  type lane_q_t is array (0 to 3) of std_logic_vector(7 downto 0);
+  signal rd_lane_q : lane_q_t := (others => (others => '0'));
   signal rd_bsel_r : std_logic_vector(1 downto 0) := (others => '0');
 
 begin
@@ -138,11 +146,24 @@ begin
       -- default bus response
       rdata_r <= (others => '0');
 
+      -- The TX_DATA memory write is pulled out of the register-map case
+      -- statement below and given its own plain `if` (rather than being a
+      -- branch of the case): yosys (via ghdl-yosys-plugin) only recognizes
+      -- the array-write-in-a-clocked-process pattern as inferable memory
+      -- when it is guarded by a simple `if`, not when it sits inside a
+      -- `case`/`when` -- wrapping the write in `case db_i.a(...) is ...`
+      -- causes the whole 2 KiB buffer to be expanded into flip-flops
+      -- instead of mapping onto SB_RAM40.
+      if db_i.en = '1' and db_i.wr = '1' and db_i.a(11 downto 0) = A_TX_DATA then
+        mem_lane0(to_integer(wr_ptr(11 downto 2))) <= db_i.d(31 downto 24);
+        mem_lane1(to_integer(wr_ptr(11 downto 2))) <= db_i.d(23 downto 16);
+        mem_lane2(to_integer(wr_ptr(11 downto 2))) <= db_i.d(15 downto  8);
+        mem_lane3(to_integer(wr_ptr(11 downto 2))) <= db_i.d( 7 downto  0);
+        wr_ptr <= wr_ptr + 4;
+      end if;
+
       if db_i.en = '1' and db_i.wr = '1' then
         case db_i.a(11 downto 0) is
-          when A_TX_DATA =>
-            mem(to_integer(wr_ptr(11 downto 2))) <= db_i.d;
-            wr_ptr <= wr_ptr + 4;
           when A_RST_PTR =>
             if db_i.d(0) = '1' then
               wr_ptr <= (others => '0');
@@ -228,17 +249,22 @@ begin
   ram_rd_proc: process (clk_eth) is
   begin
     if rising_edge(clk_eth) then
-      rd_word_r <= mem(to_integer(rd_addr(11 downto 2)));
+      rd_lane_q(0) <= mem_lane0(to_integer(rd_addr(11 downto 2)));
+      rd_lane_q(1) <= mem_lane1(to_integer(rd_addr(11 downto 2)));
+      rd_lane_q(2) <= mem_lane2(to_integer(rd_addr(11 downto 2)));
+      rd_lane_q(3) <= mem_lane3(to_integer(rd_addr(11 downto 2)));
+      -- lane select registered alongside the data so the mux below uses the
+      -- select value matching the 1-cycle-delayed lane data.
       rd_bsel_r <= std_logic_vector(rd_addr(1 downto 0));
     end if;
   end process;
 
-  -- big-endian byte mux: byte 0 (lowest addr) = d(31:24)
+  -- big-endian byte mux: byte 0 (lowest addr) = lane0
   with rd_bsel_r select
-    rd_data <= rd_word_r(31 downto 24) when "00",
-               rd_word_r(23 downto 16) when "01",
-               rd_word_r(15 downto  8) when "10",
-               rd_word_r( 7 downto  0) when others;
+    rd_data <= rd_lane_q(0) when "00",
+               rd_lane_q(1) when "01",
+               rd_lane_q(2) when "10",
+               rd_lane_q(3) when others;
 
   ------------------------------------------------------------------
   -- Manchester serializer PHY (20 MHz)
