@@ -32,24 +32,28 @@ constant UART_RX_INT_TIMEOUT       : integer := 128;
 -- above remain the DEFAULT depths.
 type uart_tx_fifo_t is array (natural range <>) of std_logic_vector(7 downto 0);
 type uart_tx_fifo_w_t is record
-   a   : natural;
+   -- FIFO index: bound to the max TX depth so pointer arithmetic synthesizes at
+   -- the FIFO's real width (a few bits) instead of a full 32-bit `natural`.
+   a   : integer range 0 to UART_TX_FIFO_LEN-1;
    d   : std_logic_vector(7 downto 0);
    we  : std_logic;
 end record;
 type uart_tx_fifo_p_t is record
-   wa  : natural;
-   ra  : natural;
+   wa  : integer range 0 to UART_TX_FIFO_LEN-1;
+   ra  : integer range 0 to UART_TX_FIFO_LEN-1;
 end record;
 
 type uart_rx_fifo_t is array (natural range <>) of std_logic_vector(7 downto 0);
 type uart_rx_fifo_w_t is record
-   a   : natural;
+   -- FIFO index: bound to the max RX depth (see uart_tx_fifo_w_t) so pointer
+   -- arithmetic synthesizes at the FIFO's real width, not a 32-bit `natural`.
+   a   : integer range 0 to UART_RX_FIFO_LEN-1;
    d   : std_logic_vector(7 downto 0);
    we  : std_logic;
 end record;
 type uart_rx_fifo_p_t is record
-   wa  : natural;
-   ra  : natural;
+   wa  : integer range 0 to UART_RX_FIFO_LEN-1;
+   ra  : integer range 0 to UART_RX_FIFO_LEN-1;
 end record;
 
 type uart_state_t is ( IDLE, START, DATA, STOP );
