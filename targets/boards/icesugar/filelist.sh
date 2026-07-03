@@ -60,6 +60,9 @@ FILES+=(
   components/misc/bus_mux_pkg.vhd
   components/misc/multi_master_bus_mux.vhd
   components/misc/gpio2.vhd
+  # eth_tx: minimal 10BASE-T Manchester TX peripheral (eth0 device class).
+  components/emac/eth_tx_phy.vhd
+  components/emac/eth_tx.vhd
   # soc_gen-generated SoC: the EBR-only cpus arch + its soc_cpus_config (binds
   # cpu_synth_j1) must precede soc.vhd; devices.vhd precedes soc.vhd.
   $BRD/cpus_one_ebr.vhd
