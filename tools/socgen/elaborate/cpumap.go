@@ -30,7 +30,11 @@ var cpuSynth = map[[3]string]struct {
 }{
 	{"j2", "direct", ""}: {"cpu_synth_direct", nil, []string{"decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_config.vhd"}},
 	{"j1", "rom", ""}:    {"cpu_synth_j1", nil, []string{"core/register_file_ebr.vhd", "core/mult_seq.vhd", "core/shifter_seq.vhd", "decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j1_config.vhd"}},
-	{"j1", "rom", "dsp"}: {"cpu_synth_j1_dsp", nil, []string{"core/register_file_ebr.vhd", "core/mult_ice40dsp.vhd", "core/shifter_seq.vhd", "decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j1_dsp_config.vhd"}},
+	// core/dsp_arith.vhd: single-SB_MAC16 DSP-backed ALU adder, enabled only
+	// for this variant via synth/cpu_synth_j1_dsp_config.vhd (DSP_ALU=>true).
+	// Must be analyzed here even though it is unused hardware for J2/J4/other
+	// J1 variants (their datapath keeps DSP_ALU=false -> the arith_unit LUT fn).
+	{"j1", "rom", "dsp"}: {"cpu_synth_j1_dsp", nil, []string{"core/register_file_ebr.vhd", "core/mult_ice40dsp.vhd", "core/dsp_arith.vhd", "core/shifter_seq.vhd", "decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j1_dsp_config.vhd"}},
 	{"j4", "direct", ""}: {"cpu_synth_j4", map[string]string{"PRIV_ARCH": "true", "MMU_ARCH": "true"}, []string{"decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_j4_config.vhd"}},
 	{"j4", "rom", ""}:    {"cpu_synth_j4_rom", map[string]string{"PRIV_ARCH": "true", "MMU_ARCH": "true"}, []string{"decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j4_rom_config.vhd"}},
 }
