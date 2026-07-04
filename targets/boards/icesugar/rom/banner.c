@@ -314,16 +314,26 @@ void main(void)
 
 	spram_memtest();     /* proves all 128 KB read/write */
 
-	/* visible heartbeat + eth RX poll: toggle the LED forever (the banner
-	   above is what the sim testbench checks; the blink is for on-hardware
-	   sanity), answering ARP/ICMP-echo as frames arrive. */
-	for (;;) {
-		volatile unsigned int d;
-		unsigned int n = eth_recv(rxbuf, sizeof(rxbuf));
-		if (n)
-			eth_handle(rxbuf, n);
-		GPIO_TOGGLE = 0x01u;
-		for (d = 0; d < 200000u; d++)
-			;
+	/* visible heartbeat + eth RX poll. The eth poll must stay responsive
+	   (a received ARP/ICMP frame is answered on the very next iteration), so
+	   the poll runs every loop with only a short spin between iterations; the
+	   LED heartbeat is decoupled onto a slow counter so it still toggles at a
+	   human-visible rate. (An earlier single ~100 ms busy-wait per iteration
+	   made the responder poll only ~10x/second, which pushed the RX->reply
+	   round-trip past the end-to-end sim's watchdog window.) */
+	{
+		unsigned int hb = 0u;
+		for (;;) {
+			volatile unsigned int d;
+			unsigned int n = eth_recv(rxbuf, sizeof(rxbuf));
+			if (n)
+				eth_handle(rxbuf, n);
+			if (++hb >= 400u) {   /* ~0.5 s heartbeat at this spin length */
+				hb = 0u;
+				GPIO_TOGGLE = 0x01u;
+			}
+			for (d = 0; d < 1500u; d++)
+				;
+		}
 	}
 }
