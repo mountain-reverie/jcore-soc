@@ -60,13 +60,8 @@ FILES+=(
   components/misc/bus_mux_pkg.vhd
   components/misc/multi_master_bus_mux.vhd
   components/misc/gpio2.vhd
-  # eth_tx: minimal 10BASE-T Manchester TX peripheral (eth0 device class).
-  # eth_rx (RX framer/buffer/CDC) is instantiated inside eth_tx.
-  components/emac/eth_rx_phy.vhd
-  components/emac/eth_rx.vhd
-  components/emac/eth_tx_phy.vhd
-  components/emac/eth_tx.vhd
-  components/emac/ice_lvds_in.vhd
+  # W5500 Ethernet over SPI (spi device class).
+  components/misc/spi2.vhd
   # soc_gen-generated SoC: the EBR-only cpus arch + its soc_cpus_config (binds
   # cpu_synth_j1) must precede soc.vhd; devices.vhd precedes soc.vhd.
   $BRD/cpus_one_ebr.vhd

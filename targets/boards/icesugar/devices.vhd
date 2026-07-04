@@ -15,16 +15,16 @@ use work.cpu2j0_pack.all;
 use work.data_bus_pack.all;
 entity devices is
     port (
-        clk_eth : in std_logic;
         clk_sys : in std_logic;
         cpu0_periph_dbus_i : out cpu_data_i_t;
         cpu0_periph_dbus_o : in cpu_data_o_t;
         cpu1_periph_dbus_i : out cpu_data_i_t;
         cpu1_periph_dbus_o : in cpu_data_o_t;
+        eth_clk : out std_logic;
+        eth_cs : out std_logic_vector(1 downto 0);
+        eth_miso : in std_logic;
+        eth_mosi : out std_logic;
         gpio_do : out std_logic_vector(2 downto 0);
-        mdi0_n : out std_logic;
-        mdi0_p : out std_logic;
-        mdi1 : in std_logic;
         reset : in std_logic;
         uart0_rx : in std_logic;
         uart0_tx : out std_logic
@@ -32,7 +32,7 @@ entity devices is
 end;
 architecture impl of devices is
     signal gpio_di : std_logic_vector(2 downto 0);
-    type device_t is (NONE, DEV_ETH0, DEV_GPIO0, DEV_UART0);
+    type device_t is (NONE, DEV_ETH, DEV_GPIO0, DEV_UART0);
     signal active_dev : device_t;
     type data_bus_i_t is array (device_t'left to device_t'right) of cpu_data_i_t;
     type data_bus_o_t is array (device_t'left to device_t'right) of cpu_data_o_t;
@@ -51,9 +51,9 @@ architecture impl of devices is
                     -- ABCD0100-ABCD010F
                     return DEV_UART0;
                 end if;
-            elsif addr(12) = '1' then
-                -- ABCD1000-ABCD1FFF
-                return DEV_ETH0;
+            elsif addr(12 downto 3) = "1000000000" then
+                -- ABCD1000-ABCD1007
+                return DEV_ETH;
             end if;
         end if;
         return NONE;
@@ -69,18 +69,23 @@ begin
     end generate;
     devs_bus_i(NONE) <= loopback_bus(devs_bus_o(NONE));
     -- Instantiate devices
-    eth0 : entity work.eth_tx(rtl)
+    eth : entity work.spi2(arch)
+        generic map (
+            clk_freq => CFG_CLK_CPU_FREQ_HZ,
+            num_cs => 2
+        )
         port map (
+            busy => open,
             clk => clk_sys,
-            clk_eth => clk_eth,
-            db_i => devs_bus_o(DEV_ETH0),
-            db_o => devs_bus_i(DEV_ETH0),
-            mdi_n => mdi0_n,
-            mdi_p => mdi0_p,
+            cpha => '0',
+            cpol => '0',
+            cs => eth_cs,
+            db_i => devs_bus_o(DEV_ETH),
+            db_o => devs_bus_i(DEV_ETH),
+            miso => eth_miso,
+            mosi => eth_mosi,
             rst => reset,
-            rx_in => mdi1,
-            rx_irq => open,
-            tx_done => open
+            spi_clk => eth_clk
         );
     gpio0 : entity work.gpio2(arch)
         generic map (

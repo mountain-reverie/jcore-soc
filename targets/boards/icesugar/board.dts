@@ -38,13 +38,9 @@
 
 	soc@abcd0000 {
 		compatible = "simple-bus";
-		ranges = <0x0 0xabcd0000 0x2000>;
+		ranges = <0x0 0xabcd0000 0x1008>;
 		#address-cells = <1>;
 		#size-cells = <1>;
-
-		eth_tx {
-			reg = <0x1000 0x1000>; // ABCD1000-ABCD1FFF
-		};
 
 		gpio2 {
 			compatible = "jcore,gpio2";
@@ -55,6 +51,40 @@
 			compatible = "jcore,uartlite", "xlnx,xps-uartlite-1.00.a";
 			device_type = "serial";
 			reg = <0x100 0x10>; // ABCD0100-ABCD010F
+		};
+
+		spi {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			clock-names = "ref_clk";
+			clocks = <&bus_clock>;
+			compatible = "jcore,spi2";
+			spi-max-frequency = <25000000>;
+			status = "ok";
+			reg = <0x1000 0x8>; // ABCD1000-ABCD1007
+
+			sdcard@0 {
+				compatible = "mmc-spi-slot";
+				reg = <0>;
+				spi-max-frequency = <25000000>;
+				voltage-ranges = <3200 3400>;
+				mode = <0>;
+			};
+
+			m25p80@1 {
+				compatible = "s25fl164k", "jedec,spi-nor";
+				#address-cells = <1>;
+				#size-cells = <1>;
+				spi-max-frequency = <25000000>;
+				reg = <1>;
+				mode = <0>;
+				m25p,fast-read;
+
+				partition@0 {
+					label = "spi_flash";
+					reg = <0 0>;
+				};
+			};
 		};
 	};
 
