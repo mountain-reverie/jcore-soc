@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/j-core/jcore-soc/tools/socgen/design"
 	"github.com/j-core/jcore-soc/tools/socgen/elaborate"
 )
 
@@ -30,6 +31,32 @@ func TestPCFEmitsSetIo(t *testing.T) {
 	}
 	if strings.Contains(out, "IO_TYPE") || strings.Contains(out, "LOCATE") {
 		t.Errorf("pcf must not contain LPF/IO_TYPE syntax:\n%s", out)
+	}
+}
+
+// nextpnr-ice40's PCF has no io-standard directive: an LVDS-input pin must be
+// emitted as a BARE set_io (the SB_LVDS_INPUT standard is applied via the
+// SB_IO cell IO_STANDARD parameter in pad_ring, not the PCF). Emitting an
+// `-io_std` token makes nextpnr treat the pin as unconstrained and abort, so
+// guard against a regression that reintroduces it.
+func TestPCFLVDSInputStaysBare(t *testing.T) {
+	res := &elaborate.Resolution{
+		Target: "ice40",
+		Pins: []*elaborate.ResolvedPin{
+			{Net: "mdi1_p", Pad: "42", In: "mdi1", PadDir: "in",
+				Attrs: map[string]design.Value{
+					"iostandard": {Kind: design.KindExpr, Text: "SB_LVDS_INPUT"}}},
+		},
+	}
+	out, err := PCF(res)
+	if err != nil {
+		t.Fatalf("PCF: %v", err)
+	}
+	if !strings.Contains(out, "set_io pin_mdi1_p 42") {
+		t.Errorf("LVDS-input pin must still be constrained to its pad:\n%s", out)
+	}
+	if strings.Contains(out, "io_std") || strings.Contains(out, "SB_LVDS_INPUT") {
+		t.Errorf("PCF must NOT carry an io-standard token (nextpnr-ice40 rejects it):\n%s", out)
 	}
 }
 

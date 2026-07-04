@@ -65,6 +65,8 @@ begin
     port map (
       clk => clk, rst => rst, db_i => db_i, db_o => db_o,
       mdi_p => mdi_p, mdi_n => mdi_n, tx_done => tx_done,
+      -- RX ports (added in the RX task): idle here -- this tb only exercises TX.
+      rx_in => '0', rx_irq => open,
       clk_eth => clk_eth);
 
   clk_proc: process

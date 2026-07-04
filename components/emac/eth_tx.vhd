@@ -78,6 +78,7 @@ architecture rtl of eth_tx is
   signal busy_sync : std_logic := '0';
   signal busy_prev : std_logic := '0';
   signal rdata_r   : std_logic_vector(31 downto 0) := (others => '0');
+  signal ack_r     : std_logic := '0';   -- registered ack, aligned with rdata_r
 
   -- clk_eth (20 MHz) domain
   signal go_meta   : std_logic := '0';
@@ -125,8 +126,19 @@ begin
         go_pend <= '0';
       end if;
 
-      -- default bus response
-      rdata_r <= (others => '0');
+      -- Registered ack, aligned with the registered read data (rdata_r), and
+      -- an access-fires-once guard -- the jcore bus convention (see gpio2.vhd /
+      -- uart.vhd): the CPU holds db_i.en high until it sees ack, then samples
+      -- db_o.d on that same (registered) ack cycle. Because ack is registered
+      -- one cycle after en, every access below is guarded by `ack_r = '0'` so
+      -- it executes exactly once (on the first en cycle) rather than repeating
+      -- for as long as en stays high -- otherwise a read's auto-increment or a
+      -- write would fire twice. The previous code paired a COMBINATIONAL ack
+      -- with this registered rdata_r, which misaligned them by one cycle: the
+      -- CPU latched the *previous* transaction's data, so back-to-back reads of
+      -- different RX registers (eth_recv: RX_STATUS then RX_LEN then RX_DATA)
+      -- were all shifted by one and the frame-ready poll never saw the frame.
+      ack_r <= db_i.en;
 
       -- The TX_DATA memory write is pulled out of the register-map case
       -- statement below and given its own plain `if` (rather than being a
@@ -136,7 +148,7 @@ begin
       -- `case`/`when` -- wrapping the write in `case db_i.a(...) is ...`
       -- causes the whole 2 KiB buffer to be expanded into flip-flops
       -- instead of mapping onto SB_RAM40.
-      if db_i.en = '1' and db_i.wr = '1' and db_i.a(11 downto 0) = A_TX_DATA then
+      if db_i.en = '1' and ack_r = '0' and db_i.wr = '1' and db_i.a(11 downto 0) = A_TX_DATA then
         mem_lane0(to_integer(wr_ptr(11 downto 2))) <= db_i.d(31 downto 24);
         mem_lane1(to_integer(wr_ptr(11 downto 2))) <= db_i.d(23 downto 16);
         mem_lane2(to_integer(wr_ptr(11 downto 2))) <= db_i.d(15 downto  8);
@@ -147,7 +159,7 @@ begin
       -- RX_ACK is a 1-cycle pulse into eth_rx.ack; default low each cycle.
       rx_ack <= '0';
 
-      if db_i.en = '1' and db_i.wr = '1' then
+      if db_i.en = '1' and ack_r = '0' and db_i.wr = '1' then
         case db_i.a(11 downto 0) is
           when A_RST_PTR =>
             if db_i.d(0) = '1' then
@@ -169,7 +181,10 @@ begin
         end case;
       end if;
 
-      if db_i.en = '1' and db_i.rd = '1' then
+      if db_i.en = '1' and ack_r = '0' and db_i.rd = '1' then
+        -- Default read result for this access (held on rdata_r until the next
+        -- read, so the CPU reads the same value on the aligned ack cycle):
+        rdata_r <= (others => '0');
         case db_i.a(11 downto 0) is
           when A_BUSY =>
             rdata_r(0) <= busy_sync or go_pend;
@@ -204,13 +219,14 @@ begin
         busy_prev   <= '0';
         rx_word_ptr <= (others => '0');
         rx_ack      <= '0';
+        ack_r       <= '0';
       end if;
     end if;
   end process;
 
-  -- Combinational ack (mirrors uart.vhd / pio.vhd / spi2.vhd / gpio2.vhd
-  -- convention): the device never stalls the bus.
-  db_o.ack <= db_i.en;
+  -- Registered ack + registered read data, aligned (jcore bus convention, see
+  -- gpio2.vhd / uart.vhd): the CPU samples db_o.d on the cycle it sees ack.
+  db_o.ack <= ack_r;
   db_o.d   <= rdata_r;
 
   ------------------------------------------------------------------

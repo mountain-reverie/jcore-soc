@@ -21,10 +21,14 @@ architecture sim of icesugar_top_tb is
   signal ser_tx : std_logic;
   signal ledr_n, ledg_n, ledb_n : std_logic;
   signal mdi0_p, mdi0_n : std_logic;
-  -- eth_rx MDI input: idle (no RX traffic driven yet -- see Task 7).
+  -- eth_rx MDI input: idle until the arp_stim process (Task 7) drives a
+  -- Manchester-encoded ARP request, after the boot's SPRAM memtest so the
+  -- CPU is in its eth_recv() poll loop.
   signal mdi1_p : std_logic := '0';
-  signal done   : boolean := false;
-  signal eth_ok : boolean := false;
+  signal done     : boolean := false;
+  signal eth_ok   : boolean := false;
+  signal spram_ok : boolean := false;   -- boot printed "SPRAM MEMTEST OK": poll loop is live
+  signal arp_ok   : boolean := false;
 
   -- Known test frame sent by banner.c's eth_send(): preamble(7)+SFD(1)+
   -- dest(6)+src(6)+ethertype(2)+payload(2)+FCS(4) = 28 bytes. The FCS is the
@@ -47,6 +51,63 @@ architecture sim of icesugar_top_tb is
     20 => x"88", 21 => x"B5",                        -- ethertype
     22 => x"4A", 23 => x"31",                        -- payload "J1"
     25 => x"E1", 24 => x"27", 26 => x"78", 27 => x"5A"); -- FCS (LE), CRC32=0x5A78E127
+
+  -- ---------------------------------------------------------------------
+  -- Task 7: MDI1 ARP-request stimulus + MDI0 ARP-reply capture.
+  --
+  -- "Host" identity driving the request: MAC AA:BB:CC:DD:EE:01, IP
+  -- 192.168.1.99. Our J1: MAC 02:00:00:00:00:01, IP 192.168.1.10 (banner.c
+  -- OUR_MAC/OUR_IP). Both frames below (preamble+SFD+eth+ARP+FCS, 54 bytes
+  -- each) are precomputed host-side (same eth_crc32 as banner.c: reflected
+  -- CRC-32, poly 0xEDB88320, init/final invert, appended little-endian)
+  -- rather than computed in VHDL, matching EXPECT_FRAME's convention above.
+  -- ---------------------------------------------------------------------
+  constant NREQ : integer := 54;
+  type frame54_t is array (0 to NREQ - 1) of std_logic_vector(7 downto 0);
+  constant REQ_FRAME : frame54_t := (
+    0 => x"55", 1 => x"55", 2 => x"55", 3 => x"55",
+    4 => x"55", 5 => x"55", 6 => x"55",             -- preamble x7
+    7 => x"D5",                                      -- SFD
+    8 => x"FF", 9 => x"FF", 10 => x"FF",
+    11 => x"FF", 12 => x"FF", 13 => x"FF",           -- eth dest: broadcast
+    14 => x"AA", 15 => x"BB", 16 => x"CC",
+    17 => x"DD", 18 => x"EE", 19 => x"01",           -- eth src: host MAC
+    20 => x"08", 21 => x"06",                        -- ethertype: ARP
+    22 => x"00", 23 => x"01",                        -- htype = Ethernet
+    24 => x"08", 25 => x"00",                        -- ptype = IPv4
+    26 => x"06",                                      -- hlen
+    27 => x"04",                                      -- plen
+    28 => x"00", 29 => x"01",                        -- opcode = request
+    30 => x"AA", 31 => x"BB", 32 => x"CC",
+    33 => x"DD", 34 => x"EE", 35 => x"01",           -- sender HA: host MAC
+    36 => x"C0", 37 => x"A8", 38 => x"01", 39 => x"63", -- sender PA: 192.168.1.99
+    40 => x"00", 41 => x"00", 42 => x"00",
+    43 => x"00", 44 => x"00", 45 => x"00",           -- target HA: unknown
+    46 => x"C0", 47 => x"A8", 48 => x"01", 49 => x"0A", -- target PA: 192.168.1.10 (us)
+    50 => x"C3", 51 => x"7A", 52 => x"F3", 53 => x"7F"); -- FCS (LE), CRC32=0x7FF37AC3
+
+  constant NREP : integer := 54;
+  constant REP_FRAME : frame54_t := (
+    0 => x"55", 1 => x"55", 2 => x"55", 3 => x"55",
+    4 => x"55", 5 => x"55", 6 => x"55",             -- preamble x7
+    7 => x"D5",                                      -- SFD
+    8 => x"AA", 9 => x"BB", 10 => x"CC",
+    11 => x"DD", 12 => x"EE", 13 => x"01",           -- eth dest: host MAC
+    14 => x"02", 15 => x"00", 16 => x"00",
+    17 => x"00", 18 => x"00", 19 => x"01",           -- eth src: our MAC
+    20 => x"08", 21 => x"06",                        -- ethertype: ARP
+    22 => x"00", 23 => x"01",                        -- htype = Ethernet
+    24 => x"08", 25 => x"00",                        -- ptype = IPv4
+    26 => x"06",                                      -- hlen
+    27 => x"04",                                      -- plen
+    28 => x"00", 29 => x"02",                        -- opcode = reply
+    30 => x"02", 31 => x"00", 32 => x"00",
+    33 => x"00", 34 => x"00", 35 => x"01",           -- sender HA: our MAC
+    36 => x"C0", 37 => x"A8", 38 => x"01", 39 => x"0A", -- sender PA: 192.168.1.10 (us)
+    40 => x"AA", 41 => x"BB", 42 => x"CC",
+    43 => x"DD", 44 => x"EE", 45 => x"01",           -- target HA: host MAC
+    46 => x"C0", 47 => x"A8", 48 => x"01", 49 => x"63", -- target PA: 192.168.1.99
+    50 => x"C2", 51 => x"AA", 52 => x"7F", 53 => x"04"); -- FCS (LE), CRC32=0x047FAAC2
 
   function contains(buf : string; n : integer; sub : string) return boolean is
   begin
@@ -76,10 +137,11 @@ begin
   -- cycle = HALF_BIT) from a real frame (still driven at 1.5*HALF_BIT) --
   -- if it already reverted, it was an NLP pulse; loop and keep watching.
   eth_decode : process
-    variable t0    : time;
-    variable got   : frame_t;
-    variable bitv  : std_logic;
-    variable j     : integer;
+    variable t0      : time;
+    variable got     : frame_t;
+    variable got_rep : frame54_t;
+    variable bitv    : std_logic;
+    variable j       : integer;
   begin
     loop
       wait until mdi0_p = '1' or mdi0_n = '1';
@@ -116,6 +178,66 @@ begin
         severity note;
       eth_ok <= true;
     end if;
+
+    -- ------------------------------------------------------------------
+    -- Task 7: second capture pass -- the J1's ARP reply to arp_stim's
+    -- request (driven on mdi1_p once the boot's poll loop is live). Same
+    -- decoder, reused via the same skip-NLP-pulse loop as above, but
+    -- decoding NREP bytes and comparing against REP_FRAME.
+    -- ------------------------------------------------------------------
+    loop
+      wait until mdi0_p = '1' or mdi0_n = '1';
+      t0 := now;
+      wait for HALF_BIT + HALF_BIT/2;
+      if mdi0_p = '0' and mdi0_n = '0' then
+        next;   -- spurious NLP pulse; keep scanning
+      end if;
+      exit;
+    end loop;
+
+    for i in 0 to NREP - 1 loop
+      for j in 0 to 7 loop
+        wait for (t0 + (real(16*i + 2*j + 1) + 0.5) * HALF_BIT) - now;
+        bitv := mdi0_p;
+        assert mdi0_p /= mdi0_n
+          report "icesugar_top_tb: illegal MDI differential state (ARP reply) at byte "
+                 & integer'image(i) & " bit " & integer'image(j)
+          severity error;
+        got_rep(i)(j) := bitv;
+      end loop;
+    end loop;
+
+    assert got_rep = REP_FRAME
+      report "icesugar_top_tb: decoded ARP reply frame mismatch" severity error;
+    if got_rep = REP_FRAME then
+      report "icesugar_top_tb: ARP REPLY OK (decoded+CRC-verified 54-byte ARP reply matches)"
+        severity note;
+      arp_ok <= true;
+    end if;
+    wait;
+  end process;
+
+  -- Drive a Manchester-encoded ARP request on mdi1_p (eth_rx's LVDS-sliced
+  -- input, see pad_ring: mdi1 <= pin_mdi1_p) after the boot's SPRAM memtest
+  -- completes and the poll loop (eth_recv/eth_handle) is live. Same
+  -- Manchester convention as eth_tx_phy / eth_rx_tb's send_frame_body: first
+  -- half-bit = not b, second half-bit = b, LSB-first within each byte.
+  arp_stim : process
+    variable b : std_logic;
+  begin
+    wait until spram_ok;
+    -- margin for the poll loop's first eth_recv() call to be reached.
+    wait for 20 us;
+    for i in 0 to NREQ - 1 loop
+      for j in 0 to 7 loop
+        b := REQ_FRAME(i)(j);
+        mdi1_p <= not b;
+        wait for HALF_BIT;
+        mdi1_p <= b;
+        wait for HALF_BIT;
+      end loop;
+    end loop;
+    mdi1_p <= '0';
     wait;
   end process;
 
@@ -138,14 +260,8 @@ begin
         n := n + 1;
         buf(n) := character'val(to_integer(unsigned(b)));
       end if;
-      if contains(buf, n, "SPRAM MEMTEST OK") then
-        if not eth_ok then
-          wait until eth_ok;
-        end if;
-        report "icesugar_top_tb PASSED: FROM SPRAM + SPRAM MEMTEST OK + ETH FRAME OK"
-          severity note;
-        done <= true;
-        wait;
+      if contains(buf, n, "SPRAM MEMTEST OK") and not spram_ok then
+        spram_ok <= true;
       elsif contains(buf, n, "SPRAM MEMTEST FAIL") then
         report "icesugar_top_tb FAILED: SPRAM MEMTEST FAIL seen"
           severity failure;
@@ -154,9 +270,29 @@ begin
     end loop;
   end process;
 
+  -- PASS gate: kept OUT of the UART-decoder loop so the decoder keeps
+  -- consuming/reporting UART while we wait for the eth events (otherwise the
+  -- decoder would block on the eth waits and stop showing later output).
+  pass_gate : process begin
+    -- Guard each wait: `wait until X` only fires on a future transition, so a
+    -- signal that is ALREADY true (e.g. eth_ok, set early at ~3.7 ms) would
+    -- otherwise block this process forever.
+    if not spram_ok then wait until spram_ok; end if;
+    if not eth_ok   then wait until eth_ok;   end if;
+    if not arp_ok   then wait until arp_ok;   end if;
+    report "icesugar_top_tb PASSED: FROM SPRAM + SPRAM MEMTEST OK + ETH FRAME OK + ARP REPLY OK"
+      severity note;
+    done <= true;
+    wait;
+  end process;
+
   watchdog : process begin
-    wait for 150 ms;
-    assert done report "TIMEOUT: SPRAM MEMTEST OK / ETH FRAME OK not seen" severity failure;
+    -- The 128 KB SPRAM memtest runs to ~139 ms of sim time before the poll loop
+    -- can answer the ARP request, so give the RX->reply round-trip comfortable
+    -- headroom past that (done is set the moment all markers hold, so a healthy
+    -- run ends well before this and the extra budget costs no wall-clock).
+    wait for 200 ms;
+    assert done report "TIMEOUT: SPRAM MEMTEST OK / ETH FRAME OK / ARP REPLY OK not seen" severity failure;
     wait;
   end process;
 end architecture;
