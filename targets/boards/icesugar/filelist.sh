@@ -66,6 +66,7 @@ FILES+=(
   components/emac/eth_rx.vhd
   components/emac/eth_tx_phy.vhd
   components/emac/eth_tx.vhd
+  components/emac/ice_lvds_in.vhd
   # soc_gen-generated SoC: the EBR-only cpus arch + its soc_cpus_config (binds
   # cpu_synth_j1) must precede soc.vhd; devices.vhd precedes soc.vhd.
   $BRD/cpus_one_ebr.vhd

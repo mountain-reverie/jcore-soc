@@ -20,6 +20,14 @@ padring-entities:
   clkgen:
     entity: ice_clkgen
     ports: { clk_in: clk, clk_out: clk_sys, clk_eth: clk_eth, rst_out: reset }
+  # Ethernet RX LVDS input: slice the MDI1 differential pair (P on pin 42, N the
+  # auto-complement on pin 38) via an SB_IO IO_STANDARD=SB_LVDS_INPUT, instead of
+  # a single-ended wire. Takes the raw pad net mdi1_pad, drives the eth device's
+  # mdi1 rx_in. (nextpnr can't take the LVDS io-standard from the PCF -- it comes
+  # from the SB_IO generic in ice_lvds_in; see tools/socgen/emit/pcf.go.)
+  lvds_rx:
+    entity: ice_lvds_in
+    ports: { pad_p: mdi1_pad, d_out: mdi1 }
 
 cpu:
   architecture: one_cpu_ebr
@@ -75,4 +83,4 @@ pins:
     - { match: ledb_n, out: { name: "gpio_do(2)", invert: true } }
     - { match: mdi0_p, out: { name: mdi0_p } }
     - { match: mdi0_n, out: { name: mdi0_n } }
-    - { match: mdi1_p, signal: mdi1, attrs: { iostandard: SB_LVDS_INPUT } }
+    - { match: mdi1_p, signal: mdi1_pad }

@@ -33,6 +33,7 @@ architecture impl of pad_ring is
     signal mdi0_n : std_logic;
     signal mdi0_p : std_logic;
     signal mdi1 : std_logic;
+    signal mdi1_pad : std_logic;
     signal reset : std_logic;
     signal uart0_rx : std_logic;
     signal uart0_tx : std_logic;
@@ -56,13 +57,18 @@ begin
             clk_out => clk_sys,
             rst_out => reset
         );
+    lvds_rx : entity work.ice_lvds_in(rtl)
+        port map (
+            d_out => mdi1,
+            pad_p => mdi1_pad
+        );
     clk <= pin_clk;
     pin_ledb_n <= not gpio_do(2);
     pin_ledg_n <= not gpio_do(1);
     pin_ledr_n <= not gpio_do(0);
     pin_mdi0_n <= mdi0_n;
     pin_mdi0_p <= mdi0_p;
-    mdi1 <= pin_mdi1_p;
+    mdi1_pad <= pin_mdi1_p;
     uart0_rx <= pin_ser_rx;
     pin_ser_tx <= uart0_tx;
 end;
