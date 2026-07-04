@@ -35,7 +35,11 @@ devices:
     name: uart0
     base-addr: 0xabcd0100
     ports: { rx: uart0_rx, tx: uart0_tx }
-    generics: { rx_fifo_len: 1, tx_fifo_len: 1 }
+    # rx_enable=false: iCESugar's rom/banner.c only ever writes the UART
+    # (UART_DATA + TX_FULL poll) and its irq is unconnected (irq => open in
+    # devices.vhd) -- the RX FIFO/shifter/baud-rx and RX/timeout interrupt
+    # logic are dead weight here, so drop them to reclaim LCs on the up5k.
+    generics: { rx_fifo_len: 1, tx_fifo_len: 1, rx_enable: false }
   - class: gpio2
     name: gpio0
     base-addr: 0xabcd0000

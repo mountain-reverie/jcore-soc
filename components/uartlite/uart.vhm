@@ -12,7 +12,8 @@ entity uartlite is generic (
    fclk   : real := 31.25e6;
    bps    : real := 115.2e3;
    rx_fifo_len : integer := UART_RX_FIFO_LEN;
-   tx_fifo_len : integer := UART_TX_FIFO_LEN);
+   tx_fifo_len : integer := UART_TX_FIFO_LEN;
+   rx_enable : boolean := true);
                    port (
    rst    : in  std_logic;
    clk    : in  std_logic;
@@ -120,7 +121,9 @@ begin
             this.tx.phs := this.tx.phs + 1; -- phase will stay at 15 when idle
          end if;
 
-         -- receiver
+         -- receiver (elaborated only when rx_enable=true; when false, no RX
+         -- FIFO/shifter/baud-rx/timeout-interrupt logic is synthesized)
+         if rx_enable then
          if    this.rx.phs = 7 or this.rx.phs = 8 or this.rx.phs = 9 then
          -- receiver majority voting input bit sampling, at 3 independent 16x baudclock times
             if this.rx.a(1) = '1' then this.rx.m := this.rx.m + 1; end if;
@@ -214,8 +217,10 @@ begin
             end if;
 	 else
 	   this.itimeout   := 0;
-	   this.rxint := '1'; 
+	   this.rxint := '1';
 	 end if;
+
+         end if; -- rx_enable
 
       end if; -- 16x baud rate
 
@@ -225,6 +230,7 @@ begin
       -- cpu side read interface
       if this.en = '0' and a.en = '1' and a.we = '0' then
          if a.dc = DATA then
+            if rx_enable then
             if this.rxp.wa /= this.rxp.ra or this.rx.full = '1' then
                this.y.d := rxf(this.rxp.ra);
                if this.rxp.ra = rx_fifo_len-1 then
@@ -236,12 +242,22 @@ begin
             else
             -- fifo underrun, oops! unhandled.
             end if;
+            else
+               -- RX disabled: no data to return
+               this.y.d := (others => '0');
+            end if;
          else
             -- status reg read
-            this.y.d := '0' & this.rx.ferr & this.rx.ovr & this.ien & this.tx.full & txe & this.rx.full & not rxe;
+            if rx_enable then
+               this.y.d := '0' & this.rx.ferr & this.rx.ovr & this.ien & this.tx.full & txe & this.rx.full & not rxe;
 
-            this.rx.ferr := '0';
-            this.rx.ovr  := '0';
+               this.rx.ferr := '0';
+               this.rx.ovr  := '0';
+            else
+               -- RX disabled: RX-related status bits (ferr, ovr, rx_full,
+               -- rx_valid) are always 0; ien/tx.full/txe are unaffected.
+               this.y.d := '0' & '0' & '0' & this.ien & this.tx.full & txe & '0' & '0';
+            end if;
          end if;
          this.y.ack := '1';
       end if;
@@ -274,8 +290,10 @@ begin
       -- one bus cycle per en
       this.en := a.en;
 
-      -- input metastable buffer
-      this.rx.a := this.rx.a(0) & rx;
+      -- input metastable buffer (unused/unsynthesized when rx_enable=false)
+      if rx_enable then
+         this.rx.a := this.rx.a(0) & rx;
+      end if;
 
       -- fifo storage write controls
       rxfw <= rfc;

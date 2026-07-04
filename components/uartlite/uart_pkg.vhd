@@ -93,7 +93,13 @@ component uartlite generic (
    fclk   : real := 31.25e6;
    bps    : real := 115.2e3;
    rx_fifo_len : integer := UART_RX_FIFO_LEN;
-   tx_fifo_len : integer := UART_TX_FIFO_LEN);
+   tx_fifo_len : integer := UART_TX_FIFO_LEN;
+   -- When false, the RX FIFO/shift-register/baud state machine and the
+   -- RX/timeout interrupt logic are not synthesized: the rx port is
+   -- unused, RX register reads return 0, and no RX-sourced interrupt is
+   -- ever asserted. TX path and the bus/register interface are unchanged
+   -- regardless of this generic. Default true preserves existing behavior.
+   rx_enable : boolean := true);
                    port (
    rst    : in  std_logic;
    clk    : in  std_logic;

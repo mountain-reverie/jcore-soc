@@ -99,6 +99,7 @@ begin
     uart0 : entity work.uartlitedb(arch)
         generic map (
             fclk => CFG_CLK_CPU_FREQ_HZ,
+            rx_enable => FALSE,
             rx_fifo_len => 1,
             tx_fifo_len => 1
         )
