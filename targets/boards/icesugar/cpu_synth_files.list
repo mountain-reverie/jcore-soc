@@ -1,5 +1,6 @@
 core/register_file_ebr.vhd
 core/mult_ice40dsp.vhd
+core/dsp_arith.vhd
 core/shifter_seq.vhd
 decode/decode_table_rom.vhd
 decode/decode_table_rom_config.vhd
