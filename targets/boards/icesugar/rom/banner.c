@@ -187,6 +187,9 @@ static void eth_handle(const unsigned char *frame, unsigned int len)
 			const unsigned char *req_ip  = frame + 28;   /* ARP sender PA */
 			unsigned int i;
 
+#ifdef ETH_PAIR_TEST
+			putc_uart('Y');
+#endif
 			for (i = 0; i < 6; i++) reply[i] = req_mac[i];        /* eth dst */
 			for (i = 0; i < 6; i++) reply[6 + i] = OUR_MAC[i];    /* eth src */
 			put16(reply + 12, 0x0806u);                            /* ethertype */
@@ -276,6 +279,32 @@ static void spram_memtest(void)
 	puts_uart(bad ? "SPRAM MEMTEST FAIL\r\n" : "SPRAM MEMTEST OK\r\n");
 }
 
+/* Build + send a 42-byte ARP REQUEST for target_ip (gratuitous ARP when
+   target_ip == OUR_IP: used by the two-iCESugar cross-connected pair test
+   to kick off an RX->reply round trip without waiting on the 128 KB SPRAM
+   memtest). Mirrors the ARP reply layout in eth_handle() above. */
+static void send_arp_request(const unsigned char target_ip[4])
+{
+	unsigned char req[42];
+	unsigned int i;
+
+	for (i = 0; i < 6; i++) req[i] = 0xFFu;               /* eth dest: broadcast */
+	for (i = 0; i < 6; i++) req[6 + i] = OUR_MAC[i];      /* eth src */
+	put16(req + 12, 0x0806u);                              /* ethertype: ARP */
+
+	put16(req + 14, 1);       /* htype = Ethernet */
+	put16(req + 16, 0x0800u); /* ptype = IPv4 */
+	req[18] = 6;               /* hlen */
+	req[19] = 4;               /* plen */
+	put16(req + 20, 1);       /* opcode = request */
+	for (i = 0; i < 6; i++) req[22 + i] = OUR_MAC[i];     /* sender HA */
+	for (i = 0; i < 4; i++) req[28 + i] = OUR_IP[i];      /* sender PA */
+	for (i = 0; i < 6; i++) req[32 + i] = 0x00u;          /* target HA: unknown */
+	for (i = 0; i < 4; i++) req[38 + i] = target_ip[i];   /* target PA */
+
+	eth_send(req, 42);
+}
+
 /* Static (not on-stack): the boot stack is tiny, and 256 B would be a
    sizable chunk of it. Sized for ARP (42 B) or a small ping (~98 B) with
    headroom; eth_recv() truncates anything larger. */
@@ -301,6 +330,14 @@ void main(void)
 	   within the window and, completing well inside eth_tx_phy's NLP idle
 	   period, avoids any ambiguity in the tb's Manchester decoder between
 	   the real frame and an idle link pulse. */
+#ifndef ETH_PAIR_TEST
+	/* In the two-iCESugar pair test this experimental test frame is omitted:
+	   each node's eth_rx holds only a single frame, so sending BOTH this
+	   frame and the gratuitous ARP request back-to-back would overrun the
+	   peer's RX buffer and lose the ARP request before its poll loop reads
+	   it. The pair test therefore puts exactly one frame (the ARP request)
+	   on each wire -- the same one-frame-in pattern the single-SoC RX path
+	   is proven good against. The default build is unaffected. */
 	{
 		static const unsigned char test_frame[] = {
 			0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,   /* dest: broadcast */
@@ -311,8 +348,21 @@ void main(void)
 		eth_send(test_frame, sizeof(test_frame));
 		puts_uart("ETH TX\r\n");
 	}
+#endif
 
+#ifndef ETH_PAIR_TEST
 	spram_memtest();     /* proves all 128 KB read/write */
+#endif
+
+#ifdef ETH_PAIR_TEST
+	/* Gratuitous ARP for OUR_IP: the peer iCESugar runs the same pairtest
+	   image (same OUR_IP), so its eth_handle() responder answers this,
+	   giving an RX->reply round trip without the 128 KB SPRAM memtest's
+	   sim-time cost. The infinite poll loop below still answers the peer's
+	   own request in the other direction. */
+	send_arp_request(OUR_IP);
+	puts_uart("ARP REQ\r\n");
+#endif
 
 	/* visible heartbeat + eth RX poll. The eth poll must stay responsive
 	   (a received ARP/ICMP frame is answered on the very next iteration), so
@@ -323,11 +373,27 @@ void main(void)
 	   round-trip past the end-to-end sim's watchdog window.) */
 	{
 		unsigned int hb = 0u;
+#ifdef ETH_PAIR_TEST
+		unsigned int arpc = 0u;
+#endif
 		for (;;) {
 			volatile unsigned int d;
 			unsigned int n = eth_recv(rxbuf, sizeof(rxbuf));
-			if (n)
+			if (n) {
+#ifdef ETH_PAIR_TEST
+				putc_uart('R');
+#endif
 				eth_handle(rxbuf, n);
+			}
+#ifdef ETH_PAIR_TEST
+			/* Re-send the gratuitous ARP periodically: the peer may not have
+			   reached its RX poll loop when our first (boot-time) request went
+			   out, so retry until it answers (bounded by the tb watchdog). */
+			if (++arpc >= 40u) {
+				arpc = 0u;
+				send_arp_request(OUR_IP);
+			}
+#endif
 			if (++hb >= 400u) {   /* ~0.5 s heartbeat at this spin length */
 				hb = 0u;
 				GPIO_TOGGLE = 0x01u;
