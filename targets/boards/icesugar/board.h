@@ -8,24 +8,9 @@
 #define DRAM_BASE 0x10000000
 
 // Memory mapped peripherals
-#define DEVICE_ETH0_ADDR  0xabcd1000
+#define DEVICE_ETH_ADDR   0xabcd1000
 #define DEVICE_GPIO0_ADDR 0xabcd0000
 #define DEVICE_UART0_ADDR 0xabcd0100
-
-struct eth_tx_regs {
-  uint32_t ignore0[512];
-  uint32_t tx_data;
-  uint32_t tx_rstptr;
-  uint32_t tx_len;
-  uint32_t tx_go;
-  uint32_t tx_status; // read-only
-  uint32_t ignore1[59];
-  uint32_t rx_status; // read-only
-  uint32_t rx_len; // read-only
-  uint32_t rx_data; // read-only
-  uint32_t rx_ack;
-};
-#define DEVICE_ETH0 ((volatile struct eth_tx_regs *) DEVICE_ETH0_ADDR)
 
 struct gpio2_regs {
   uint32_t value;
@@ -33,6 +18,12 @@ struct gpio2_regs {
   uint32_t toggle;
 };
 #define DEVICE_GPIO0 ((volatile struct gpio2_regs *) DEVICE_GPIO0_ADDR)
+
+struct spi_regs {
+  uint32_t ctrl; // only byte 3
+  uint32_t data; // only byte 3
+};
+#define DEVICE_ETH ((volatile struct spi_regs *) DEVICE_ETH_ADDR)
 
 struct uartlite_regs {
   uint32_t rx; // only byte 3

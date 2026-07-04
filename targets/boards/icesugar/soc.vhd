@@ -14,12 +14,12 @@ use work.clk_config.all;
 use work.cpu2j0_pack.all;
 entity soc is
     port (
-        clk_eth : in std_logic;
         clk_sys : in std_logic;
+        eth_clk : out std_logic;
+        eth_cs : out std_logic_vector(1 downto 0);
+        eth_miso : in std_logic;
+        eth_mosi : out std_logic;
         gpio_do : out std_logic_vector(2 downto 0);
-        mdi0_n : out std_logic;
-        mdi0_p : out std_logic;
-        mdi1 : in std_logic;
         reset : in std_logic;
         uart0_rx : in std_logic;
         uart0_tx : out std_logic
@@ -79,16 +79,16 @@ begin
         );
     devices : entity work.devices(impl)
         port map (
-            clk_eth => clk_eth,
             clk_sys => clk_sys,
             cpu0_periph_dbus_i => cpu0_periph_dbus_i,
             cpu0_periph_dbus_o => cpu0_periph_dbus_o,
             cpu1_periph_dbus_i => cpu1_periph_dbus_i,
             cpu1_periph_dbus_o => cpu1_periph_dbus_o,
+            eth_clk => eth_clk,
+            eth_cs => eth_cs,
+            eth_miso => eth_miso,
+            eth_mosi => eth_mosi,
             gpio_do => gpio_do,
-            mdi0_n => mdi0_n,
-            mdi0_p => mdi0_p,
-            mdi1 => mdi1,
             reset => reset,
             uart0_rx => uart0_rx,
             uart0_tx => uart0_tx

@@ -20,14 +20,6 @@ padring-entities:
   clkgen:
     entity: ice_clkgen
     ports: { clk_in: clk, clk_out: clk_sys, clk_eth: clk_eth, rst_out: reset }
-  # Ethernet RX LVDS input: slice the MDI1 differential pair (P on pin 42, N the
-  # auto-complement on pin 38) via an SB_IO IO_STANDARD=SB_LVDS_INPUT, instead of
-  # a single-ended wire. Takes the raw pad net mdi1_pad, drives the eth device's
-  # mdi1 rx_in. (nextpnr can't take the LVDS io-standard from the PCF -- it comes
-  # from the SB_IO generic in ice_lvds_in; see tools/socgen/emit/pcf.go.)
-  lvds_rx:
-    entity: ice_lvds_in
-    ports: { pad_p: mdi1_pad, d_out: mdi1 }
 
 cpu:
   architecture: one_cpu_ebr
@@ -57,10 +49,14 @@ devices:
     # register/mux/toggle/set/clear datapath lanes to reclaim LCs on the up5k.
     generics: { width: 3 }
     ports: { d_o: gpio_do, d_i: gpio_di }
-  - class: eth_tx
-    name: eth0
+  # W5500 Ethernet controller (WIZ850io PMOD) driven over SPI. Replaces the
+  # PHY-less 10BASE-T eth: the W5500 does PHY+MAC+TCP/IP in silicon; the J1
+  # drives its registers via this spi master. num_cs=1 (single W5500).
+  - class: spi
+    name: eth
     base-addr: 0xabcd1000
-    ports: { mdi_p: mdi0_p, mdi_n: mdi0_n, tx_done: eth0_tx_done, rx_in: mdi1, rx_irq: eth0_rx_irq, clk_eth: clk_eth }
+    # spi2 requires NUM_CS in 2..5; the W5500 uses only cs(0), cs(1) is unused.
+    generics: { num_cs: 2 }
 
 # Single J1 master: drop cpu1's peripheral bus so socgen connects the one master
 # directly (no multi_master_bus_mux) — saves LCs on the UP5K.
@@ -81,6 +77,8 @@ pins:
     - { match: ledr_n, out: { name: "gpio_do(0)", invert: true } }
     - { match: ledg_n, out: { name: "gpio_do(1)", invert: true } }
     - { match: ledb_n, out: { name: "gpio_do(2)", invert: true } }
-    - { match: mdi0_p, out: { name: mdi0_p } }
-    - { match: mdi0_n, out: { name: mdi0_n } }
-    - { match: mdi1_p, signal: mdi1_pad }
+    # W5500 SPI (WIZ850io PMOD) -- pin numbers to confirm vs iCESugar PMOD schematic.
+    - { match: w5500_sclk, signal: eth_clk }
+    - { match: w5500_mosi, signal: eth_mosi }
+    - { match: w5500_miso, signal: eth_miso }
+    - { match: w5500_cs, signal: "eth_cs(0)" }
