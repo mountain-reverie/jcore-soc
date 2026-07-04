@@ -13,7 +13,7 @@ the Lattice iCE40 UP5K (SG48 package, 5280 LUTs, 30 EBR blocks, 4 SPRAMs).
 | Memory | EBR boot ROM (2 KB) + 128 KB SPRAM main RAM (4× `SB_SPRAM256KA` on `DEV_DDR` `0x10000000`) |
 | UART | 1× (UART-lite over FTDI, 115200 baud) |
 | GPIO | 3× LEDs (active-low RGB) |
-| Ethernet | 1× 10BASE-T TX (`eth_tx` @ `0xABCD1000`, PMOD, see below) |
+| Ethernet | WIZnet **W5500** over SPI (`spi2` @ `0xABCD1000`, WIZ850io PMOD, see below) |
 
 The `cpu` block in `design.yaml` uses `model: j1` with the EBR + SPRAM
 `cpus` architecture (`cpus_one_ebr.vhd`): the boot ROM and reset vector
@@ -128,209 +128,67 @@ docker run --rm \
 | icepack | ASC → BIN bitstream packing |
 | iceprog | Flash programming (not in CI) |
 
-## Ethernet (10BASE-T TX)
+## Ethernet (W5500 over SPI)
 
-`eth_tx` is a software-driven 10BASE-T Manchester transmitter: the CPU builds
-the whole on-wire frame (preamble + SFD + payload + FCS) in a RAM buffer and
-pokes a `GO` bit; the device serializes it out over a differential MDI pair.
-There is no MAC/PHY chip on iCESugar — the FPGA drives the twisted pair
-directly (10BASE-T signal levels only; add an external isolation
-transformer/line driver for a real link).
+iCESugar drives a **WIZnet W5500** Ethernet controller (WIZ850io PMOD) over SPI.
+The W5500 provides PHY + MAC + a hardwired TCP/IP stack in silicon, so the FPGA
+only needs a small SPI master and the J1 firmware programs the chip's registers.
+This replaces the earlier FPGA PHY-less 10BASE-T (`eth_tx`/`eth_rx`), preserved
+on PRs #70-73 as the FPGA-as-PHY reference.
 
-**PMOD / pins** (verified against `targets/boards/icesugar/icesugar.pcf`,
-socgen-generated from `design.yaml`'s `mdi0_p`/`mdi0_n` net names):
+**Device**: a `spi2` SPI master (`class: spi`, name `eth`) at `0xABCD1000`
+(`num_cs=2` -- spi2's minimum; the W5500 is on `cs(0)`; software-controlled CS
+holds low across the multi-byte W5500 register frames).
+
+**PMOD / pins** (**to confirm against the iCESugar PMOD schematic** -- currently
+reuse the freed eth pins):
 
 | Signal | Package pin | Note |
 |--------|--------------|------|
-| `mdi0_p` | 37 | differential MDI+ |
-| `mdi0_n` | 36 | differential MDI− |
+| `w5500_sclk` | 37 | SPI clock |
+| `w5500_mosi` | 36 | SPI MOSI |
+| `w5500_miso` | 42 | SPI MISO |
+| `w5500_cs`   | 38 | chip select (`cs(0)`) |
 
-**Register map** (device window base `0xABCD1000` = `DEVICE_ETH0_ADDR` in
-`board.h`; offsets verified against `components/emac/eth_tx.vhd`'s address
-decode and `targets/boards/icesugar/rom/banner.c`'s `ETH_*` defines):
+`RSTn`/`INTn` are not yet wired (INT is poll-able; an AIC would make it a real
+interrupt).
 
-| Offset | Access | Name | Description |
-|--------|--------|------|--------------|
-| `0x800` | write | `TX_DATA` | append one 32-bit word to the frame buffer (big-endian: `d(31:24)` is the lowest-address byte on the wire); write pointer auto-increments by 4 |
-| `0x804` | write, bit0 | `TX_RSTPTR` | reset the write pointer to 0 |
-| `0x808` | write | `TX_LEN` | frame length in bytes (post-preamble/SFD, i.e. total bytes loaded via `TX_DATA`) |
-| `0x80C` | write, bit0 | `TX_GO` | start transmission |
-| `0x810` | read, bit0 | `TX_STATUS` | `busy` — 1 while a transmission is in progress |
+**Software model** (`rom/banner.c`): a minimal spi2 byte-transaction layer ->
+`w5500_write` (frame `[addr_hi][addr_lo][control][data...]`, common block) ->
+`w5500_init_ping`: soft reset via `MR`, then set `SHAR` (MAC `02:00:00:00:00:01`),
+`SIPR` (IP `192.168.1.10`), `SUBR`, `GAR`. The W5500 auto-answers ARP + ICMP ping
+once MAC+IP are set (Ping-Block bit left 0) -- no socket needed.
 
-**Software model** (`rom/banner.c`'s `eth_send()`): build preamble (7×`0x55`)
-+ SFD (`0xD5`) + body (dest/src/ethertype/payload) + IEEE 802.3 CRC-32 FCS
-(reflected, poly `0xEDB88320`, appended little-endian) into a local buffer,
-poll `TX_STATUS` until not busy, reset the write pointer (`TX_RSTPTR`), push
-the buffer 32 bits at a time via `TX_DATA`, set `TX_LEN`, pulse `TX_GO`, then
-poll `TX_STATUS` again until the transmission completes.
+**Verified in simulation**: `sim.sh` / `icesugar_top_tb` instantiate a behavioral
+W5500 SPI slave (`components/emac/w5500_model.vhd`) that captures the common-block
+register writes and assert the driver programmed the correct MAC + IP
+(`PASS: W5500 programmed with correct MAC+IP`).
 
-**Clocking**: `eth_tx` runs its bus-facing registers in the 12 MHz `clk`
-domain; the Manchester serializer (`eth_tx_phy`) and the RX PHY/framer
-(`eth_rx`) run off a `clk_eth` input port, fed by the board's `ice_clkgen`
-`SB_PLL40_2_PAD` — `PLLOUTGLOBALA` is the 12 MHz CPU-clock passthrough
-(unchanged) and `PLLOUTGLOBALB` is a second ~39.75 MHz output
-(`icepll -i 12 -o 40`: DIVR=0 DIVF=52 DIVQ=4) routed to `eth_tx`/`eth_rx` as
-`clk_eth` via socgen. The RX path needs the 40 MHz rate to oversample the
-100 ns Manchester half-bits (4 clk_eth cycles per bit); the TX PHY was
-retimed to 2 clk_eth cycles per half-bit so its 50 ns half-bit slot is
-unchanged. The UP5K has a single PLL bel, so both clocks are generated by
-that one hard-macro rather than each device instantiating its own PLL. A
-2-FF synchronizer crosses `busy`/`done` back into the 12 MHz domain (see
-`components/emac/eth_tx.vhd`).
+**Fit**: `ICESTORM_LC 4763/5280` (~517 LC free), `clk_sys` ~14.7 MHz -- the W5500
+SPI path is far smaller than the PHY-less design it replaces.
 
-**Verified in simulation**: `sim.sh` / `icesugar_top_tb` decode the
-`pin_mdi0_p`/`pin_mdi0_n` pins with a Manchester decoder and assert the
-on-wire frame (all 28 bytes, including the CRC-32 FCS) matches the known
-boot-time test frame (broadcast dest, dummy src, ethertype `0x88B5`,
-payload `"J1"`) — see `tb/icesugar_top_tb.vhd`.
+**Hardware bring-up** (not yet done -- WIZ850io in transit): confirm the PMOD pin
+numbers, wire `RSTn`/`INTn`, flash, then `ping 192.168.1.10`.
 
-**Fit / timing status**: moving the PLL out of `eth_tx` into `ice_clkgen`
-(`SB_PLL40_2_PAD`, PORTA = 12 MHz CPU passthrough, PORTB = ~39.75 MHz
-`clk_eth`) resolved the earlier pin/PLL placement conflict. At the TX-only
-milestone the design fit and routed on real UP5K silicon: `ICESTORM_LC`
-5086/5280 (96%), `SB_PLL40_2_PAD` places cleanly, both clocks met timing
-(clk_sys Fmax 13.9 MHz ≥ 12 MHz; clk_eth Fmax 42.6 MHz ≥ 40 MHz). **Adding
-the RX path (`eth_rx`) since then pushed the design over the LC budget** — see
-"Known Constraints / Status" below for the current 5318/5280 fit and the
-candidate trades to close it.
-
-**Hardware bring-up notes** (not yet verified on physical hardware):
-- `clk_eth` is ~19.875 MHz rather than an exact 20 MHz (PLL divider
-  rounding), ~0.6% slow — 10BASE-T is self-clocked (Manchester encoding
-  carries its own clock), so this should be within tolerance, but it has not
-  been checked against real link partners.
-- `eth_tx`'s `mdi_p`/`mdi_n` outputs are plain 3.3 V LVCMOS, not the ±2.5 V
-  differential drive a real 10BASE-T transformer/line expects — series
-  resistors on the PMOD lines may be needed for a real link.
-- PMOD header pins 37/36 (currently assigned to `mdi0_p`/`mdi0_n`) need
-  physical confirmation against the iCESugar PMOD pinout before wiring up
-  real hardware.
-
-## Ethernet RX + ARP/ICMP
-
-The same `eth_tx` device now also carries a 10BASE-T **receive** path
-(`components/emac/eth_rx.vhd` + `eth_rx_phy.vhd`), and `rom/banner.c` runs a
-tiny software ARP + ICMP-echo responder against it.
-
-**MDI1 LVDS front-end**: the receive pair enters on **package pin 42**
-(`pin_mdi1_p`, socgen net `mdi1`). On real UP5K silicon pin 42 is the positive
-leg of a differential input pair, so it should be configured as an
-`SB_LVDS_INPUT` to slice the ±differential 10BASE-T signal; in simulation the
-board tb drives `pin_mdi1_p` single-ended (the already-sliced logic level).
-See "LVDS bring-up note" below for how the LVDS standard is (and is not)
-expressed in the iCE40 flow.
-
-**Clock recovery / Manchester decode**: `eth_rx_phy` synchronizes `rx_in`,
-runs a squelch/carrier detector (rejects lone NLP link pulses: needs
-`LOCK_EDGES=6` back-to-back transitions before asserting carrier), then a
-**DPLL** (8-bit phase accumulator, `STEP=64` so it wraps once per 100 ns bit at
-40 MHz = 4 clk_eth cycles/bit, bang-bang steered on the guaranteed mid-bit
-Manchester transition) recovers the bit clock and samples each bit in its
-second half. Same Manchester convention as `eth_tx_phy` (first half-bit
-`not b`, second half `b`, LSB-first within a byte). The DPLL block is clearly
-delimited in `eth_rx_phy.vhd`; a 4× oversample-and-vote FSM is the documented
-fit fallback if LC budget is tight.
-
-**Framer + buffer**: `eth_rx` slides an 8-bit window looking for the SFD
-(`0xD5`) to lock byte alignment (preamble discarded), then writes assembled
-bytes into a 4× `SB_RAM40` byte-lane buffer (byte 0 = first byte after SFD =
-destination MAC byte 0, big-endian on read). On carrier loss it latches the
-length and raises a clk-domain `frame_ready` (2-FF CDC); a new frame arriving
-before the previous is acked is dropped in full and latches `overrun`.
-
-**RX register map** (same `0xABCD1000` device window as TX; offsets decoded on
-`db_i.a(11:0)`, verified against `eth_tx.vhd` and `banner.c`'s `ETH_RX_*`):
-
-| Offset | Access | Name | Description |
-|--------|--------|------|--------------|
-| `0x900` | read | `RX_STATUS` | bit0 = `frame_ready`, bit1 = `overrun` |
-| `0x904` | read | `RX_LEN` | received frame length in bytes (incl. 4-byte FCS) |
-| `0x908` | read | `RX_DATA` | next 32-bit word of the frame, big-endian; each read auto-increments the RX read-word pointer so successive reads walk the frame |
-| `0x90C` | write, bit0 | `RX_ACK` | release the frame buffer + rewind the RX read pointer to 0 |
-
-**Poll model** (`banner.c` main loop): after boot the CPU polls `RX_STATUS`;
-on `frame_ready` it reads `RX_LEN` then walks `RX_DATA` word-by-word (one C
-`volatile` load per word = one bus cycle, satisfying the "one bus cycle between
-reads" requirement of the auto-increment pointer), then pulses `RX_ACK`.
-`eth_handle()` verifies the FCS (CRC-32 over dest..payload) and answers:
-- **ARP request → ARP reply** for `OUR_IP` (`192.168.1.10`), sender =
-  `OUR_MAC` (`02:00:00:00:00:01`) / `OUR_IP`, opcode 2.
-- **ICMP echo request → echo reply** for `OUR_IP` (swaps eth+IP addresses,
-  sets ICMP type 0, recomputes the ICMP and IPv4 header checksums).
-Replies go back out through the same `eth_send()` TX path.
-
-**Verified in simulation**: `sim.sh` / `icesugar_top_tb` drives a full
-Manchester-encoded **ARP request** (host `AA:BB:CC:DD:EE:01` /
-`192.168.1.99` asking for `192.168.1.10`, valid FCS) on `pin_mdi1_p` once the
-boot reaches its poll loop, then decodes the J1's response on
-`pin_mdi0_p`/`pin_mdi0_n` and asserts a byte-exact valid **ARP reply** (dest =
-host MAC, src = `OUR_MAC`, opcode 2, sender = `OUR_MAC`/`OUR_IP`, target =
-host MAC/IP, correct CRC-32 FCS). The PASS gate requires banner + `FROM SPRAM`
-+ `SPRAM MEMTEST OK` + `ETH FRAME OK` (TX) + `ARP REPLY OK` (RX loopback).
-
-**LVDS bring-up note**: nextpnr-ice40's PCF grammar is only
-`set_io [-nowarn] [-pullup ...] [-pullup_resistor ...] cell pin` — it has **no
-io-standard directive** (an `-io_std` token makes nextpnr treat the pin as
-unconstrained and abort P&R). The iCE40 `SB_LVDS_INPUT` differential standard
-is instead selected by the `IO_STANDARD => "SB_LVDS_INPUT"` parameter on the
-pin's `SB_IO` cell in the netlist — which lives in the socgen-generated
-`pad_ring.vhd` (currently a plain `mdi1 <= pin_mdi1_p;` passthrough that yosys
-maps to a default single-ended input). So the `iostandard: SB_LVDS_INPUT`
-attribute on `mdi1_p` in `design.yaml` is meaningful only to the ECP5 LPF path;
-for iCE40 it is a **documented bring-up step**, not a PCF line. To sample mdi1
-as true LVDS on hardware, the padring emitter (or a manual post-generation
-edit of `pad_ring.vhd`) must instantiate an `SB_IO` for `pin_mdi1_p` with
-`PIN_TYPE => "000001"` (simple input) and `IO_STANDARD => "SB_LVDS_INPUT"`,
-routing `D_IN_0` to `mdi1` (nextpnr then reserves the hard complement pin
-automatically). Without it the real bitstream samples mdi1 single-ended — fine
-for a 3.3 V single-ended source, wrong for a transformer-coupled ±differential
-10BASE-T link.
-
-**Follow-ups (not yet implemented)**:
-- AIC (interrupt controller) hookup — both `tx_done` and `rx_irq` ports exist
-  on `eth_tx`, but are currently left unconnected / polled only. `rx_irq`
-  pulses one clk cycle per received frame and is the natural AIC source.
-- RX buffer is 2 KB (512×32) per byte-lane set; sized for ARP/small ICMP, not
-  a full 1518-byte MTU. Bump `BUF_WORDS` (and the boot `rxbuf`) for larger
-  frames.
-- Socgen padring `SB_IO`/`IO_STANDARD` emission for iCE40 LVDS pins (see the
-  LVDS bring-up note above) so the LVDS standard sticks across regeneration.
+**Linux**: the W5500 has a mainline kernel driver (`w5100-spi`,
+`compatible = "wiznet,w5500"`, DT bindings since v5.2) -- on a Linux-capable
+J-Core target a DTS node binds it with no custom driver (MACRAW mode).
 
 ## Known Constraints / Status
 
-The GHDL simulation (`sim.sh`) **passes** — the J1 SoC is functionally correct:
-it boots from EBR, emits the UART banner, runs from SPRAM, transmits a
-10BASE-T Manchester frame the tb decodes on `mdi0_p`/`mdi0_n` (`ETH FRAME OK`),
-and now completes a full RX→ARP-reply loopback the tb decodes and byte-checks
-(`ARP REPLY OK`) — see the "Ethernet RX + ARP/ICMP" section above.
+The GHDL simulation (`sim.sh`) **passes** -- the J1 SoC is functionally correct:
+it boots from EBR, emits the UART banner, runs from SPRAM (with a 128 KB SPRAM
+memtest), and programs the W5500 over SPI with the correct MAC + IP
+(`PASS: W5500 programmed with correct MAC+IP`) -- see the "Ethernet (W5500 over
+SPI)" section above.
 
-**Fit status with the RX path added (over budget by 38 LC):** adding `eth_rx`
-(RX PHY + framer + 4× `SB_RAM40` byte-lane buffer) pushed the UP5K over its
-LC budget. The former TX-only design fit at 5086/5280; with RX it does **not**
-place:
-
-- ICESTORM_LC: **5318 / 5280 (101%, over by 38)** — does **not** fit
-  (5371 with the original RX DPLL; the DPLL→4× oversampler swap in
-  `eth_rx_phy.vhd` reclaimed 38 LC → 5333; the eth_tx read/ack fix shaved 15 more → 5318, still 38 over)
-- ICESTORM_RAM: **25 / 30 (83%)** — fits
-- `SB_PLL40_2_PAD`: 1, places cleanly (unchanged from the TX-only design)
-- Timing: nextpnr aborts at LC-expansion before routing, so no post-route
-  Fmax is produced while over budget; the TX-only design met timing
-  comfortably (clk_sys 13.9 MHz ≥ 12; clk_eth 42.6 MHz ≥ 40).
-- `$assert` cells: handled (stripped in `synth.sh`)
-
-**Closing the last 38 LC is a human decision** (per the RX feature's fit
-ladder — the oversampler swap was the automatic step; further cuts were left
-for review rather than silently truncating functionality). Candidate trades,
-roughly ordered by risk:
-
-1. Narrow `eth_rx` `byte_cnt`/`CNT_BITS` 16→12 bits and shrink the RX buffer
-   `BUF_WORDS` 512→128 (512 B, still ≥ ARP/small-ICMP): trims the byte-index
-   arithmetic — est. ~15–30 LC, self-contained to the RX feature.
-2. uartlite FIFOs 2/2 → 1/1 (already listed below): est. ~20–40 LC.
-3. Trim unused `data_bus_pkg` DEV slots (shared bus code; est. ~40–80 LC but
-   regression risk to all boards).
-4. HX8K (7680 LC) board variant if a real UP5K bitstream isn't required.
+**Fit status:** the design fits the UP5K comfortably -- `ICESTORM_LC`
+**4763/5280 (90%, ~517 LC free)**, `ICESTORM_RAM` 17/30, `ICESTORM_DSP` 8/8,
+`clk_sys` Fmax ~14.7 MHz >= 12 MHz (fit + timing OK). Switching from the FPGA
+PHY-less 10BASE-T to the W5500 SPI controller reclaimed ~417 LC (the PHY-less
+eth was ~573 LC; the `spi2` master ~156), and the J1 DSP-ALU (`dsp_arith`,
+jcore-cpu #101) reclaimed another ~59 -- headroom that now leaves room for an
+AIC, which the PHY-less design could not fit.
 
 ### Optimizations already applied (893 LC reclaimed, 6336 → 5443)
 

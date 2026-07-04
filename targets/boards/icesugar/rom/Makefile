@@ -16,19 +16,7 @@ boot.elf: start.S banner.c $(LDSCRIPT)
 boot.bin: boot.elf
 	$(OBJCOPY) -O binary $< $@
 
-# Pairtest variant: -DETH_PAIR_TEST skips the 128 KB SPRAM memtest and sends a
-# gratuitous ARP request for OUR_IP at boot, so two cross-connected iCESugar
-# instances (icesugar_pair_tb) exchange ARP request/reply without waiting on
-# the memtest's sim-time cost. Same crt0/linker script as the default image.
-boot_pairtest.elf: start.S banner.c $(LDSCRIPT)
-	$(CC) $(CFLAGS) -DETH_PAIR_TEST -T $(LDSCRIPT) -o $@ start.S banner.c
-
-boot_pairtest.bin: boot_pairtest.elf
-	$(OBJCOPY) -O binary $< $@
-
 all: boot.bin
 
-pairtest: boot_pairtest.bin
-
 clean:
-	rm -f boot.elf boot.bin boot_pairtest.elf boot_pairtest.bin
+	rm -f boot.elf boot.bin
