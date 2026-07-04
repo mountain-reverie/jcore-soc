@@ -51,4 +51,4 @@ ghdl -a --std=93 -fexplicit -fsynopsys -C --workdir="$WORK" \
     targets/boards/icesugar/tb/icesugar_top_tb.vhd
 ghdl -e --std=93 -fexplicit -fsynopsys -C --syn-binding --workdir="$WORK" icesugar_top_tb
 ghdl -r --std=93 -fexplicit -fsynopsys -C --syn-binding --workdir="$WORK" icesugar_top_tb \
-    --stop-time=160ms --assert-level=error
+    --stop-time=210ms --assert-level=error
