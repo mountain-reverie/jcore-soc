@@ -15,8 +15,11 @@ use ieee.numeric_std.all;
 -- are just storage. Register pointer auto-increments (wrapping mod 16) on
 -- both read and write, matching the DS3231 datasheet.
 --
--- NOT modeled: clock ticking (registers are static until written), SQW
--- (tied to '1'), alarms, temperature. Out of scope per the driver spec.
+-- NOT modeled: clock ticking (registers are static until written), alarms,
+-- temperature. Out of scope per the driver spec. SQW is idle-high and, in
+-- this sim model only, pulses a handful of times shortly after reset (see
+-- sqw_pulse below) so a testbench can exercise the AIC irq_i(1) path; real
+-- hardware SQW runs at a much slower, configurable rate.
 entity ds3231_model is
   port (
     scl       : in    std_logic;
@@ -43,7 +46,34 @@ architecture sim of ds3231_model is
   signal start_tog : std_logic := '0';
   signal stop_tog  : std_logic := '0';
 begin
-  sqw <= '1';
+  -- Sim-only fast SQW pulse generator: a real DS3231 SQW is a slow (typ.
+  -- 1 Hz) square wave, far too slow to exercise the AIC interrupt path
+  -- (irq_i(1), aic.vhd's rising-edge aic_edgedet) within a sim run of
+  -- reasonable wall-clock length. Idle high (matching the datasheet/open-
+  -- drain idle level and this entity's default), then pulse low/high
+  -- continuously at a 1 ms period for the whole run.
+  --
+  -- Why free-run for the whole sim rather than a short early burst: the AIC
+  -- edge-detect latch (components/misc/aic_edgedet.vhd) captures a rising
+  -- edge ONLY while its enable es_irqs(1) is high -- "q <= en_i" on the
+  -- edge -- and es_irqs(1) is 0 until the CPU writes aic0's ilevel(1)
+  -- (banner.c's AIC0_ILEVELS write in main(), which only runs after
+  -- ds3231_init()'s ~13 ms bit-banged I2C round trip). A burst that ends
+  -- before that write would have every edge discarded. Free-running edges
+  -- guarantee several rising edges land after the enable and before the
+  -- AIC-check print (~148 ms, just past the SPRAM memtest). No now()/
+  -- random: a fixed toggle loop, deterministic across runs.
+  sqw_pulse : process
+    constant SQW_HALF_PERIOD : time := 10 us;
+  begin
+    sqw <= '1';
+    loop
+      wait for SQW_HALF_PERIOD;
+      sqw <= '0';
+      wait for SQW_HALF_PERIOD;
+      sqw <= '1';
+    end loop;
+  end process;
 
   reg_sec   <= regs(0);
   reg_min   <= regs(1);

@@ -14,6 +14,30 @@
 #define GPIO_DATA   (*(volatile unsigned int *)(GPIO_BASE + 0x00u)) /* wr d_o */
 #define GPIO_TOGGLE (*(volatile unsigned int *)(GPIO_BASE + 0x08u)) /* XOR d_o */
 
+/* aic0 @ 0xABCD0200 (DEVICE_AIC0_ADDR in board.h): +0x08 is the "ilevels"
+   register -- 8 x 4-bit interrupt-priority fields packed one per irq_i
+   line, ilevel(7)[31:28] .. ilevel(0)[3:0] (see components/misc/aic.vhd's
+   p_interface write decode). There is no separate per-IRQ enable bit: aic
+   ORs together an ilevel's 4 bits into es_irqs(N) (the aic_edgedet enable),
+   so writing ANY non-zero level into ilevel(N) both sets its priority and
+   enables it. irq_i(1) is the DS3231 SQW tick (ice_irq_in / design.yaml);
+   give it the maximum priority level (0xF) since the CPU only accepts an
+   interrupt when its level is strictly greater than SR's current I-mask
+   (components/cpu/decode/decode_core.vhm), and _enable_interrupts (start.S)
+   lowers that mask to 0. All other ilevel fields are left 0 (disabled). */
+#define AIC0_BASE     0xABCD0200u
+#define AIC0_ILEVELS  (*(volatile unsigned int *)(AIC0_BASE + 0x08u))
+#define AIC0_ILEVEL1_MAX  0x000000F0u   /* ilevel(1) = 0xF, all others 0 */
+
+/* Bumped by the AIC irq_i(1) ISR (_aic_isr in start.S) on every DS3231 SQW
+   tick. Observable proof the interrupt actually fired and was serviced. */
+volatile unsigned int irq_tick_count;
+
+/* start.S: programs VBR to _int_vector_table and clears SR's I-mask.
+   (sh2-elf-gcc prefixes C symbols with an extra leading underscore, so this
+   C name "enable_interrupts" is start.S's asm label "_enable_interrupts".) */
+extern void enable_interrupts(void);
+
 static void putc_uart(char c)
 {
 	while (UART_STATUS & TX_FULL)
@@ -355,6 +379,25 @@ void main(void)
 
 	ds3231_init();       /* bit-banged I2C round trip to the DS3231 RTC (early:
 	                        keeps its sim assertion ahead of the slow memtest) */
+
+	/* AIC interrupt test: enable aic0 irq_i(1) (the DS3231 SQW tick), install the
+	   vector table + unmask interrupts, let a few SQW edges fire, then report
+	   whether the ISR actually ran. Proves the AIC delivers an interrupt and
+	   software services it (the ISR in start.S bumps irq_tick_count). Writing a
+	   non-zero level into ilevel(1) both enables and prioritizes the line (the
+	   aic ORs the level bits into es_irqs -- there is no separate enable). */
+	AIC0_ILEVELS = AIC0_ILEVEL1_MAX;  /* ilevel(1)=0xF: enable+prioritize irq_i(1) */
+	enable_interrupts();              /* VBR -> vector table, SR I-mask -> 0 */
+	{ volatile unsigned int d; for (d = 0; d < 4000u; d++) ; }  /* let SQW ticks fire */
+	puts_uart("AIC tick_count=");
+	puthex8((unsigned char)irq_tick_count);
+	puts_uart(irq_tick_count > 0u ? " AIC PASS\r\n" : " AIC FAIL\r\n");
+	/* The one-shot delivery test is done; disable irq_i(1) again so the sim
+	   model's artificially-fast SQW (10 us half-period, vs the DS3231's real
+	   1 Hz) does not storm the CPU with interrupts through the slow 128 KB
+	   memtest below. On real hardware the 1 Hz tick would simply be left
+	   enabled as the system time base. */
+	AIC0_ILEVELS = 0u;                 /* ilevel(1)=0: disable irq_i(1) */
 
 	spram_memtest();     /* proves all 128 KB read/write */
 
