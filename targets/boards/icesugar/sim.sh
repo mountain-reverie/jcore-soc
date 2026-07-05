@@ -40,7 +40,13 @@ source targets/boards/icesugar/filelist.sh   # defines FILES=( ... )
 # sb_mac16_sim.vhd's comments; current GHDL (6.0.0) rejects them under
 # --std=93 without it, on every ghdl invocation (analyze/elaborate/run) that
 # touches this file.
-FILES=( components/cpu/core/sb_mac16_sim.vhd components/memory/sb_spram256ka_sim.vhd components/emac/sb_pll40_2_pad_sim.vhd components/emac/w5500_model.vhd "${FILES[@]}" )
+# sb_io_sim.vhd: sim-only iCE40 SB_IO model (tristate/open-drain), needed to
+# bind ice_i2c_io's unbound SB_IO instances for the bit-banged DS3231 I2C.
+# ds3231_model.vhd: sim-only behavioral I2C slave (the DS3231 RTC) hooked
+# onto pad_ring's pin_i2c_scl/pin_i2c_sda in the testbench below. Neither is
+# in the synth filelist -- synthesis maps SB_IO to the real cell and there is
+# no DS3231 model to synthesize.
+FILES=( components/cpu/core/sb_mac16_sim.vhd components/memory/sb_spram256ka_sim.vhd components/emac/sb_pll40_2_pad_sim.vhd components/emac/sb_io_sim.vhd components/emac/w5500_model.vhd components/misc/ds3231_model.vhd "${FILES[@]}" )
 ghdl -a --std=93 -fexplicit -fsynopsys -C --workdir="$WORK" "${FILES[@]}"
 ghdl -e --std=93 -fexplicit -fsynopsys -C --syn-binding --workdir="$WORK" pad_ring
 echo "pad_ring elaborated OK"

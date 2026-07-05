@@ -43,6 +43,8 @@ architecture sim of icesugar_top_tb is
   signal i2c_scl, i2c_sda : std_logic;
   signal ds3231_sec, ds3231_min, ds3231_hour  : std_logic_vector(7 downto 0);
   signal ds3231_day, ds3231_date, ds3231_month, ds3231_year : std_logic_vector(7 downto 0);
+  signal rtc_sqw     : std_logic;      -- ds3231_model's fast-pulse SQW -> aic0 irq_i(1)
+  signal aic_irq_ok  : boolean := false;  -- "AIC PASS" seen on the UART (tick_count>0)
 
   -- Expected values programmed by banner.c's w5500_init_ping(): SHAR
   -- 02:00:00:00:00:01, SIPR 192.168.1.10 (0xC0A8010A).
@@ -73,14 +75,13 @@ begin
               pin_w5500_cs => w5500_cs, pin_w5500_sclk => w5500_sclk,
               pin_w5500_mosi => w5500_mosi, pin_w5500_miso => w5500_miso,
               pin_i2c_pad0 => i2c_scl, pin_i2c_pad1 => i2c_sda,
-              -- SQW/INT are both out of scope here (SQW->aic tick irq and
-              -- the W5500's own interrupt line aren't exercised by this
-              -- tb): tie idle-high, matching their open-drain/active-low
-              -- idle level on real hardware. Pre-existing gap from the SQW-
-              -- >aic hardware commit (pad_ring gained these two "in" ports
-              -- with no tb hookup) -- fixed here since it otherwise blocks
-              -- elaboration entirely.
-              pin_rtc_sqw => '1', pin_w5500_int => '1');
+              -- rtc_sqw is now driven by ds3231_model's fast-pulse SQW output
+              -- below (real hardware pulses far too slowly to exercise the
+              -- AIC irq_i(1) path in sim). w5500_int stays out of scope for
+              -- this tb (the W5500's own interrupt line isn't exercised
+              -- here): tie idle-high, matching its active-low idle level on
+              -- real hardware.
+              pin_rtc_sqw => rtc_sqw, pin_w5500_int => '1');
 
   clk <= not clk after CLK_PER/2 when not done else '0';
 
@@ -92,7 +93,7 @@ begin
     port map (
       scl       => i2c_scl,
       sda       => i2c_sda,
-      sqw       => open,
+      sqw       => rtc_sqw,
       reg_sec   => ds3231_sec,
       reg_min   => ds3231_min,
       reg_hour  => ds3231_hour,
@@ -190,6 +191,13 @@ begin
         report "icesugar_top_tb FAILED: DS3231 FAIL seen (driver read-back mismatch)"
           severity failure;
         wait;
+      elsif contains(buf, n, "AIC PASS") and not aic_irq_ok then
+        report "PASS: AIC interrupt delivered + serviced" severity note;
+        aic_irq_ok <= true;
+      elsif contains(buf, n, "AIC FAIL") then
+        report "icesugar_top_tb FAILED: AIC FAIL seen (irq_tick_count stayed 0 -- interrupt never fired/serviced)"
+          severity failure;
+        wait;
       end if;
     end loop;
   end process;
@@ -204,7 +212,8 @@ begin
     if not w5500_ok then wait until w5500_ok; end if;
     if not ds3231_model_ok then wait until ds3231_model_ok; end if;
     if not ds3231_ok then wait until ds3231_ok; end if;
-    report "icesugar_top_tb PASSED: FROM SPRAM + SPRAM MEMTEST OK + W5500 programmed + DS3231 round trip"
+    if not aic_irq_ok then wait until aic_irq_ok; end if;
+    report "icesugar_top_tb PASSED: FROM SPRAM + SPRAM MEMTEST OK + W5500 programmed + DS3231 round trip + AIC interrupt delivered"
       severity note;
     done <= true;
     wait;
