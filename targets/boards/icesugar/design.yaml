@@ -27,7 +27,7 @@ padring-entities:
   # Open-drain I2C pads for the bit-banged I2C master (gpio2 'i2c' device).
   i2c_io:
     entity: ice_i2c_io
-    ports: { d_o: i2c_do, d_t: i2c_dt, d_i: i2c_di, pin_scl: i2c_scl_pad, pin_sda: i2c_sda_pad }
+    ports: { d_o: i2c_do, d_t: i2c_dt, d_i: i2c_di, pin: i2c_pad }
 
 cpu:
   architecture: one_cpu_ebr
@@ -128,6 +128,6 @@ pins:
     - { match: w5500_miso, signal: eth_miso }
     - { match: w5500_cs, signal: "eth_cs(0)" }
     - { match: w5500_int, signal: eth_int }   # W5500 INTn (active low) -> aic irq
-    - { match: i2c_scl, signal: i2c_scl_pad, buff: false }   # DS3231 I2C (open-drain)
-    - { match: i2c_sda, signal: i2c_sda_pad, buff: false }
+    - { match: i2c_pad0, signal: i2c_pad, entity-pad: true }   # DS3231 I2C SCL (bidir open-drain, bit0)
+    - { match: i2c_pad1, signal: i2c_pad, entity-pad: true }   # DS3231 I2C SDA (bit1)
     - { match: rtc_sqw, signal: rtc_sqw_net }                # DS3231 SQW/INT -> aic irq(1)

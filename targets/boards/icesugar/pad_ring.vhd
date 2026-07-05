@@ -15,8 +15,8 @@ use work.cpu2j0_pack.all;
 entity pad_ring is
     port (
         pin_clk : in std_logic;
-        pin_i2c_scl : inout std_logic;
-        pin_i2c_sda : inout std_logic;
+        pin_i2c_pad0 : inout std_logic;
+        pin_i2c_pad1 : inout std_logic;
         pin_ledb_n : out std_logic;
         pin_ledg_n : out std_logic;
         pin_ledr_n : out std_logic;
@@ -76,8 +76,8 @@ begin
             d_i => i2c_di,
             d_o => i2c_do,
             d_t => i2c_dt,
-            pin_scl => pin_i2c_scl,
-            pin_sda => pin_i2c_sda
+            pin(0) => pin_i2c_pad0,
+            pin(1) => pin_i2c_pad1
         );
     irq_in : entity work.ice_irq_in(rtl)
         port map (
