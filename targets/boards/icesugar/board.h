@@ -8,9 +8,25 @@
 #define DRAM_BASE 0x10000000
 
 // Memory mapped peripherals
+#define DEVICE_AIC0_ADDR  0xabcd0200
 #define DEVICE_ETH_ADDR   0xabcd1000
 #define DEVICE_GPIO0_ADDR 0xabcd0000
 #define DEVICE_UART0_ADDR 0xabcd0100
+
+struct aic_regs {
+  uint32_t ctrl0;
+  uint32_t brkadd;
+  uint32_t ilevels;
+  uint32_t ctrl1;
+  uint32_t pit_throttle;
+  uint32_t pit_counter;
+  uint32_t clock_period; // read-only
+  uint32_t ignore0;
+  uint32_t rtc_sec_hi;
+  uint32_t rtc_sec_lo;
+  uint32_t rtc_nsec;
+};
+#define DEVICE_AIC0 ((volatile struct aic_regs *) DEVICE_AIC0_ADDR)
 
 struct gpio2_regs {
   uint32_t value;

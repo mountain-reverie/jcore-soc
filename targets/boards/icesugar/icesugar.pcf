@@ -5,6 +5,7 @@ set_io pin_ledr_n 41
 set_io pin_ser_rx 4
 set_io pin_ser_tx 6
 set_io pin_w5500_cs 38
+set_io pin_w5500_int 34
 set_io pin_w5500_miso 42
 set_io pin_w5500_mosi 36
 set_io pin_w5500_sclk 37

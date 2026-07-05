@@ -21,6 +21,7 @@ entity pad_ring is
         pin_ser_rx : in std_logic;
         pin_ser_tx : out std_logic;
         pin_w5500_cs : out std_logic;
+        pin_w5500_int : in std_logic;
         pin_w5500_miso : in std_logic;
         pin_w5500_mosi : out std_logic;
         pin_w5500_sclk : out std_logic
@@ -31,6 +32,8 @@ architecture impl of pad_ring is
     signal clk_sys : std_logic;
     signal eth_clk : std_logic;
     signal eth_cs : std_logic_vector(1 downto 0);
+    signal eth_int : std_logic;
+    signal eth_irq_vec : std_logic_vector(7 downto 0);
     signal eth_miso : std_logic;
     signal eth_mosi : std_logic;
     signal gpio_do : std_logic_vector(2 downto 0);
@@ -43,6 +46,7 @@ begin
             clk_sys => clk_sys,
             eth_clk => eth_clk,
             eth_cs => eth_cs,
+            eth_irq_vec => eth_irq_vec,
             eth_miso => eth_miso,
             eth_mosi => eth_mosi,
             gpio_do => gpio_do,
@@ -57,6 +61,11 @@ begin
             clk_out => clk_sys,
             rst_out => reset
         );
+    w5500_irq : entity work.ice_w5500_irq(rtl)
+        port map (
+            int_n => eth_int,
+            irq => eth_irq_vec
+        );
     clk <= pin_clk;
     pin_ledb_n <= not gpio_do(2);
     pin_ledg_n <= not gpio_do(1);
@@ -64,6 +73,7 @@ begin
     uart0_rx <= pin_ser_rx;
     pin_ser_tx <= uart0_tx;
     pin_w5500_cs <= eth_cs(0);
+    eth_int <= pin_w5500_int;
     eth_miso <= pin_w5500_miso;
     pin_w5500_mosi <= eth_mosi;
     pin_w5500_sclk <= eth_clk;
