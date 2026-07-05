@@ -42,9 +42,22 @@
 		#address-cells = <1>;
 		#size-cells = <1>;
 
+		timer {
+			compatible = "jcore,pit";
+			reg = <0x200 0x30>;
+			interrupts = <0x10>;
+		};
+
 		gpio2 {
 			compatible = "jcore,gpio2";
 			reg = <0x0 0x10>; // ABCD0000-ABCD000F
+		};
+
+		interrupt-controller {
+			#interrupt-cells = <1>;
+			compatible = "jcore,aic1";
+			interrupt-controller;
+			reg = <0x200 0x40>; // ABCD0200-ABCD023F
 		};
 
 		serial {

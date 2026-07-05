@@ -25,3 +25,4 @@ w5500_mosi 36
 # Same PMOD2-header-not-yet-confirmed caveat as mdi0 above applies.
 w5500_miso 42
 w5500_cs 38
+w5500_int 34

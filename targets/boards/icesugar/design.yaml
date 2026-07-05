@@ -20,6 +20,10 @@ padring-entities:
   clkgen:
     entity: ice_clkgen
     ports: { clk_in: clk, clk_out: clk_sys, clk_eth: clk_eth, rst_out: reset }
+  # W5500 INTn (active low) -> aic0.irq_i(0) (active-high, rising-edge).
+  w5500_irq:
+    entity: ice_w5500_irq
+    ports: { int_n: eth_int, irq: eth_irq_vec }
 
 cpu:
   architecture: one_cpu_ebr
@@ -80,6 +84,7 @@ devices:
       enmi_i: 1
       event_i: cpu0_event_o
       event_o: cpu0_event_i
+      irq_i: eth_irq_vec
 
 # cpu0_event_i is driven by aic0; cpu1_event_i is the unused 2nd core. List both
 # so socgen zero-ties whichever ends up undriven.
@@ -111,3 +116,4 @@ pins:
     - { match: w5500_mosi, signal: eth_mosi }
     - { match: w5500_miso, signal: eth_miso }
     - { match: w5500_cs, signal: "eth_cs(0)" }
+    - { match: w5500_int, signal: eth_int }   # W5500 INTn (active low) -> aic irq

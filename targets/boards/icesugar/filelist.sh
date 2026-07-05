@@ -71,6 +71,7 @@ FILES+=(
   components/ddr2/ddrc_cnt_pkg.vhd
   components/cpu/cache/cache_pkg.vhd
   components/misc/aic2_pkg.vhd
+  components/misc/ice_w5500_irq.vhd
   components/misc/aic_edgedet.vhd
   components/misc/aic.vhd
   # soc_gen-generated SoC: the EBR-only cpus arch + its soc_cpus_config (binds

@@ -17,6 +17,7 @@ entity soc is
         clk_sys : in std_logic;
         eth_clk : out std_logic;
         eth_cs : out std_logic_vector(1 downto 0);
+        eth_irq_vec : in std_logic_vector(7 downto 0);
         eth_miso : in std_logic;
         eth_mosi : out std_logic;
         gpio_do : out std_logic_vector(2 downto 0);
@@ -26,9 +27,12 @@ entity soc is
     );
 end;
 architecture impl of soc is
+    signal cpu0_data_master_ack : std_logic;
+    signal cpu0_data_master_en : std_logic;
     signal cpu0_ddr_dbus_i : cpu_data_i_t;
     signal cpu0_ddr_ibus_i : cpu_instruction_i_t;
     signal cpu0_event_i : cpu_event_i_t;
+    signal cpu0_event_o : cpu_event_o_t;
     signal cpu0_periph_dbus_i : cpu_data_i_t;
     signal cpu0_periph_dbus_o : cpu_data_o_t;
     signal cpu1_ddr_dbus_i : cpu_data_i_t;
@@ -48,14 +52,14 @@ begin
             clk => clk_sys,
             cpu0_copro_i => NULL_COPR_I,
             cpu0_copro_o => open,
-            cpu0_data_master_ack => open,
-            cpu0_data_master_en => open,
+            cpu0_data_master_ack => cpu0_data_master_ack,
+            cpu0_data_master_en => cpu0_data_master_en,
             cpu0_ddr_dbus_i => cpu0_ddr_dbus_i,
             cpu0_ddr_dbus_o => open,
             cpu0_ddr_ibus_i => cpu0_ddr_ibus_i,
             cpu0_ddr_ibus_o => open,
             cpu0_event_i => cpu0_event_i,
-            cpu0_event_o => open,
+            cpu0_event_o => cpu0_event_o,
             cpu0_mem_lock => open,
             cpu0_periph_dbus_i => cpu0_periph_dbus_i,
             cpu0_periph_dbus_o => cpu0_periph_dbus_o,
@@ -80,12 +84,17 @@ begin
     devices : entity work.devices(impl)
         port map (
             clk_sys => clk_sys,
+            cpu0_data_master_ack => cpu0_data_master_ack,
+            cpu0_data_master_en => cpu0_data_master_en,
+            cpu0_event_i => cpu0_event_i,
+            cpu0_event_o => cpu0_event_o,
             cpu0_periph_dbus_i => cpu0_periph_dbus_i,
             cpu0_periph_dbus_o => cpu0_periph_dbus_o,
             cpu1_periph_dbus_i => cpu1_periph_dbus_i,
             cpu1_periph_dbus_o => cpu1_periph_dbus_o,
             eth_clk => eth_clk,
             eth_cs => eth_cs,
+            eth_irq_vec => eth_irq_vec,
             eth_miso => eth_miso,
             eth_mosi => eth_mosi,
             gpio_do => gpio_do,
@@ -93,4 +102,6 @@ begin
             uart0_rx => uart0_rx,
             uart0_tx => uart0_tx
         );
+    -- Zero out unused signals
+    cpu1_event_i <= (en => '0', cmd => INTERRUPT, vec => (others => '0'), msk => '0', lvl => (others => '0'));
 end;

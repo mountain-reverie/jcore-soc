@@ -16,12 +16,17 @@ use work.data_bus_pack.all;
 entity devices is
     port (
         clk_sys : in std_logic;
+        cpu0_data_master_ack : in std_logic;
+        cpu0_data_master_en : in std_logic;
+        cpu0_event_i : out cpu_event_i_t;
+        cpu0_event_o : in cpu_event_o_t;
         cpu0_periph_dbus_i : out cpu_data_i_t;
         cpu0_periph_dbus_o : in cpu_data_o_t;
         cpu1_periph_dbus_i : out cpu_data_i_t;
         cpu1_periph_dbus_o : in cpu_data_o_t;
         eth_clk : out std_logic;
         eth_cs : out std_logic_vector(1 downto 0);
+        eth_irq_vec : in std_logic_vector(7 downto 0);
         eth_miso : in std_logic;
         eth_mosi : out std_logic;
         gpio_do : out std_logic_vector(2 downto 0);
@@ -32,7 +37,7 @@ entity devices is
 end;
 architecture impl of devices is
     signal gpio_di : std_logic_vector(2 downto 0);
-    type device_t is (NONE, DEV_ETH, DEV_GPIO0, DEV_UART0);
+    type device_t is (NONE, DEV_AIC0, DEV_ETH, DEV_GPIO0, DEV_UART0);
     signal active_dev : device_t;
     type data_bus_i_t is array (device_t'left to device_t'right) of cpu_data_i_t;
     type data_bus_o_t is array (device_t'left to device_t'right) of cpu_data_o_t;
@@ -43,13 +48,18 @@ architecture impl of devices is
         -- Assumes addr(31 downto 28) = x"a".
         -- Address decoding closer to CPU checks those bits.
         if addr(27 downto 13) = "101111001101000" then
-            if addr(12 downto 9) = "0000" then
-                if addr(8 downto 4) = "00000" then
-                    -- ABCD0000-ABCD000F
-                    return DEV_GPIO0;
-                elsif addr(8 downto 4) = "10000" then
-                    -- ABCD0100-ABCD010F
-                    return DEV_UART0;
+            if addr(12 downto 10) = "000" then
+                if addr(9) = '0' then
+                    if addr(8 downto 4) = "00000" then
+                        -- ABCD0000-ABCD000F
+                        return DEV_GPIO0;
+                    elsif addr(8 downto 4) = "10000" then
+                        -- ABCD0100-ABCD010F
+                        return DEV_UART0;
+                    end if;
+                elsif addr(9 downto 6) = "1000" then
+                    -- ABCD0200-ABCD023F
+                    return DEV_AIC0;
                 end if;
             elsif addr(12 downto 3) = "1000000000" then
                 -- ABCD1000-ABCD1007
@@ -58,6 +68,7 @@ architecture impl of devices is
         end if;
         return NONE;
     end;
+    signal irqs0 : std_logic_vector(7 downto 0) := (others => '0');
 begin
     -- Disconnected peripheral buses
     cpu1_periph_dbus_i <= loopback_bus(cpu1_periph_dbus_o);
@@ -69,6 +80,30 @@ begin
     end generate;
     devs_bus_i(NONE) <= loopback_bus(devs_bus_o(NONE));
     -- Instantiate devices
+    aic0 : entity work.aic(behav)
+        generic map (
+            debug_enable => FALSE,
+            pit_enable_g => FALSE,
+            reboot_enable => FALSE,
+            rtc_enable => FALSE,
+            rtc_sec_length34b => FALSE,
+            vector_numbers => (x"00", x"00", x"00", x"00", x"00", x"00", x"00", x"00")
+        )
+        port map (
+            back_i => cpu0_data_master_ack,
+            bstb_i => cpu0_data_master_en,
+            clk_bus => clk_sys,
+            db_i => devs_bus_o(DEV_AIC0),
+            db_o => devs_bus_i(DEV_AIC0),
+            enmi_i => '1',
+            event_i => cpu0_event_o,
+            event_o => cpu0_event_i,
+            irq_i => eth_irq_vec,
+            reboot => open,
+            rst_i => reset,
+            rtc_nsec => open,
+            rtc_sec => open
+        );
     eth : entity work.spi2(arch)
         generic map (
             clk_freq => CFG_CLK_CPU_FREQ_HZ,
