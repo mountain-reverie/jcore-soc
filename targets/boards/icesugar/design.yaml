@@ -57,6 +57,35 @@ devices:
     base-addr: 0xabcd1000
     # spi2 requires NUM_CS in 2..5; the W5500 uses only cs(0), cs(1) is unused.
     generics: { num_cs: 2 }
+  # Advanced Interrupt Controller (single J1). Drives the CPU event handshake
+  # (event_i <- cpu event_o / event_o -> cpu event_i); irq_i(0) = the W5500 INT.
+  # bstb_i/back_i are the CPU data-master strobe/ack (breakpoint use). No RTC on
+  # iCESugar (rtc_sec/nsec left open); reboot unused.
+  - class: aic
+    name: aic0
+    cpu: 0
+    base-addr: 0xabcd0200
+    generics:
+      rtc_sec_length34b: false
+      # Trim unused aic blocks for the up5k: no RTC/reboot wired (rtc_sec/
+      # rtc_nsec/reboot ports left open, see below), no PIT, and no
+      # breakpoint/debug support needed for a single W5500 INT line.
+      rtc_enable: false
+      pit_enable_g: false
+      debug_enable: false
+      reboot_enable: false
+    ports:
+      bstb_i: cpu0_data_master_en
+      back_i: cpu0_data_master_ack
+      enmi_i: 1
+      event_i: cpu0_event_o
+      event_o: cpu0_event_i
+
+# cpu0_event_i is driven by aic0; cpu1_event_i is the unused 2nd core. List both
+# so socgen zero-ties whichever ends up undriven.
+zero-signals:
+  - cpu0_event_i
+  - cpu1_event_i
 
 # Single J1 master: drop cpu1's peripheral bus so socgen connects the one master
 # directly (no multi_master_bus_mux) — saves LCs on the UP5K.

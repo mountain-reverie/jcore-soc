@@ -62,6 +62,17 @@ FILES+=(
   components/misc/gpio2.vhd
   # W5500 Ethernet over SPI (spi device class).
   components/misc/spi2.vhd
+  # Advanced Interrupt Controller (aic device class): aic2_pkg brings in the
+  # cpu_data_o_t/cpu_event_*_t types + v_irq_t used by aic's generics/ports;
+  # aic_edgedet is the per-IRQ edge detector aic.vhd instantiates. aic2_pkg
+  # unconditionally pulls in cache_pack (unused by aic itself, but shared
+  # with aic2), which in turn needs ddrc_cnt_pack -- neither board actually
+  # uses caches/DDR2, they are only analyzed to satisfy the package.
+  components/ddr2/ddrc_cnt_pkg.vhd
+  components/cpu/cache/cache_pkg.vhd
+  components/misc/aic2_pkg.vhd
+  components/misc/aic_edgedet.vhd
+  components/misc/aic.vhd
   # soc_gen-generated SoC: the EBR-only cpus arch + its soc_cpus_config (binds
   # cpu_synth_j1) must precede soc.vhd; devices.vhd precedes soc.vhd.
   $BRD/cpus_one_ebr.vhd
