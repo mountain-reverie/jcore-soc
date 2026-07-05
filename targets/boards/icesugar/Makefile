@@ -31,7 +31,8 @@ include $(TOOLS_DIR)/soc.mk
 VHDL_FILES += targets/boards/icesugar/cpus_one_ebr.vhd
 VHDL_FILES += targets/boards/icesugar/ice_clkgen.vhd
 # On-chip boot RAM (inferred iCE40 EBR): all memory is here, no SDRAM.
-VHDL_FILES += components/misc/ice_w5500_irq.vhd
+VHDL_FILES += components/misc/ice_irq_in.vhd
+VHDL_FILES += components/misc/ice_i2c_io.vhd
 VHDL_FILES += components/memory/bootram_infer.vhd
 
 project = $(BOARD_NAME)

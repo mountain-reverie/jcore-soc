@@ -30,6 +30,9 @@ entity devices is
         eth_miso : in std_logic;
         eth_mosi : out std_logic;
         gpio_do : out std_logic_vector(2 downto 0);
+        i2c_di : in std_logic_vector(1 downto 0);
+        i2c_do : out std_logic_vector(1 downto 0);
+        i2c_dt : out std_logic_vector(1 downto 0);
         reset : in std_logic;
         uart0_rx : in std_logic;
         uart0_tx : out std_logic
@@ -37,7 +40,7 @@ entity devices is
 end;
 architecture impl of devices is
     signal gpio_di : std_logic_vector(2 downto 0);
-    type device_t is (NONE, DEV_AIC0, DEV_ETH, DEV_GPIO0, DEV_UART0);
+    type device_t is (NONE, DEV_AIC0, DEV_ETH, DEV_GPIO0, DEV_I2C, DEV_UART0);
     signal active_dev : device_t;
     type data_bus_i_t is array (device_t'left to device_t'right) of cpu_data_i_t;
     type data_bus_o_t is array (device_t'left to device_t'right) of cpu_data_o_t;
@@ -57,9 +60,14 @@ architecture impl of devices is
                         -- ABCD0100-ABCD010F
                         return DEV_UART0;
                     end if;
-                elsif addr(9 downto 6) = "1000" then
-                    -- ABCD0200-ABCD023F
-                    return DEV_AIC0;
+                else
+                    if addr(8 downto 6) = "000" then
+                        -- ABCD0200-ABCD023F
+                        return DEV_AIC0;
+                    elsif addr(8 downto 4) = "10000" then
+                        -- ABCD0300-ABCD030F
+                        return DEV_I2C;
+                    end if;
                 end if;
             elsif addr(12 downto 3) = "1000000000" then
                 -- ABCD1000-ABCD1007
@@ -133,6 +141,20 @@ begin
             d_t => open,
             db_i => devs_bus_o(DEV_GPIO0),
             db_o => devs_bus_i(DEV_GPIO0),
+            irq => open,
+            rst => reset
+        );
+    i2c : entity work.gpio2(arch)
+        generic map (
+            width => 2
+        )
+        port map (
+            clk => clk_sys,
+            d_i => i2c_di,
+            d_o => i2c_do,
+            d_t => i2c_dt,
+            db_i => devs_bus_o(DEV_I2C),
+            db_o => devs_bus_i(DEV_I2C),
             irq => open,
             rst => reset
         );

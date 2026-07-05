@@ -15,9 +15,12 @@ use work.cpu2j0_pack.all;
 entity pad_ring is
     port (
         pin_clk : in std_logic;
+        pin_i2c_scl : out std_logic;
+        pin_i2c_sda : out std_logic;
         pin_ledb_n : out std_logic;
         pin_ledg_n : out std_logic;
         pin_ledr_n : out std_logic;
+        pin_rtc_sqw : in std_logic;
         pin_ser_rx : in std_logic;
         pin_ser_tx : out std_logic;
         pin_w5500_cs : out std_logic;
@@ -37,7 +40,13 @@ architecture impl of pad_ring is
     signal eth_miso : std_logic;
     signal eth_mosi : std_logic;
     signal gpio_do : std_logic_vector(2 downto 0);
+    signal i2c_di : std_logic_vector(1 downto 0);
+    signal i2c_do : std_logic_vector(1 downto 0);
+    signal i2c_dt : std_logic_vector(1 downto 0);
+    signal i2c_scl_pad : std_logic;
+    signal i2c_sda_pad : std_logic;
     signal reset : std_logic;
+    signal rtc_sqw_net : std_logic;
     signal uart0_rx : std_logic;
     signal uart0_tx : std_logic;
 begin
@@ -50,6 +59,9 @@ begin
             eth_miso => eth_miso,
             eth_mosi => eth_mosi,
             gpio_do => gpio_do,
+            i2c_di => i2c_di,
+            i2c_do => i2c_do,
+            i2c_dt => i2c_dt,
             reset => reset,
             uart0_rx => uart0_rx,
             uart0_tx => uart0_tx
@@ -61,15 +73,27 @@ begin
             clk_out => clk_sys,
             rst_out => reset
         );
-    w5500_irq : entity work.ice_w5500_irq(rtl)
+    i2c_io : entity work.ice_i2c_io(rtl)
         port map (
-            int_n => eth_int,
-            irq => eth_irq_vec
+            d_i => i2c_di,
+            d_o => i2c_do,
+            d_t => i2c_dt,
+            pin_scl => i2c_scl_pad,
+            pin_sda => i2c_sda_pad
+        );
+    irq_in : entity work.ice_irq_in(rtl)
+        port map (
+            irq => eth_irq_vec,
+            rtc_sqw => rtc_sqw_net,
+            w5500_int_n => eth_int
         );
     clk <= pin_clk;
+    pin_i2c_scl <= i2c_scl_pad;
+    pin_i2c_sda <= i2c_sda_pad;
     pin_ledb_n <= not gpio_do(2);
     pin_ledg_n <= not gpio_do(1);
     pin_ledr_n <= not gpio_do(0);
+    rtc_sqw_net <= pin_rtc_sqw;
     uart0_rx <= pin_ser_rx;
     pin_ser_tx <= uart0_tx;
     pin_w5500_cs <= eth_cs(0);

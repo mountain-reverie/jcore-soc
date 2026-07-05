@@ -1,7 +1,10 @@
 set_io pin_clk 35
+set_io pin_i2c_scl 44
+set_io pin_i2c_sda 45
 set_io pin_ledb_n 39
 set_io pin_ledg_n 40
 set_io pin_ledr_n 41
+set_io pin_rtc_sqw 43
 set_io pin_ser_rx 4
 set_io pin_ser_tx 6
 set_io pin_w5500_cs 38
