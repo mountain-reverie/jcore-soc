@@ -27,6 +27,6 @@ w5500_miso 42
 w5500_cs 38
 w5500_int 34
 # DS3231 RTC (I2C + square-wave/interrupt) -- PMOD pins, confirm vs schematic
-i2c_scl 44
-i2c_sda 45
+i2c_pad0 44
+i2c_pad1 45
 rtc_sqw 43

@@ -1,6 +1,6 @@
 set_io pin_clk 35
-set_io pin_i2c_scl 44
-set_io pin_i2c_sda 45
+set_io pin_i2c_pad0 44
+set_io pin_i2c_pad1 45
 set_io pin_ledb_n 39
 set_io pin_ledg_n 40
 set_io pin_ledr_n 41
