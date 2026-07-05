@@ -11,6 +11,7 @@
 #define DEVICE_AIC0_ADDR  0xabcd0200
 #define DEVICE_ETH_ADDR   0xabcd1000
 #define DEVICE_GPIO0_ADDR 0xabcd0000
+#define DEVICE_I2C_ADDR   0xabcd0300
 #define DEVICE_UART0_ADDR 0xabcd0100
 
 struct aic_regs {
@@ -34,6 +35,7 @@ struct gpio2_regs {
   uint32_t toggle;
 };
 #define DEVICE_GPIO0 ((volatile struct gpio2_regs *) DEVICE_GPIO0_ADDR)
+#define DEVICE_I2C ((volatile struct gpio2_regs *) DEVICE_I2C_ADDR)
 
 struct spi_regs {
   uint32_t ctrl; // only byte 3

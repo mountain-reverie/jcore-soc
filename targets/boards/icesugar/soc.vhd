@@ -21,6 +21,9 @@ entity soc is
         eth_miso : in std_logic;
         eth_mosi : out std_logic;
         gpio_do : out std_logic_vector(2 downto 0);
+        i2c_di : in std_logic_vector(1 downto 0);
+        i2c_do : out std_logic_vector(1 downto 0);
+        i2c_dt : out std_logic_vector(1 downto 0);
         reset : in std_logic;
         uart0_rx : in std_logic;
         uart0_tx : out std_logic
@@ -98,6 +101,9 @@ begin
             eth_miso => eth_miso,
             eth_mosi => eth_mosi,
             gpio_do => gpio_do,
+            i2c_di => i2c_di,
+            i2c_do => i2c_do,
+            i2c_dt => i2c_dt,
             reset => reset,
             uart0_rx => uart0_rx,
             uart0_tx => uart0_tx

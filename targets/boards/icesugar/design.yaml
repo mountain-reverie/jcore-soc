@@ -21,9 +21,13 @@ padring-entities:
     entity: ice_clkgen
     ports: { clk_in: clk, clk_out: clk_sys, clk_eth: clk_eth, rst_out: reset }
   # W5500 INTn (active low) -> aic0.irq_i(0) (active-high, rising-edge).
-  w5500_irq:
-    entity: ice_w5500_irq
-    ports: { int_n: eth_int, irq: eth_irq_vec }
+  irq_in:
+    entity: ice_irq_in
+    ports: { w5500_int_n: eth_int, rtc_sqw: rtc_sqw_net, irq: eth_irq_vec }
+  # Open-drain I2C pads for the bit-banged I2C master (gpio2 'i2c' device).
+  i2c_io:
+    entity: ice_i2c_io
+    ports: { d_o: i2c_do, d_t: i2c_dt, d_i: i2c_di, pin_scl: i2c_scl_pad, pin_sda: i2c_sda_pad }
 
 cpu:
   architecture: one_cpu_ebr
@@ -53,6 +57,13 @@ devices:
     # register/mux/toggle/set/clear datapath lanes to reclaim LCs on the up5k.
     generics: { width: 3 }
     ports: { d_o: gpio_do, d_i: gpio_di }
+  # Bit-banged I2C master for the DS3231 RTC: a 2-bit tristate gpio2 (bit0=SCL,
+  # bit1=SDA) driven open-drain through ice_i2c_io. Software bit-bangs I2C.
+  - class: gpio2
+    name: i2c
+    base-addr: 0xabcd0300
+    generics: { width: 2 }
+    ports: { d_o: i2c_do, d_t: i2c_dt, d_i: i2c_di }
   # W5500 Ethernet controller (WIZ850io PMOD) driven over SPI. Replaces the
   # PHY-less 10BASE-T eth: the W5500 does PHY+MAC+TCP/IP in silicon; the J1
   # drives its registers via this spi master. num_cs=1 (single W5500).
@@ -117,3 +128,6 @@ pins:
     - { match: w5500_miso, signal: eth_miso }
     - { match: w5500_cs, signal: "eth_cs(0)" }
     - { match: w5500_int, signal: eth_int }   # W5500 INTn (active low) -> aic irq
+    - { match: i2c_scl, signal: i2c_scl_pad, buff: false }   # DS3231 I2C (open-drain)
+    - { match: i2c_sda, signal: i2c_sda_pad, buff: false }
+    - { match: rtc_sqw, signal: rtc_sqw_net }                # DS3231 SQW/INT -> aic irq(1)
