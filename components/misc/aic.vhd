@@ -12,7 +12,16 @@ entity aic is
 	-- sets the vector number sent to the CPU for each of the 8 elements of
         -- the irq_i port
 	rtc_sec_length34b : boolean := false;
-	vector_numbers : v_irq_t := (x"11", x"12", x"13", x"14", x"15", x"16", x"17", x"18")
+	vector_numbers : v_irq_t := (x"11", x"12", x"13", x"14", x"15", x"16", x"17", x"18");
+	-- Feature trim generics, all default to 'true' so any instantiation
+	-- that does not pass them (e.g. turtle boards) gets byte-identical
+	-- behavior to the original, non-generic aic. Set to 'false' to drop
+	-- the corresponding block on area-constrained targets (e.g. iCESugar
+	-- UP5K, which only needs the interrupt core for a single IRQ line).
+	rtc_enable : boolean := true;		-- 64b RTC seconds/nsec counters
+	pit_enable_g : boolean := true;	-- programmable interval timer
+	debug_enable : boolean := true;	-- breakpoint/debug (brkadr, db/da FSMs)
+	reboot_enable : boolean := true	-- reboot register/output
 	);
 	port (
 	clk_bus : in std_logic;
@@ -90,83 +99,148 @@ begin
 	get_irqs : for irr in irq_i'range generate
 		iedge_inst : aic_edgedet port map( q => q_irqs(irr), clk => clk_bus, rst => rst_i, irq => irq_i(irr), en_i => es_irqs(irr), clr_i => ec_irqs(irr));
 	end generate;
-	rtc_bit_expand : process(reg_rtc_sec)
-	begin
-		if(rtc_sec_length34b = true) then
-			rtc_sec(63 downto 34) <= (others => '0');
-			rtc_sec(33 downto  0) <= reg_rtc_sec(33 downto 0);
-		else
-			rtc_sec <= reg_rtc_sec;
-		end if;
-	end process;
-	rtc_nsec <= reg_rtc_nsec;
-	-- For now RTC is read only
-	p_rtc : process(clk_bus, rst_i)
-	begin
-		if rst_i = '1' then
-			reg_rtc_sec <= (others => '0');
-			reg_rtc_nsec <= (others => '0');
-			reboot <= '0';
-		elsif rising_edge(clk_bus) then	
-			if reg_rtc_nsec >= std_logic_vector(to_unsigned(1e9, reg_rtc_nsec'length)) then
-				reg_rtc_nsec <= reg_rtc_nsec -  (1e9 - c_busperiod);	--999999960;
-  			    if(rtc_sec_length34b = true) then
-				 reg_rtc_sec <= x"0000000" & "00" & 
-					(reg_rtc_sec(33 downto 0) + 1);
-			    else reg_rtc_sec <= reg_rtc_sec + 1; end if;
+	-- RTC block: 64b seconds + 32b nsec counters, gated by rtc_enable via a
+	-- pair of mutually exclusive if-generate blocks (VHDL-93 has no "else
+	-- generate", and the project's soc_gen VHDL parser only understands the
+	-- plain "if <cond> generate" form). When disabled the whole subsystem
+	-- (reg_rtc_sec/reg_rtc_nsec counters, expand logic, and the RTC portion
+	-- of the readback mux) is not elaborated at all.
+	gen_rtc_on : if rtc_enable generate
+		rtc_bit_expand : process(reg_rtc_sec)
+		begin
+			if(rtc_sec_length34b = true) then
+				rtc_sec(63 downto 34) <= (others => '0');
+				rtc_sec(33 downto  0) <= reg_rtc_sec(33 downto 0);
 			else
-				reg_rtc_nsec <= reg_rtc_nsec + c_busperiod;
+				rtc_sec <= reg_rtc_sec;
 			end if;
-			if (db_i.wr and db_i.a(5)) = '1' then
-				if db_i.a(3 downto 2) = "00" then
-				   if(rtc_sec_length34b = true) then
-					reg_rtc_sec(63 downto 34) <= x"0000000" & "00";
-				   else	reg_rtc_sec(63 downto 34) <= db_i.d(31 downto 2); end if;
-					reg_rtc_sec(33 downto 32) <= db_i.d(1 downto 0);
-				elsif db_i.a(3 downto 2) = "01" then
-					reg_rtc_sec(31 downto 0) <= db_i.d;
-				elsif db_i.a(3 downto 2) = "10" then
-					reg_rtc_nsec <= db_i.d;
-				elsif db_i.a(4 downto 2) = "111" then
+		end process;
+		rtc_nsec <= reg_rtc_nsec;
+		-- For now RTC is read only
+		p_rtc : process(clk_bus, rst_i)
+		begin
+			if rst_i = '1' then
+				reg_rtc_sec <= (others => '0');
+				reg_rtc_nsec <= (others => '0');
+			elsif rising_edge(clk_bus) then
+				if reg_rtc_nsec >= std_logic_vector(to_unsigned(1e9, reg_rtc_nsec'length)) then
+					reg_rtc_nsec <= reg_rtc_nsec -  (1e9 - c_busperiod);	--999999960;
+	  			    if(rtc_sec_length34b = true) then
+					 reg_rtc_sec <= x"0000000" & "00" &
+						(reg_rtc_sec(33 downto 0) + 1);
+				    else reg_rtc_sec <= reg_rtc_sec + 1; end if;
+				else
+					reg_rtc_nsec <= reg_rtc_nsec + c_busperiod;
+				end if;
+				if (db_i.wr and db_i.a(5)) = '1' then
+					if db_i.a(3 downto 2) = "00" then
+					   if(rtc_sec_length34b = true) then
+						reg_rtc_sec(63 downto 34) <= x"0000000" & "00";
+					   else	reg_rtc_sec(63 downto 34) <= db_i.d(31 downto 2); end if;
+						reg_rtc_sec(33 downto 32) <= db_i.d(1 downto 0);
+					elsif db_i.a(3 downto 2) = "01" then
+						reg_rtc_sec(31 downto 0) <= db_i.d;
+					elsif db_i.a(3 downto 2) = "10" then
+						reg_rtc_nsec <= db_i.d;
+					end if;
+				end if;
+			end if;
+		end process;
+		w_rtcout <= x"0000000" & "00" & reg_rtc_sec(33 downto 32)
+			    			      when (db_i.a(3 downto 2) = "00") and (rtc_sec_length34b = true) else
+			    reg_rtc_sec(63 downto 32) when (db_i.a(3 downto 2) = "00") else
+			    reg_rtc_sec(31 downto 0) when db_i.a(3 downto 2) = "01" else
+			    reg_rtc_nsec when db_i.a(3 downto 2) = "10" else
+			    (others => '0');
+	end generate;
+	gen_rtc_off : if not rtc_enable generate
+		rtc_sec <= (others => '0');
+		rtc_nsec <= (others => '0');
+		w_rtcout <= (others => '0');
+	end generate;
+
+	-- reboot output register, gated by reboot_enable (separate from RTC
+	-- since it shares only the a(5)='1' address decode region, not the
+	-- RTC counters themselves).
+	gen_reboot_on : if reboot_enable generate
+		process(clk_bus, rst_i)
+		begin
+			if rst_i = '1' then
+				reboot <= '0';
+			elsif rising_edge(clk_bus) then
+				if (db_i.wr and db_i.a(5)) = '1' and db_i.a(4 downto 2) = "111" then
 					reboot <= db_i.d(0);
 				end if;
 			end if;
-		end if;
-	end process;
+		end process;
+	end generate;
+	gen_reboot_off : if not reboot_enable generate
+		reboot <= '0';
+	end generate;
 
-	p_debug : process(clk_bus, rst_i) 
-	begin
-		if rst_i = '1' then
-			db_count <= (others => '0');
-			db_state <= db_init;
-			da_state <= db_init;
-			db_ackcount <= (others => '0');
-		elsif rising_edge(clk_bus) then
-                        db_ackcount <= (others => '1');--yk added temp to easy timing 
-			case db_state is 
-				when db_init =>
-					if q_irqs(6) = '1' then
-						db_state <= db_int;
-						db_count <= db_count + 1;
+	-- Breakpoint/debug machinery, gated by debug_enable: brkadr compare,
+	-- brk_enable register bit, and the db_state/da_state ack-tracking
+	-- FSMs. None of this feeds the core interrupt-delivery path except
+	-- w_enmi (breakpoint-triggered NMI), which is forced to '0' when
+	-- disabled.
+	gen_debug_on : if debug_enable generate
+		p_debug_regs : process(clk_bus, rst_i)
+		begin
+			if rst_i = '1' then
+				brkadr <= (others => '0');
+				brk_enable <= '0';
+			elsif rising_edge(clk_bus) then
+				if db_i.wr = '1' and db_i.a(5) = '0' and db_i.a(4) = '0' and db_i.a(3) = '0' then
+					if db_i.a(2) = '0' then
+						brk_enable <= db_i.d(24);
+					else
+						brkadr <= db_i.d;
 					end if;
-				when db_int =>
-					if q_irqs(6) = '0' then
-						db_state <= db_init;
-					end if;
-			end case;
-			case da_state is
-				when db_init =>
-					if event_i.ack = '1' then
-						da_state <= db_int;
-						--yk commented; db_ackcount <= db_ackcount + 1;
-					end if;
-				when db_int =>
-					if event_i.ack = '0' then
-						da_state <= db_init;
-					end if;
-			end case;
-		end if;
-	end process;
+				end if;
+			end if;
+		end process;
+		w_enmi <= brk_enable and bstb_i and back_i when db_i.a = brkadr else '0';
+		p_debug : process(clk_bus, rst_i)
+		begin
+			if rst_i = '1' then
+				db_count <= (others => '0');
+				db_state <= db_init;
+				da_state <= db_init;
+				db_ackcount <= (others => '0');
+			elsif rising_edge(clk_bus) then
+	                        db_ackcount <= (others => '1');--yk added temp to easy timing
+				case db_state is
+					when db_init =>
+						if q_irqs(6) = '1' then
+							db_state <= db_int;
+							db_count <= db_count + 1;
+						end if;
+					when db_int =>
+						if q_irqs(6) = '0' then
+							db_state <= db_init;
+						end if;
+				end case;
+				case da_state is
+					when db_init =>
+						if event_i.ack = '1' then
+							da_state <= db_int;
+							--yk commented; db_ackcount <= db_ackcount + 1;
+						end if;
+					when db_int =>
+						if event_i.ack = '0' then
+							da_state <= db_init;
+						end if;
+				end case;
+			end if;
+		end process;
+	end generate;
+	gen_debug_off : if not debug_enable generate
+		brkadr <= (others => '0');
+		brk_enable <= '0';
+		w_enmi <= '0';
+		db_count <= (others => '0');
+		db_ackcount <= (others => '0');
+	end generate;
 
      --	db_o.ack <= '0' when db_i.en = '0' else
      --		     '1' when db_i.rd = '1' else
@@ -200,12 +274,6 @@ begin
                     std_logic_vector(to_unsigned(c_busperiod, w_pitout'length)) when db_i.a(3) = '1' else
 		    pit_throttle when db_i.a(2) = '0' else
 		    pit_cntr;
-	w_rtcout <= x"0000000" & "00" & reg_rtc_sec(33 downto 32)
-		    			      when (db_i.a(3 downto 2) = "00") and (rtc_sec_length34b = true) else
-		    reg_rtc_sec(63 downto 32) when (db_i.a(3 downto 2) = "00") else
-		    reg_rtc_sec(31 downto 0) when db_i.a(3 downto 2) = "01" else
-		    reg_rtc_nsec when db_i.a(3 downto 2) = "10" else
-		    (others => '0');
 	-- external set IRQ using interrupt priority level. when the level is 0. the interrupt is disabled
 
 	es_irqs(0) <= ilevel(0)(0) or ilevel(0)(1) or ilevel(0)(2) or ilevel(0)(3);
@@ -255,21 +323,58 @@ begin
 		end loop;
 		w_irqevent <= '0' & id_irq(high_i) & '0' & c_event_irq & ilevel(high_i) & vector_numbers(high_i);
 	end process p_priority;
-	pit_event <= '1' when pit_cntr = pit_throttle else
-		     '0';
+	-- Programmable interval timer, gated by pit_enable_g. Split out of the
+	-- shared register-interface process into its own pair of if-generate
+	-- blocks (see the RTC comment above for why not "else generate"). The
+	-- pit_enable register bit still gates the testvect write in
+	-- p_interface below; when pit_enable_g is false, pit_enable is tied
+	-- to '0' there so testvect stays writable exactly as before.
+	gen_pit_on : if pit_enable_g generate
+		pit_event <= '1' when pit_cntr = pit_throttle else '0';
+		p_pit : process(clk_bus, rst_i)
+		begin
+			if rst_i = '1' then
+				pit_enable <= '0';
+				-- default pit_throttle to 100 Hz
+				pit_throttle <= std_logic_vector(to_unsigned(1e9 / 100 / c_busperiod,
+						pit_throttle'length));
+				pit_cntr <= (others => '0');
+				pit_flag <= '0';
+			elsif rising_edge(clk_bus) then
+				if db_i.wr = '1' and db_i.a(5) = '0' and db_i.a(4) = '0'
+				   and db_i.a(3) = '0' and db_i.a(2) = '0' then
+					pit_enable <= db_i.d(26);
+				end if;
+				if db_i.wr = '1' and db_i.a(5) = '0' and db_i.a(4) = '1'
+				   and db_i.a(3 downto 2) = "00" and pit_enable = '0' then
+					pit_throttle <= db_i.d;
+				end if;
+				if pit_enable = '1' then
+					if pit_event = '1' then
+						pit_cntr <= (others => '0');
+						pit_flag <= not pit_flag;
+					else
+						pit_cntr <= pit_cntr + 1;
+					end if;
+				else
+					pit_cntr <= (others => '0');
+				end if;
+			end if;
+		end process;
+	end generate;
+	gen_pit_off : if not pit_enable_g generate
+		pit_enable <= '0';
+		pit_cntr <= (others => '0');
+		pit_throttle <= (others => '0');
+		pit_flag <= '0';
+		pit_event <= '0';
+	end generate;
 
 	p_interface: process(clk_bus, rst_i)
 	begin
 		if rst_i = '1' then
-			brkadr <= (others => '0');
-			pit_enable <= '0';
-			pit_cntr <= (others => '0');
-			-- default pit_throttle to 100 Hz
-			pit_throttle <= std_logic_vector(to_unsigned(1e9 / 100 / c_busperiod,
-					pit_throttle'length));
 			count_enable <= '0';
 			count <= (others => '1');
-			brk_enable <= '0';
 			rw_ack <= '0';
 			r_nmi <= '0';
 			r_irq1 <= '0';
@@ -282,7 +387,6 @@ begin
 			end loop;
 			testvect <= (others => '0');
 			ec_irqs <= (others => '1');
-			pit_flag <= '0';
 		elsif rising_edge(clk_bus) then
 			rw_ack <= db_i.en and (not rw_ack);
 			if db_i.wr = '1' and db_i.a(5) = '0' then
@@ -292,13 +396,10 @@ begin
 							if pit_enable = '0' then
 								testvect <= db_i.d(23 downto 12);
 							end if;
-							brk_enable <= db_i.d(24);
 							count_enable <= db_i.d(25);
-							pit_enable <= db_i.d(26);
 							count <= db_i.d(11 downto 0);
-						else
-							brkadr <= db_i.d;
 						end if;
+						-- else: brkadr write, handled by p_debug_regs above
 					elsif db_i.a(2) = '0' then
 						ilevel(7) <= db_i.d(31 downto 28);
 						ilevel(6) <= db_i.d(27 downto 24);
@@ -309,26 +410,12 @@ begin
 						ilevel(1) <= db_i.d(7 downto 4);
 						ilevel(0) <= db_i.d(3 downto 0);
 					end if;
-				else	-- db_i.a(4) = '1' 
-					if db_i.a(3 downto 2) = "00" then
-						if pit_enable = '0' then
-							pit_throttle <= db_i.d;
-						end if;
-					end if;
 				end if;
+				-- else db_i.a(4) = '1': PIT throttle write, handled by
+				-- gen_pit_on/p_pit above
 			end if;
 			if count_enable = '1' then
 				count <= count - 1;
-			end if;
-			if pit_enable = '1' then
-				if pit_event = '1' then
-					pit_cntr <= (others => '0');
-					pit_flag <= not pit_flag;
-				else
-					pit_cntr <= pit_cntr + 1;
-				end if;
-			else
-				pit_cntr <= (others => '0');
 			end if;
 			if s_mrs = '1' then
 				r_mrst <= '1';
@@ -388,7 +475,7 @@ begin
 	s_eirq <= (w_wctrl and db_i.d(30)) or pit_event;
 	s_eirq2 <= count_enable when (count = x"000") else '0';
 	s_enmi <= (w_wctrl and db_i.d(31)) or w_enmi or vnmi;
-	w_enmi <= brk_enable and bstb_i and back_i when db_i.a = brkadr else '0';
+	-- w_enmi is driven inside the gen_debug_on/gen_debug_off blocks above
 	-- Vlad's test NMI hack stuff
 	process(clk_bus, rst_i) 
 	begin
