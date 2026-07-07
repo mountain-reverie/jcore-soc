@@ -9,8 +9,14 @@ use work.misc_pack.all;
 use work.config.all;
 
 entity cpu_core is
-  generic ( 
-    COPRO_DECODE : boolean := true);
+  generic (
+    COPRO_DECODE : boolean := true;
+    -- External restartable page-fault feature (see cpu2j0_pack.cpu_page_fault_i_t
+    -- and cpu.vhd's PAGE_FAULT_ARCH generic). Default false keeps every existing
+    -- cpu_core instantiation (turtle/mimas/ulx3s/etc.) byte-identical -- only a
+    -- board that explicitly sets this true (Sub-project B iCESugar XIP page
+    -- cache) elaborates the extra page-fault dispatch logic in the inner cpu.
+    PAGE_FAULT_ARCH : boolean := false);
   port (
     clk : in std_logic;
     rst : in std_logic;
@@ -32,7 +38,19 @@ entity cpu_core is
     data_master_ack : out std_logic;
 
     copro_o : out cop_o_t;
-    copro_i : in  cop_i_t
+    copro_i : in  cop_i_t;
+
+    -- SoC-driven sideband page fault (forwarded straight to the inner cpu).
+    -- Defaults to NULL_PAGE_FAULT_I (en='0') so boards that don't wire this up
+    -- see no behavior change.
+    page_fault_i : in cpu_page_fault_i_t := NULL_PAGE_FAULT_I;
+
+    -- Snoop taps onto the CPU's instruction/data master buses (pre-mux, i.e.
+    -- before core_instr_bus_mux/core_data_bus_mux split them to DEV_SRAM/
+    -- DEV_DDR/...), for a SoC-side XIP page cache (or other bus observer) to
+    -- watch fetch/read addresses without becoming part of the bus mux itself.
+    instr_master_snoop : out cpu_instruction_o_t;
+    data_master_snoop  : out cpu_data_o_t
     );
 end entity;
 
@@ -49,7 +67,7 @@ architecture arch of cpu_core is
 
 begin
   u_cpu : cpu
-    generic map ( COPRO_DECODE => COPRO_DECODE )
+    generic map ( COPRO_DECODE => COPRO_DECODE, PAGE_FAULT_ARCH => PAGE_FAULT_ARCH )
     port map (
       clk => clk,
       rst => rst,
@@ -63,8 +81,12 @@ begin
       event_o => event_o,
       event_i => event_i,
       cop_o => copro_o,
-      cop_i => copro_i
+      cop_i => copro_i,
+      page_fault_i => page_fault_i
     );
+
+  instr_master_snoop <= instr_master_o;
+  data_master_snoop  <= data_master_o;
 
   -- select instruction bus device based on instruction address
   core_instr_bus_mux(

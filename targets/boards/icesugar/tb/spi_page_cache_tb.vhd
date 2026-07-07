@@ -3,6 +3,7 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use work.cpu2j0_pack.all;
 use work.spi_page_cache_pack.all;
+use work.data_bus_pack.all;
 
 -- Task 1 (spi_flash_fill) unit test: t1_fill drives a behavioral SPI flash
 -- model (decoding the Fast-Read 0x0B command straight off spi_flash_fill's
@@ -92,6 +93,63 @@ architecture sim of spi_page_cache_tb is
   begin
     return std_logic_vector(to_unsigned(k mod 256, 8));
   end function;
+
+  ------------------------------------------------------------------------
+  -- Task 4: cpu_core smoke test (PAGE_FAULT_ARCH threaded through the SoC
+  -- CPU wrapper + master-bus snoop taps). Local component declaration
+  -- (rather than `use work.cpu_core_pack.all`) so this tb can name the new
+  -- generic/port additions explicitly without pulling in the whole
+  -- cpu_core_pack namespace (which also declares cpumreg etc., unrelated to
+  -- this smoke test). Bound to the real work.cpu_core(arch) entity, and its
+  -- embedded u_cpu bound to the existing cpu_sim_pagefault configuration
+  -- (components/cpu/core/cpu_config.vhd), via the block configuration
+  -- t4_core_smoke_cfg at the bottom of this file.
+  ------------------------------------------------------------------------
+  component cpu_core is
+    generic (PAGE_FAULT_ARCH : boolean := false);
+    port (
+      clk : in std_logic;
+      rst : in std_logic;
+      instr_bus_o : out instr_bus_o_t;
+      instr_bus_i : in  instr_bus_i_t;
+      data_bus_lock : out std_logic;
+      data_bus_o : out data_bus_o_t;
+      data_bus_i : in  data_bus_i_t;
+      debug_o : out cpu_debug_o_t;
+      debug_i : in  cpu_debug_i_t;
+      event_o : out cpu_event_o_t;
+      event_i : in  cpu_event_i_t;
+      data_master_en : out std_logic;
+      data_master_ack : out std_logic;
+      copro_o : out cop_o_t;
+      copro_i : in  cop_i_t;
+      page_fault_i : in cpu_page_fault_i_t := NULL_PAGE_FAULT_I;
+      instr_master_snoop : out cpu_instruction_o_t;
+      data_master_snoop  : out cpu_data_o_t);
+  end component;
+
+  signal t4_clk  : std_logic := '0';
+  signal t4_rst  : std_logic := '1';
+  signal t4_done : boolean := false;
+
+  -- Instruction bus always acks with a SH-2 NOP (0x0009) so the CPU keeps
+  -- fetching (and hence toggling instr_master_snoop.en) instead of stalling.
+  -- Data bus also always acks (benign all-zero read data) so an incidental
+  -- data access (e.g. a stray load in the reset/exception path) doesn't wedge
+  -- the smoke test; this tb only asserts fetch activity, not data content.
+  signal t4_instr_bus_o : instr_bus_o_t;
+  signal t4_instr_bus_i : instr_bus_i_t := (others => (d => x"0009", ack => '1'));
+  signal t4_data_bus_lock : std_logic;
+  signal t4_data_bus_o : data_bus_o_t;
+  signal t4_data_bus_i : data_bus_i_t := (others => (d => (others => '0'), ack => '1'));
+  signal t4_debug_o : cpu_debug_o_t;
+  signal t4_event_o : cpu_event_o_t;
+  signal t4_data_master_en  : std_logic;
+  signal t4_data_master_ack : std_logic;
+  signal t4_copro_o : cop_o_t;
+  signal t4_instr_snoop : cpu_instruction_o_t;
+  signal t4_data_snoop  : cpu_data_o_t;
+  signal t4_fetch_seen  : boolean := false;
 
 begin
 
@@ -406,4 +464,110 @@ begin
     wait;
   end process;
 
+  ------------------------------------------------------------------------
+  -- Task 4: t4_core_smoke -- elaborates cpu_core with PAGE_FAULT_ARCH => true
+  -- and page_fault_i tied to NULL_PAGE_FAULT_I, and asserts fetch activity
+  -- (instr_master_snoop.en pulses at least once) is observable on the new
+  -- snoop tap. Runs on its own free-running clock/reset (t4_clk/t4_rst),
+  -- independent of the t1/t3 shared `clk`, so it is unaffected by those
+  -- tests' timing/stop conditions.
+  ------------------------------------------------------------------------
+  t4_dut : cpu_core
+    generic map (PAGE_FAULT_ARCH => true)
+    port map (
+      clk => t4_clk, rst => t4_rst,
+      instr_bus_o => t4_instr_bus_o, instr_bus_i => t4_instr_bus_i,
+      data_bus_lock => t4_data_bus_lock,
+      data_bus_o => t4_data_bus_o, data_bus_i => t4_data_bus_i,
+      debug_o => t4_debug_o, debug_i => CPU_DEBUG_NOP,
+      event_o => t4_event_o, event_i => NULL_CPU_EVENT_I,
+      data_master_en => t4_data_master_en, data_master_ack => t4_data_master_ack,
+      copro_o => t4_copro_o, copro_i => NULL_COPR_I,
+      page_fault_i => NULL_PAGE_FAULT_I,
+      instr_master_snoop => t4_instr_snoop,
+      data_master_snoop => t4_data_snoop);
+
+  t4_clkgen : process
+  begin
+    while not t4_done loop
+      t4_clk <= not t4_clk;
+      wait for CLK_PER / 2;
+    end loop;
+    wait;
+  end process;
+
+  t4_core_smoke : process
+  begin
+    t4_rst <= '1';
+    wait for CLK_PER * 4;
+    t4_rst <= '0';
+
+    for i in 0 to 300 loop
+      wait until rising_edge(t4_clk);
+      if t4_instr_snoop.en = '1' then
+        t4_fetch_seen <= true;
+      end if;
+    end loop;
+
+    assert t4_fetch_seen
+      report "t4_core_smoke: instr_master_snoop.en never asserted (no fetch activity observed)"
+      severity failure;
+
+    report "Test Passed t4_core_smoke" severity note;
+    t4_done <= true;
+    wait;
+  end process;
+
 end architecture;
+
+-- Block configuration binding t4_dut's local `cpu_core` component to the real
+-- work.cpu_core(arch) entity, and (descending further) its embedded u_cpu to
+-- the same variant selection as the existing cpu_sim_pagefault configuration
+-- (components/cpu/core/cpu_config.vhd: decode_core PAGE_FAULT_ARCH=>true,
+-- MMU_ARCH=>false; two_bank regfile; comb shifter) -- inlined here (rather
+-- than `use configuration work.cpu_sim_pagefault` directly) because this tb's
+-- analyze order (needed to satisfy cpu_config.vhd's own unconditional
+-- references to the DSP-ALU prototype variant, core/mult_ice40dsp.vhd +
+-- core/dsp_arith.vhd) leaves entity `mult` with two analyzed architectures
+-- (stru, ice40dsp); cpu_sim_pagefault's default binding for u_mult (it has no
+-- explicit "for u_mult" entry) would then resolve to whichever was analyzed
+-- last, not necessarily `stru`. Binding u_mult explicitly here removes that
+-- ambiguity regardless of analyze order.
+-- Elaborate/run this configuration name (not the bare entity) so the binding
+-- takes effect: `ghdl -r --std=93 t4_core_smoke_cfg ...`.
+-- Top-level configuration "of cpu" -- same shape/scope as cpu_config.vhd's
+-- own cpu_sim_pagefault, so the "mult"/"decode"/"datapath"/"register_file"/
+-- "shifter" component names resolve via the standard inherited-scope rule
+-- (visibility of cpu's architecture `stru`), same as every other config in
+-- that file. Referenced below by name (`use configuration work.
+-- t4_cpu_pagefault_cfg`), matching the established repo pattern (e.g.
+-- icesugar/cpus_config.vhd's `for u_cpu : cpu use configuration work.
+-- cpu_synth_j1_dsp;`) rather than inlining cpu's internals directly inside
+-- t4_core_smoke_cfg (which GHDL rejects: the component names are not visible
+-- at that nesting point without this file having its own `use
+-- cpu2j0_components_pack.all` etc.).
+configuration t4_cpu_pagefault_cfg of cpu is
+  for stru
+    for u_mult : mult use entity work.mult(stru); end for;
+    for u_decode : decode use configuration work.cpu_decode_direct_pagefault; end for;
+    for u_datapath : datapath use entity work.datapath(stru);
+      for stru
+        for u_regfile : register_file use entity work.register_file(two_bank); end for;
+        for u_shifter : shifter use entity work.shifter(comb); end for;
+      end for;
+    end for;
+  end for;
+end configuration;
+
+configuration t4_core_smoke_cfg of spi_page_cache_tb is
+  for sim
+    for t4_dut : cpu_core
+      use entity work.cpu_core(arch);
+      for arch
+        for u_cpu : cpu
+          use configuration work.t4_cpu_pagefault_cfg;
+        end for;
+      end for;
+    end for;
+  end for;
+end configuration;
