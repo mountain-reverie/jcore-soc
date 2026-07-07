@@ -352,7 +352,7 @@ begin
     -- t3_miss_fault: no tags valid -> instruction fetch into the flash
     -- window must miss.
     ------------------------------------------------------------------
-    va32 := x"40002000";
+    va32 := x"10802000";
     pc_instr_o.en <= '1';
     pc_instr_o.a  <= va32(31 downto 1);
     wait until rising_edge(clk);
@@ -371,7 +371,7 @@ begin
     -- MMIO read FAULT_VA
     pc_reg_o.en <= '1'; pc_reg_o.wr <= '0'; pc_reg_o.a <= OFF_FAULT_VA;
     wait for 1 ns;
-    assert pc_reg_i.d = x"40002000" report "t3_miss_fault: FAULT_VA readback" severity failure;
+    assert pc_reg_i.d = x"10802000" report "t3_miss_fault: FAULT_VA readback" severity failure;
 
     -- MMIO read STATUS
     pc_reg_o.a <= OFF_STATUS;
@@ -402,8 +402,8 @@ begin
     -- TAG0 = {valid=1, page=0x02}
     mmio_write(pc_reg_o, OFF_TAG0, x"00000102", clk);
 
-    -- fetch 0x40002004 -> should hit, no fault
-    va32 := x"40002004";
+    -- fetch 0x10802004 -> should hit, no fault
+    va32 := x"10802004";
     pc_instr_o.en <= '1';
     pc_instr_o.a  <= va32(31 downto 1);
     wait until rising_edge(clk); -- hit detected combinationally this cycle
@@ -421,8 +421,8 @@ begin
     pc_instr_o.en <= '0';
     wait until rising_edge(clk);
 
-    -- ODD half-word: fetch 0x40002006, a(1)='1' selects the LOWER half (bits 15:0)
-    va32 := x"40002006";
+    -- ODD half-word: fetch 0x10802006, a(1)='1' selects the LOWER half (bits 15:0)
+    va32 := x"10802006";
     pc_instr_o.en <= '1';
     pc_instr_o.a  <= va32(31 downto 1);
     wait until rising_edge(clk); -- hit detected combinationally this cycle
@@ -447,7 +447,7 @@ begin
 
     pc_data_o.en <= '1';
     pc_data_o.rd <= '1';
-    pc_data_o.a  <= x"40003000";
+    pc_data_o.a  <= x"10803000";
     wait until rising_edge(clk);
     wait for 1 ns;
 

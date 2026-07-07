@@ -2,7 +2,7 @@
 --
 -- Observes the CPU's instruction and data master buses. Any access whose
 -- top address bits fall in the flash window (a(31 downto 20) = PC_WIN_BASE's
--- x"400") is decoded here: VA(19 downto 12) is compared against 4 tag
+-- PC_WIN_TAG=x"108") is decoded here: VA(19 downto 12) is compared against 4 tag
 -- registers (pc_tag_array_t). On a HIT the access is served transparently
 -- from the matching 4 KB frame (frame_ram), with 1-cycle read latency
 -- (ack/d registered the cycle after the hit is detected -- matching the
@@ -129,8 +129,8 @@ begin
   ----------------------------------------------------------------------------
   -- Window decode + tag compare (combinational)
   ----------------------------------------------------------------------------
-  win_instr_sel_i <= instr_master_o.en when instr_master_o.a(31 downto 20) = x"400" else '0';
-  win_data_sel_i  <= data_master_o.rd  when data_master_o.a(31 downto 20)  = x"400" else '0';
+  win_instr_sel_i <= instr_master_o.en when instr_master_o.a(31 downto 20) = PC_WIN_TAG else '0';
+  win_data_sel_i  <= data_master_o.rd  when data_master_o.a(31 downto 20)  = PC_WIN_TAG else '0';
 
   win_instr_sel <= win_instr_sel_i;
   win_data_sel  <= win_data_sel_i;

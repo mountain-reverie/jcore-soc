@@ -4,9 +4,13 @@ use work.cpu2j0_pack.all;
 
 package spi_page_cache_pack is
 
-  constant PC_WIN_BASE   : std_logic_vector(31 downto 0) := x"40000000"; -- flash window
-  constant PC_WIN_TOPBIT : natural := 20;  -- window = a(31 downto 20)=x"400"
-  constant PC_FRAME_BASE : std_logic_vector(31 downto 0) := x"40100000"; -- CPU-addressable frames
+  -- XIP window/frames live in the 0x1/DEV_DDR nibble (above the 128 KB SPRAM)
+  -- so windowed hits reach an externally-routed bus. The 0x4 nibble was
+  -- unusable: the CPU decodes it to an internal DEV_NONE loopback.
+  constant PC_WIN_BASE   : std_logic_vector(31 downto 0) := x"10800000"; -- flash window
+  constant PC_WIN_TAG    : std_logic_vector(11 downto 0) := x"108";  -- window = a(31 downto 20)=x"108"
+  constant PC_FRAME_BASE : std_logic_vector(31 downto 0) := x"10900000"; -- CPU-addressable frames
+  constant PC_FRAME_TAG  : std_logic_vector(11 downto 0) := x"109";  -- frames = a(31 downto 20)=x"109"
   constant PC_MMIO_BASE  : std_logic_vector(31 downto 0) := x"ABCD0400";
   constant PC_NFRAMES    : natural := 4;
   constant PC_PAGE_BITS  : natural := 12;                 -- 4 KB pages
