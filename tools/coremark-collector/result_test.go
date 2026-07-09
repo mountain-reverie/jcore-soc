@@ -118,3 +118,34 @@ func TestParseZeroCycle(t *testing.T) {
 	// Verify that the result would be invalid (division by zero protection in main.go guard)
 	// The collector's main() function checks if r.Cycles == 0 and continues to ignore the packet
 }
+
+func TestValidateCRCMismatchRejected(t *testing.T) {
+	// A well-formed, non-zero-cycle result whose CRC does not match the
+	// known-good CoreMark crcfinal is a miscompile signal and must be
+	// rejected by validate(), not silently accepted as a pass.
+	r := Result{
+		Magic:      Magic,
+		GitRev:     0x1,
+		CRC:        0xdead, // deliberately wrong
+		Iterations: 1000,
+		Cycles:     16,
+		ClkHz:      100000000,
+	}
+	if err := validate(r, ExpectedCRC); err == nil {
+		t.Fatal("expected CRC mismatch to be rejected, got nil error")
+	}
+}
+
+func TestValidateCRCMatchAccepted(t *testing.T) {
+	r := Result{
+		Magic:      Magic,
+		GitRev:     0x1,
+		CRC:        ExpectedCRC,
+		Iterations: 1000,
+		Cycles:     16,
+		ClkHz:      100000000,
+	}
+	if err := validate(r, ExpectedCRC); err != nil {
+		t.Fatalf("expected matching CRC to be accepted, got: %v", err)
+	}
+}
