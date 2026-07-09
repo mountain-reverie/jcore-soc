@@ -73,4 +73,17 @@ FILES+=(
   # Board top (soc_gen-generated pad_ring) + 12 MHz clkgen.
   $BRD/ice_clkgen.vhd
   $BRD/pad_ring.vhd
+  # cpus_coremark: flash-boot arch (Task 7b). Not wired into design.yaml /
+  # soc_gen yet (Task 8), registered here so it analyzes as part of the
+  # icesugar file set. flash_boot_reader.vhd / ice_spi_io.vhd are pulled in
+  # transitively via components/misc/build.mk's file list, but this
+  # filelist.sh is hand-maintained (not build.mk-driven), so list them
+  # explicitly.
+  components/misc/flash_boot_reader.vhd
+  components/misc/ice_spi_io.vhd
+  components/memory/dev_ddr_spram_boot.vhd
+  $BRD/boot_image_coremark_pkg.vhd
+  components/memory/bootram_infer_coremark.vhd
+  $BRD/cpus_coremark.vhd
+  $BRD/cpus_coremark_config.vhd
 )

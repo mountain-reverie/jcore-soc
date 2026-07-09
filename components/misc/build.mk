@@ -26,3 +26,5 @@ $(VHDLS) += aic2_tglue.vhd
 $(VHDLS) += bussizem.vhd
 $(VHDLS) += bussizesa.vhd
 $(VHDLS) += cycle_counter.vhd
+$(VHDLS) += flash_boot_reader.vhd
+$(VHDLS) += ice_spi_io.vhd
