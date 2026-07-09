@@ -56,7 +56,15 @@ entity cpus is
     cpu0_copro_o : out cop_o_t;
     cpu0_copro_i : in  cop_i_t;
     cpu1_copro_o : out cop_o_t;
-    cpu1_copro_i : in  cop_i_t);
+    cpu1_copro_i : in  cop_i_t;
+
+    -- Config-flash pins (iCESugar cpus_coremark flash-boot arch; undriven
+    -- outputs / unconnected input in architectures that don't use them --
+    -- legal VHDL). Task 8 wires these through soc_gen/pad_ring for real.
+    fl_cs_n : out std_logic;
+    fl_sck  : out std_logic;
+    fl_mosi : out std_logic;
+    fl_miso : in  std_logic := '0');
 
 -- synopsys translate_off
   group global_sigs : global_ports(
