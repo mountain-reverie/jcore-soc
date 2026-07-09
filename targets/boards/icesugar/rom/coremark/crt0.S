@@ -21,4 +21,5 @@ _start:
 stack_top_addr:	.long __stack_top
 bss_start_addr:	.long __bss_start
 bss_end_addr:	.long __bss_end
-main_addr:	.long __main
+! _main = asm name of CoreMark's C main() under this toolchain's leading-underscore convention
+main_addr:	.long _main

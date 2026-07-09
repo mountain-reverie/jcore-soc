@@ -398,6 +398,16 @@ for (i = 0; i < MULTITHREAD; i++)
             ee_printf("[%d]crcstate      : 0x%04x\n", i, results[i].crcstate);
     for (i = 0; i < default_num_contexts; i++)
         ee_printf("[%d]crcfinal      : 0x%04x\n", i, results[i].crc);
+
+    /* jcore: emit result over eth instead of printf --- BEGIN
+       This board has no console; hand the authoritative result (crcfinal,
+       actual iteration count, elapsed cyccnt ticks) to the port's
+       finalize hook instead of relying on the ee_printf() calls above
+       (which are no-ops on this port, HAS_PRINTF == 0). See
+       core_portme.c:portme_finish() / report_result(). */
+    portme_finish(results[0].crc, results[0].iterations, total_time);
+    /* jcore: emit result over eth instead of printf --- END */
+
     if (total_errors == 0)
     {
         ee_printf(
