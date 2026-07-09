@@ -40,7 +40,7 @@ entity devices is
 end;
 architecture impl of devices is
     signal gpio_di : std_logic_vector(2 downto 0);
-    type device_t is (NONE, DEV_AIC0, DEV_ETH, DEV_GPIO0, DEV_I2C, DEV_UART0);
+    type device_t is (NONE, DEV_CYCCNT, DEV_ETH, DEV_GPIO0, DEV_UART0);
     signal active_dev : device_t;
     type data_bus_i_t is array (device_t'left to device_t'right) of cpu_data_i_t;
     type data_bus_o_t is array (device_t'left to device_t'right) of cpu_data_o_t;
@@ -60,14 +60,9 @@ architecture impl of devices is
                         -- ABCD0100-ABCD010F
                         return DEV_UART0;
                     end if;
-                else
-                    if addr(8 downto 6) = "000" then
-                        -- ABCD0200-ABCD023F
-                        return DEV_AIC0;
-                    elsif addr(8 downto 4) = "10000" then
-                        -- ABCD0300-ABCD030F
-                        return DEV_I2C;
-                    end if;
+                elsif addr(9 downto 3) = "1000000" then
+                    -- ABCD0200-ABCD0207
+                    return DEV_CYCCNT;
                 end if;
             elsif addr(12 downto 3) = "1000000000" then
                 -- ABCD1000-ABCD1007
@@ -88,29 +83,12 @@ begin
     end generate;
     devs_bus_i(NONE) <= loopback_bus(devs_bus_o(NONE));
     -- Instantiate devices
-    aic0 : entity work.aic(behav)
-        generic map (
-            debug_enable => FALSE,
-            pit_enable_g => FALSE,
-            reboot_enable => FALSE,
-            rtc_enable => FALSE,
-            rtc_sec_length34b => FALSE,
-            vector_numbers => (x"00", x"00", x"00", x"00", x"00", x"00", x"00", x"00")
-        )
+    cyccnt : entity work.cycle_counter(rtl)
         port map (
-            back_i => cpu0_data_master_ack,
-            bstb_i => cpu0_data_master_en,
-            clk_bus => clk_sys,
-            db_i => devs_bus_o(DEV_AIC0),
-            db_o => devs_bus_i(DEV_AIC0),
-            enmi_i => '1',
-            event_i => cpu0_event_o,
-            event_o => cpu0_event_i,
-            irq_i => eth_irq_vec,
-            reboot => open,
-            rst_i => reset,
-            rtc_nsec => open,
-            rtc_sec => open
+            clk => clk_sys,
+            db_i => devs_bus_o(DEV_CYCCNT),
+            db_o => devs_bus_i(DEV_CYCCNT),
+            rst => reset
         );
     eth : entity work.spi2(arch)
         generic map (

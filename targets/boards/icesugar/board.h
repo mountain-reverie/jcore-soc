@@ -8,11 +8,15 @@
 #define DRAM_BASE 0x10000000
 
 // Memory mapped peripherals
-#define DEVICE_AIC0_ADDR  0xabcd0200
-#define DEVICE_ETH_ADDR   0xabcd1000
-#define DEVICE_GPIO0_ADDR 0xabcd0000
-#define DEVICE_I2C_ADDR   0xabcd0300
-#define DEVICE_UART0_ADDR 0xabcd0100
+#define DEVICE_CYCCNT_ADDR 0xabcd0200
+#define DEVICE_ETH_ADDR    0xabcd1000
+#define DEVICE_GPIO0_ADDR  0xabcd0000
+#define DEVICE_UART0_ADDR  0xabcd0100
+
+struct cycle_counter_regs {
+  uint32_t count; // read-only only byte 0
+};
+#define DEVICE_CYCCNT ((volatile struct cycle_counter_regs *) DEVICE_CYCCNT_ADDR)
 
 struct aic_regs {
   uint32_t ctrl0;
