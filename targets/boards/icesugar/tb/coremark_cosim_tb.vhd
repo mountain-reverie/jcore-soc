@@ -194,6 +194,10 @@ begin
       ok := false;
       report "Test Failed: clk_hz mismatch" severity error;
     end if;
+    if unsigned(sock0_tx_bytes(63 downto 32)) = 0 then
+      ok := false;
+      report "Test Failed: cycles field is zero (cycle counter not working)" severity error;
+    end if;
 
     if ok then
       report "Test Passed" severity note;
