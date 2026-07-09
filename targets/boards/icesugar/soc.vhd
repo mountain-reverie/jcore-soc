@@ -20,6 +20,10 @@ entity soc is
         eth_irq_vec : in std_logic_vector(7 downto 0);
         eth_miso : in std_logic;
         eth_mosi : out std_logic;
+        fl_cs_n : out std_logic;
+        fl_miso : in std_logic;
+        fl_mosi : out std_logic;
+        fl_sck : out std_logic;
         gpio_do : out std_logic_vector(2 downto 0);
         i2c_di : in std_logic_vector(1 downto 0);
         i2c_do : out std_logic_vector(1 downto 0);
@@ -82,6 +86,10 @@ begin
             cpu1eni => '0',
             debug_i => debug_i,
             debug_o => open,
+            fl_cs_n => fl_cs_n,
+            fl_miso => fl_miso,
+            fl_mosi => fl_mosi,
+            fl_sck => fl_sck,
             rst => reset
         );
     devices : entity work.devices(impl)

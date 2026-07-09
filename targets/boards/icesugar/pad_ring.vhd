@@ -23,6 +23,10 @@ entity pad_ring is
         pin_rtc_sqw : in std_logic;
         pin_ser_rx : in std_logic;
         pin_ser_tx : out std_logic;
+        pin_spi_cs_pin : out std_logic;
+        pin_spi_miso_pin : out std_logic;
+        pin_spi_mosi_pin : out std_logic;
+        pin_spi_sck_pin : out std_logic;
         pin_w5500_cs : out std_logic;
         pin_w5500_int : in std_logic;
         pin_w5500_miso : in std_logic;
@@ -39,12 +43,19 @@ architecture impl of pad_ring is
     signal eth_irq_vec : std_logic_vector(7 downto 0);
     signal eth_miso : std_logic;
     signal eth_mosi : std_logic;
+    signal fl_cs_n : std_logic;
+    signal fl_miso : std_logic;
+    signal fl_mosi : std_logic;
+    signal fl_sck : std_logic;
     signal gpio_do : std_logic_vector(2 downto 0);
     signal i2c_di : std_logic_vector(1 downto 0);
     signal i2c_do : std_logic_vector(1 downto 0);
     signal i2c_dt : std_logic_vector(1 downto 0);
     signal reset : std_logic;
-    signal rtc_sqw_net : std_logic;
+    signal spi_cs_pin : std_logic;
+    signal spi_miso_pin : std_logic;
+    signal spi_mosi_pin : std_logic;
+    signal spi_sck_pin : std_logic;
     signal uart0_rx : std_logic;
     signal uart0_tx : std_logic;
 begin
@@ -56,6 +67,10 @@ begin
             eth_irq_vec => eth_irq_vec,
             eth_miso => eth_miso,
             eth_mosi => eth_mosi,
+            fl_cs_n => fl_cs_n,
+            fl_miso => fl_miso,
+            fl_mosi => fl_mosi,
+            fl_sck => fl_sck,
             gpio_do => gpio_do,
             i2c_di => i2c_di,
             i2c_do => i2c_do,
@@ -71,19 +86,16 @@ begin
             clk_out => clk_sys,
             rst_out => reset
         );
-    i2c_io : entity work.ice_i2c_io(rtl)
+    spi_flash : entity work.ice_spi_io(rtl)
         port map (
-            d_i => i2c_di,
-            d_o => i2c_do,
-            d_t => i2c_dt,
-            pin(0) => pin_i2c_pad0,
-            pin(1) => pin_i2c_pad1
-        );
-    irq_in : entity work.ice_irq_in(rtl)
-        port map (
-            irq => eth_irq_vec,
-            rtc_sqw => rtc_sqw_net,
-            w5500_int_n => eth_int
+            d_cs_n => fl_cs_n,
+            d_miso => fl_miso,
+            d_mosi => fl_mosi,
+            d_sck => fl_sck,
+            pin_cs_n => spi_cs_pin,
+            pin_miso => spi_miso_pin,
+            pin_mosi => spi_mosi_pin,
+            pin_sck => spi_sck_pin
         );
     clk <= pin_clk;
     pin_ledb_n <= not gpio_do(2);
@@ -92,6 +104,10 @@ begin
     rtc_sqw_net <= pin_rtc_sqw;
     uart0_rx <= pin_ser_rx;
     pin_ser_tx <= uart0_tx;
+    pin_spi_cs_pin <= spi_cs_pin;
+    pin_spi_miso_pin <= spi_miso_pin;
+    pin_spi_mosi_pin <= spi_mosi_pin;
+    pin_spi_sck_pin <= spi_sck_pin;
     pin_w5500_cs <= eth_cs(0);
     eth_int <= pin_w5500_int;
     eth_miso <= pin_w5500_miso;

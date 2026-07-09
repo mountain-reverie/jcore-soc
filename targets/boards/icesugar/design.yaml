@@ -4,6 +4,7 @@ device-classes: !include ../common_device_classes.yaml
 
 top-entities:
   cpus:
+    architecture: cpus_coremark
     ports:
       cpu0_copro_i: NULL_COPR_I
       cpu1_copro_i: NULL_COPR_I
@@ -20,17 +21,17 @@ padring-entities:
   clkgen:
     entity: ice_clkgen
     ports: { clk_in: clk, clk_out: clk_sys, clk_eth: clk_eth, rst_out: reset }
-  # W5500 INTn (active low) -> aic0.irq_i(0) (active-high, rising-edge).
-  irq_in:
-    entity: ice_irq_in
-    ports: { w5500_int_n: eth_int, rtc_sqw: rtc_sqw_net, irq: eth_irq_vec }
-  # Open-drain I2C pads for the bit-banged I2C master (gpio2 'i2c' device).
-  i2c_io:
-    entity: ice_i2c_io
-    ports: { d_o: i2c_do, d_t: i2c_dt, d_i: i2c_di, pin: i2c_pad }
+  # Config-SPI flash pin wrappers: the cpus entity's fl_* ports (driven by
+  # cpus_coremark's flash_boot_reader) route through SB_IO (ice_spi_io) to
+  # the reused UP5K config-SPI pads.
+  spi_flash:
+    entity: ice_spi_io
+    architecture: rtl
+    ports: { d_cs_n: fl_cs_n, d_sck: fl_sck, d_mosi: fl_mosi, d_miso: fl_miso,
+             pin_cs_n: spi_cs_pin, pin_sck: spi_sck_pin, pin_mosi: spi_mosi_pin, pin_miso: spi_miso_pin }
 
 cpu:
-  architecture: one_cpu_ebr
+  architecture: cpus_coremark
   cores: 1
   model: j1
   decode: rom
@@ -100,7 +101,11 @@ pins:
     - { match: w5500_mosi, signal: eth_mosi }
     - { match: w5500_miso, signal: eth_miso }
     - { match: w5500_cs, signal: "eth_cs(0)" }
-    - { match: w5500_int, signal: eth_int }   # W5500 INTn (active low) -> aic irq
-    - { match: i2c_pad0, signal: i2c_pad, entity-pad: true }   # DS3231 I2C SCL (bidir open-drain, bit0)
-    - { match: i2c_pad1, signal: i2c_pad, entity-pad: true }   # DS3231 I2C SDA (bit1)
-    - { match: rtc_sqw, signal: rtc_sqw_net }                # DS3231 SQW/INT -> aic irq(1)
+    # Config-SPI flash pads (SG48 dedicated config pins). The spi_flash
+    # padring-entity above (ice_spi_io/SB_IO) already produces pad-level
+    # signals -- straight passthrough (buff: false), no additional IO
+    # buffer inference needed.
+    - { match: spi_cs_pin, signal: true, buff: false }
+    - { match: spi_sck_pin, signal: true, buff: false }
+    - { match: spi_mosi_pin, signal: true, buff: false }
+    - { match: spi_miso_pin, signal: true, buff: false }

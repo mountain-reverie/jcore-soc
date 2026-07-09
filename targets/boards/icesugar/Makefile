@@ -34,6 +34,16 @@ VHDL_FILES += targets/boards/icesugar/ice_clkgen.vhd
 VHDL_FILES += components/misc/ice_irq_in.vhd
 VHDL_FILES += components/misc/ice_i2c_io.vhd
 VHDL_FILES += components/memory/bootram_infer.vhd
+# cpus_coremark: flash-boot arch (Task 7b/8a) selected by design.yaml's
+# cpu.architecture. flash_boot_reader.vhd / ice_spi_io.vhd are already part of
+# the global VHDL_FILES set (components/misc/build.mk); only the
+# board-specific pieces (the arch itself + its own boot RAM/SPRAM/image deps)
+# need to be added here so socgen's interface library can resolve the
+# architecture and its instantiated entities.
+VHDL_FILES += targets/boards/icesugar/cpus_coremark.vhd
+VHDL_FILES += components/memory/dev_ddr_spram_boot.vhd
+VHDL_FILES += components/memory/bootram_infer_coremark.vhd
+VHDL_FILES += targets/boards/icesugar/boot_image_coremark_pkg.vhd
 
 project = $(BOARD_NAME)
 top_module = pad_ring
