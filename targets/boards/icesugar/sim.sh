@@ -42,7 +42,21 @@ if [ "${1:-}" = "xip" ]; then
 
   # 1. generated cpu sources (same prerequisite as the full board build --
   #    cpus_xip.vhd's core0 still needs the decode tables + v2p'd cores).
-  make -C components/cpu/decode generate
+  #    CRITICAL: use `generate-pagefault`, NOT the plain `generate`. The Page
+  #    Fault I/D exception microcode lives in the spec/pagefault overlay
+  #    decoder; a plain `generate` (base) leaves PAGE_FAULT_I/D as x"00"
+  #    placeholders, so when spi_page_cache raises page_fault_o.en the CPU
+  #    dispatches an exception op that jumps to ROM addr 0 -> garbage, and the
+  #    faulting fetch is never redirected to VBR+0 (the CPU wedges re-fetching
+  #    the faulting window address forever). This mirrors
+  #    components/cpu/sim/pagefault_sim.sh's documented gotcha. Because
+  #    generate-pagefault overwrites the tracked base decode tables with the
+  #    9-bit-ROM overlay (which must NOT be committed), the committed base
+  #    tables are restored right after this sim finishes (see the trap below).
+  make -C components/cpu/decode generate-pagefault
+  # Restore the committed base decode tables on exit so the working tree is
+  # never left holding the (uncommittable) page-fault overlay tables.
+  trap 'make -C "$ROOT/components/cpu/decode" generate >/dev/null 2>&1 || true' EXIT
   ( cd components/cpu && for f in core/mult core/datapath decode/decode_core; do
       LD_LIBRARY_PATH='' perl ../../tools/v2p < "$f.vhm" > "$f.vhd"; done )
 
@@ -78,6 +92,11 @@ if [ "${1:-}" = "xip" ]; then
     $CPU/decode/decode_body.vhd
     $CPU/decode/decode_table.vhd
     $CPU/decode/decode_core.vhd
+    # DIRECT decode table: cpus_xip's one_cpu_xip_core_cfg binds the DIRECT
+    # page-fault decode (cpu_decode_direct_pagefault, declared locally in
+    # cpus_xip.vhd -- see its rationale) rather than the ROM decode from
+    # cpu_synth_files.list, so the DIRECT table architecture must be analyzed.
+    $CPU/decode/decode_table_direct.vhd
   )
   while IFS= read -r _f; do
     [ -n "$_f" ] && FILES+=("$CPU/$_f")

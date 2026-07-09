@@ -120,8 +120,22 @@ architecture sim of cpus_xip_tb is
       cpu0_copro_o : out cop_o_t;
       cpu0_copro_i : in  cop_i_t;
       cpu1_copro_o : out cop_o_t;
-      cpu1_copro_i : in  cop_i_t);
+      cpu1_copro_i : in  cop_i_t;
+      -- Digital config-flash SPI ports (Task 8 refactor): the page cache's
+      -- fill-engine SPI master, brought out of cpus for the padring to map to
+      -- the real SB_IO cell. This cosim wires a behavioral flash straight to
+      -- these digital ports (no SB_IO/pad model needed).
+      spi_d_cs_n : out std_logic;
+      spi_d_sck : out std_logic;
+      spi_d_mosi : out std_logic;
+      spi_d_miso : in std_logic);
   end component;
+
+  -- Digital SPI between cpus (master) and the behavioral flash model below.
+  signal spi_d_cs_n : std_logic;
+  signal spi_d_sck  : std_logic;
+  signal spi_d_mosi : std_logic;
+  signal spi_d_miso : std_logic := '0';
 
 begin
 
@@ -157,7 +171,9 @@ begin
       cpu0_event_o => cpu0_event_o, cpu0_event_i => NULL_CPU_EVENT_I,
       cpu1_event_o => cpu1_event_o, cpu1_event_i => NULL_CPU_EVENT_I,
       cpu0_copro_o => cpu0_copro_o, cpu0_copro_i => NULL_COPR_I,
-      cpu1_copro_o => cpu1_copro_o, cpu1_copro_i => NULL_COPR_I);
+      cpu1_copro_o => cpu1_copro_o, cpu1_copro_i => NULL_COPR_I,
+      spi_d_cs_n => spi_d_cs_n, spi_d_sck => spi_d_sck,
+      spi_d_mosi => spi_d_mosi, spi_d_miso => spi_d_miso);
 
   ------------------------------------------------------------------------
   -- Behavioral SPI flash model, wired to cpus_xip.vhd's internal pad-level
@@ -168,11 +184,6 @@ begin
   -- pin_cs_n/pin_sck/pin_mosi (driven by ice_spi_io's SB_IO output pads).
   ------------------------------------------------------------------------
   flash_model : process
-    alias ext_pin_cs_n  is << signal .cpus_xip_tb.dut.pin_cs_n  : std_logic >>;
-    alias ext_pin_sck   is << signal .cpus_xip_tb.dut.pin_sck   : std_logic >>;
-    alias ext_pin_mosi  is << signal .cpus_xip_tb.dut.pin_mosi  : std_logic >>;
-    alias ext_pin_miso  is << signal .cpus_xip_tb.dut.pin_miso  : std_logic >>;
-
     variable shreg   : std_logic_vector(31 downto 0);
     variable addr    : natural;
     variable tx_byte : std_logic_vector(7 downto 0);
@@ -191,31 +202,31 @@ begin
       end if;
     end function;
   begin
-    ext_pin_miso <= '0';
+    spi_d_miso <= '0';
     loop
-      wait until ext_pin_cs_n = '0';
+      wait until spi_d_cs_n = '0';
 
       shreg := (others => '0');
       for i in 0 to 31 loop
-        wait until rising_edge(ext_pin_sck);
-        shreg := shreg(30 downto 0) & ext_pin_mosi;
+        wait until rising_edge(spi_d_sck);
+        shreg := shreg(30 downto 0) & spi_d_mosi;
       end loop;
       addr := to_integer(unsigned(shreg(23 downto 0)));
 
       for i in 0 to 7 loop
-        wait until rising_edge(ext_pin_sck);
+        wait until rising_edge(spi_d_sck);
       end loop;
 
       byte_i := 0;
       outer : loop
         tx_byte := flash_mem(addr + byte_i);
         for b in 7 downto 0 loop
-          if ext_pin_cs_n = '1' then
+          if spi_d_cs_n = '1' then
             exit outer;
           end if;
-          ext_pin_miso <= tx_byte(b);
-          wait until rising_edge(ext_pin_sck) or ext_pin_cs_n = '1';
-          if ext_pin_cs_n = '1' then
+          spi_d_miso <= tx_byte(b);
+          wait until rising_edge(spi_d_sck) or spi_d_cs_n = '1';
+          if spi_d_cs_n = '1' then
             exit outer;
           end if;
         end loop;
@@ -251,6 +262,17 @@ begin
   -- Fast-Read (32 bits cmd+addr + 8 dummy + 4096 data bytes, each byte 8 sck
   -- edges) per page fault is slow in simulated time -- tens of ms.
   ------------------------------------------------------------------------
+  dbg_prog : process
+    variable prevcs : std_logic := '1';
+    variable ntx : integer := 0;
+  begin
+    wait until rising_edge(clk);
+    if spi_d_cs_n = '0' and prevcs = '1' then ntx := ntx + 1;
+      report "PROG t=" & time'image(now) & " flash_tx#=" & integer'image(ntx)
+             severity note; end if;
+    prevcs := spi_d_cs_n;
+  end process;
+
   smoke : process
     constant STOP_TIME : time := 60 ms;
   begin
