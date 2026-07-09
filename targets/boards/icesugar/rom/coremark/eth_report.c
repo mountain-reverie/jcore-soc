@@ -214,18 +214,46 @@ void eth_init(void)
 	eth_inited = 1;
 }
 
+static void put_le16(unsigned char *b, unsigned int v)
+{
+	b[0] = (unsigned char)(v & 0xffu);
+	b[1] = (unsigned char)((v >> 8) & 0xffu);
+}
+
+static void put_le32(unsigned char *b, unsigned int v)
+{
+	b[0] = (unsigned char)(v & 0xffu);
+	b[1] = (unsigned char)((v >> 8) & 0xffu);
+	b[2] = (unsigned char)((v >> 16) & 0xffu);
+	b[3] = (unsigned char)((v >> 24) & 0xffu);
+}
+
 static void send_once(struct coremark_result *r)
 {
 	static const unsigned char dipr[4] = CMK_COLLECTOR_IP;
 	unsigned int wr;
+	unsigned char buf[24];
 
 	w5500_wr(0x000Cu, BSB_SOCK0_REG, dipr, 4);            /* Sn_DIPR */
 	w5500_wr16(0x0010u, BSB_SOCK0_REG, CMK_COLLECTOR_PORT); /* Sn_DPORT */
 
+	/* Serialize the struct into wire-format little-endian bytes,
+	   field by field. This runs unconditionally (target is
+	   big-endian SH-2; the collector expects LE per
+	   coremark_result.h), so target and host always execute the
+	   same serialization. Do not raw-copy the struct: on a
+	   big-endian CPU that would put big-endian bytes on the wire. */
+	put_le32(&buf[0],  r->magic);
+	put_le32(&buf[4],  r->git_rev);
+	put_le16(&buf[8],  r->crc);
+	put_le16(&buf[10], 0);            /* _pad */
+	put_le32(&buf[12], r->iterations);
+	put_le32(&buf[16], r->cycles);
+	put_le32(&buf[20], r->clk_hz);
+
 	wr = w5500_rd16(0x0024u, BSB_SOCK0_REG);              /* Sn_TX_WR */
-	w5500_wr(wr, BSB_SOCK0_TX, (const unsigned char *)r,
-	         (int)sizeof(*r));
-	wr += (unsigned int)sizeof(*r);
+	w5500_wr(wr, BSB_SOCK0_TX, buf, 24);
+	wr += 24u;
 	w5500_wr16(0x0024u, BSB_SOCK0_REG, wr);
 
 	w5500_wr8(0x0001u, BSB_SOCK0_REG, 0x20u);              /* Sn_CR=SEND */
