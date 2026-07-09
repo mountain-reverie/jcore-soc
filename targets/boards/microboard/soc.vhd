@@ -69,6 +69,7 @@ architecture impl of soc is
     signal ddr_bus_i : cpu_data_i_t;
     signal ddr_bus_o : cpu_data_o_t;
     signal dma_dbus_o : bus_ddr_o_t;
+    signal fl_miso : std_logic;
     signal icache0_ctrl : cache_ctrl_t;
     signal icache1_ctrl : cache_ctrl_t;
 begin
@@ -109,6 +110,10 @@ begin
             cpu1eni => '0',
             debug_i => CPU_DEBUG_NOP,
             debug_o => open,
+            fl_cs_n => open,
+            fl_miso => fl_miso,
+            fl_mosi => open,
+            fl_sck => open,
             rst => reset
         );
     ddr_ctrl : entity work.ddr_ctrl(logic)
