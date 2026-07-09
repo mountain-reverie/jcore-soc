@@ -27,13 +27,34 @@ entity w5500_model is
     -- (VHDL-93 has no external-name access into an instance, so these are
     -- plain ports the tb wires up).
     shar_out : out std_logic_vector(47 downto 0);
-    sipr_out : out std_logic_vector(31 downto 0)
+    sipr_out : out std_logic_vector(31 downto 0);
+
+    -- Extended (Task 8b) outputs, backward-compatible additions: capture of
+    -- socket-0 TX buffer writes (BSB=0x02) and a one-cycle-wide pulse when
+    -- Sn_CR (BSB=0x01, addr 0x0001) is written with SEND (0x20). Existing
+    -- instantiations (e.g. icesugar_top_tb.vhd) that don't connect these
+    -- new output ports are unaffected.
+    sock0_tx_bytes : out std_logic_vector(191 downto 0) := (others => '0'); -- 24 bytes, byte0 = bits(191 downto 184)
+    sent           : out std_logic := '0'
   );
 end entity;
 
 architecture sim of w5500_model is
   type reg_mem_t is array (0 to 18) of std_logic_vector(7 downto 0);
   signal reg_mem : reg_mem_t := (others => (others => '0'));
+
+  -- Socket-0 register block (BSB=0x01) and TX buffer (BSB=0x02), modeled
+  -- separately from the common block so common-block addresses (e.g. GAR at
+  -- 0x0001) don't alias with socket-0 register addresses (e.g. Sn_CR at
+  -- 0x0001).
+  type sock0_reg_t is array (0 to 63) of std_logic_vector(7 downto 0);
+  signal sock0_reg : sock0_reg_t := (others => (others => '0'));
+  type tx_buf_t is array (0 to 2047) of std_logic_vector(7 downto 0);
+  signal tx_buf : tx_buf_t := (others => (others => '0'));
+
+  constant BSB_COMMON    : integer := 0;
+  constant BSB_SOCK0_REG : integer := 1;
+  constant BSB_SOCK0_TX  : integer := 2;
 begin
 
   shar_out <= reg_mem(9) & reg_mem(10) & reg_mem(11) & reg_mem(12) & reg_mem(13) & reg_mem(14);
@@ -42,6 +63,7 @@ begin
   spi_proc : process
     variable addr_hi, addr_lo, ctrl : std_logic_vector(7 downto 0);
     variable addr    : integer;
+    variable bsb     : integer;
     variable is_write : boolean;
     variable shreg   : std_logic_vector(7 downto 0);
     variable bitcnt  : integer;
@@ -49,6 +71,7 @@ begin
   begin
     -- Wait for a frame to begin (cs falling edge).
     wait until spi_cs = '0';
+    sent <= '0';
 
     -- Shift in three header bytes MSB-first, sampling mosi on sclk rising
     -- edges, aborting early if cs is deasserted mid-frame.
@@ -74,6 +97,7 @@ begin
     if spi_cs = '0' then
       addr := to_integer(unsigned(addr_hi)) * 256 + to_integer(unsigned(addr_lo));
       is_write := ctrl(2) = '1';
+      bsb := to_integer(unsigned(ctrl(7 downto 3)));
 
       -- Shift subsequent data bytes until cs is deasserted.
       data_bytes : loop
@@ -85,24 +109,52 @@ begin
             exit data_bytes when spi_cs = '1';
             shreg := shreg(6 downto 0) & spi_mosi;
           else
-            -- Drive miso following sclk falling edges, MSB-first.
+            -- Read: present each bit MSB-first and advance on the master's
+            -- SAMPLE edge (sclk rising, spi2 cpha=0 samples miso there). The
+            -- header loop above exits on a rising edge with sclk HIGH, so
+            -- waiting on the next rising here naturally skips the control
+            -- byte's trailing falling edge -- driving on the falling edge
+            -- instead would consume that trailing edge as a bit boundary and
+            -- shift every read byte by one bit.
             if bitcnt = 0 then
-              if addr >= 0 and addr <= 18 then
+              if bsb = BSB_COMMON and addr >= 0 and addr <= 18 then
                 shreg := reg_mem(addr);
+              elsif bsb = BSB_SOCK0_REG and addr >= 0 and addr <= 63 then
+                shreg := sock0_reg(addr);
               else
                 shreg := (others => '0');
               end if;
             end if;
             spi_miso <= shreg(7);
-            wait until (spi_sclk = '0' and spi_sclk'event) or spi_cs = '1';
+            wait until (spi_sclk = '1' and spi_sclk'event) or spi_cs = '1';
             exit data_bytes when spi_cs = '1';
             shreg := shreg(6 downto 0) & '0';
           end if;
           bitcnt := bitcnt + 1;
         end loop;
 
-        if is_write and addr >= 0 and addr <= 18 then
-          reg_mem(addr) <= shreg;
+        if is_write then
+          if bsb = BSB_COMMON and addr >= 0 and addr <= 18 then
+            reg_mem(addr) <= shreg;
+          elsif bsb = BSB_SOCK0_REG and addr >= 0 and addr <= 63 then
+            sock0_reg(addr) <= shreg;
+            -- Model the chip's autonomous socket-0 reactions so the
+            -- driver's polling loops (eth_init/send_once in eth_report.c)
+            -- make progress, mirroring eth_report.c's HOST_TEST model.
+            if addr = 1 then                      -- Sn_CR
+              if shreg = x"01" then                -- OPEN
+                sock0_reg(3) <= x"22";              -- Sn_SR = SOCK_UDP
+              elsif shreg = x"20" then              -- SEND
+                sock0_reg(2) <= sock0_reg(2) or x"10"; -- Sn_IR.SENDOK
+                sent <= '1';
+                for k in 0 to 23 loop
+                  sock0_tx_bytes(191 - k*8 downto 184 - k*8) <= tx_buf(k);
+                end loop;
+              end if;
+            end if;
+          elsif bsb = BSB_SOCK0_TX and addr >= 0 and addr <= 2047 then
+            tx_buf(addr mod 2048) <= shreg;
+          end if;
         end if;
         addr := addr + 1;
       end loop data_bytes;

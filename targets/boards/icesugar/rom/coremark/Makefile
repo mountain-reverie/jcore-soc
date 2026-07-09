@@ -23,6 +23,17 @@ coremark.elf: $(OBJS) $(LDSCRIPT)
 	$(CC) $(CFLAGS) -T $(LDSCRIPT) -o $@ $(OBJS) -lgcc
 coremark.bin: coremark.elf
 	$(OBJCOPY) -O binary $< $@
+
+# cosim.bin: Task 8b GHDL end-to-end cosim payload. Links ONLY crt0 +
+# core_portme + eth_report + cosim_main (NOT the CoreMark vendor sources),
+# reusing the same linker script/startup as the real coremark.bin so it
+# boots identically via flash_boot_reader -> SPRAM -> _start -> main.
+COSIM_OBJS := crt0.o core_portme.o eth_report.o cosim_main.o
+cosim.elf: $(COSIM_OBJS) $(LDSCRIPT)
+	$(CC) $(CFLAGS) -T $(LDSCRIPT) -o $@ $(COSIM_OBJS) -lgcc
+cosim.bin: cosim.elf
+	$(OBJCOPY) -O binary $< $@
+
 %.o: %.S ; $(CC) $(CFLAGS) -c -o $@ $<
 %.o: %.c ; $(CC) $(CFLAGS) -c -o $@ $<
 clean: ; rm -f *.o vendor/*.o *.elf *.bin
