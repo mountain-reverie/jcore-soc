@@ -24,7 +24,7 @@ entity pad_ring is
         pin_ser_rx : in std_logic;
         pin_ser_tx : out std_logic;
         pin_spi_cs_pin : out std_logic;
-        pin_spi_miso_pin : out std_logic;
+        pin_spi_miso_pin : in std_logic;
         pin_spi_mosi_pin : out std_logic;
         pin_spi_sck_pin : out std_logic;
         pin_w5500_cs : out std_logic;
@@ -105,7 +105,7 @@ begin
     uart0_rx <= pin_ser_rx;
     pin_ser_tx <= uart0_tx;
     pin_spi_cs_pin <= spi_cs_pin;
-    pin_spi_miso_pin <= spi_miso_pin;
+    spi_miso_pin <= pin_spi_miso_pin;
     pin_spi_mosi_pin <= spi_mosi_pin;
     pin_spi_sck_pin <= spi_sck_pin;
     pin_w5500_cs <= eth_cs(0);
