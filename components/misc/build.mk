@@ -25,3 +25,4 @@ $(VHDLS) += aic2_pkg.vhd
 $(VHDLS) += aic2_tglue.vhd
 $(VHDLS) += bussizem.vhd
 $(VHDLS) += bussizesa.vhd
+$(VHDLS) += cycle_counter.vhd
