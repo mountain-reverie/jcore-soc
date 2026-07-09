@@ -4,6 +4,14 @@
 # budget) or a constrained clock misses its declared frequency at FINAL
 # (post-route) timing. The timing check keeps the LAST verdict per clock, so an
 # intermediate nextpnr estimate cannot false-positive (same rule as ulx3s).
+#
+# Baseline (Task 12, cpus_coremark arch — base J1 + cycle_counter +
+# flash_boot_reader + ice_spi_io + W5500 SPI eth; no XIP page cache, no AIC):
+# ICESTORM_LC 5136/5280 (97%, 144 LC margin), ICESTORM_RAM 17/30,
+# ICESTORM_DSP 8/8 (SB_MAC16, J1 DSP multiplier), ICESTORM_SPRAM 4/4
+# (SB_SPRAM256KA, spram_128k), clk_sys Fmax 14.13 MHz (PASS at 12.00 MHz
+# constraint). Any regression pushing ICESTORM_LC over budget or missing
+# 12 MHz timing fails this gate.
 # Usage: fit_gate.sh <nextpnr.log> <bitstream-file>
 set -uo pipefail
 LOG="${1:?usage: fit_gate.sh <nextpnr.log> <bitstream-file>}"
