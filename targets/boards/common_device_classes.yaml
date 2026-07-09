@@ -49,6 +49,14 @@ gpio:
     - { name: edge }
     - { name: changes, mode: read }
 
+cycle_counter:
+  entity: cycle_counter
+  dt-props:
+    compatible: jcore,cycle-counter
+  left-addr-bit: 2          # 8-byte window, single 32-bit register
+  regs:
+    - { name: count, width: 1, addr: 0, mode: read }
+
 gpio2:
   desc: General purpose IO
   entity: gpio2

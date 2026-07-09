@@ -42,13 +42,12 @@
 		#address-cells = <1>;
 		#size-cells = <1>;
 
-		timer {
-			compatible = "jcore,pit";
-			reg = <0x200 0x30>;
-			interrupts = <0x10>;
+		cycle_counter {
+			compatible = "jcore,cycle-counter";
+			reg = <0x200 0x8>; // ABCD0200-ABCD0207
 		};
 
-		gpio2@0 {
+		gpio2 {
 			compatible = "jcore,gpio2";
 			reg = <0x0 0x10>; // ABCD0000-ABCD000F
 		};
