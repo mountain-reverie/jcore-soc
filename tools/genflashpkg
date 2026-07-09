@@ -1,0 +1,43 @@
+#!/usr/bin/env perl
+# genflashpkg <payload.bin> <payload_words> > flash_image_pkg.vhd
+#
+# Task 8b: emit a VHDL package with a byte array of the flash image the
+# coremark_cosim_tb's Fast-Read flash-slave model streams starting at
+# FLASH_BASE, sized to exactly match flash_boot_reader's PAYLOAD_WORDS (so
+# the flash model always has a byte to serve for the whole stream that
+# cpus_coremark.vhd's fixed PAYLOAD_WORDS=8192 constant requests), zero-filled
+# past payload.bin's end. Modeled directly on tools/genbootpkg's convention
+# (big-endian word packing, zero-fill), but emits a flat byte array (the
+# flash model streams byte-at-a-time, not word-at-a-time).
+use strict;
+use warnings;
+
+my ($binfile, $words) = @ARGV;
+die "usage: genflashpkg <payload.bin> <payload_words>\n"
+  unless defined $binfile && defined $words;
+
+open(my $fh, '<:raw', $binfile) or die "cannot open $binfile: $!";
+local $/;
+my $bytes = <$fh>;
+close($fh);
+my @b = unpack('C*', $bytes);
+
+my $depth = $words * 4;
+die "payload too large: " . (scalar @b) . " bytes > $depth\n"
+  if scalar(@b) > $depth;
+
+print "library ieee;\n";
+print "use ieee.std_logic_1164.all;\n\n";
+my $hi = $depth - 1;
+print "package flash_image_pkg is\n";
+print "  constant FLASH_IMAGE_BYTES : integer := $depth;\n";
+print "  type flash_image_t is array (0 to $hi) of std_logic_vector(7 downto 0);\n";
+print "  constant FLASH_IMAGE : flash_image_t := (\n";
+my @lines;
+for (my $i = 0; $i < $depth; $i++) {
+  my $v = $b[$i] // 0;
+  push @lines, sprintf('    %d => x"%02x"', $i, $v);
+}
+print join(",\n", @lines), "\n";
+print "  );\n";
+print "end package flash_image_pkg;\n";

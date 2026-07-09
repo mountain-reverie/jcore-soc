@@ -2,7 +2,14 @@
 # Build the EBR boot image, analyze the iCESugar EBR-only J1 design under ghdl,
 # and run the top-level banner testbench (drive 12 MHz, decode ser_tx, assert
 # the boot banner). Full nextpnr synthesis is synth.sh.
+#
+# Usage: sim.sh [banner|coremark]  (default: banner, the pre-existing flow)
+#   banner:   the flow below (icesugar_top_tb, EBR-boot banner/blink image).
+#   coremark: Task 8b end-to-end cosim -- build cosim.bin, generate the
+#             flash-slave model's payload package, analyze + run
+#             coremark_cosim_tb (flash-boot -> SPRAM -> CPU -> W5500 SEND).
 set -euo pipefail
+MODE="${1:-banner}"
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 WORK="${WORK:-/tmp/icework}"
 cd "$ROOT"
@@ -50,6 +57,28 @@ FILES=( components/cpu/core/sb_mac16_sim.vhd components/memory/sb_spram256ka_sim
 ghdl -a --std=93 -fexplicit -fsynopsys -C --workdir="$WORK" "${FILES[@]}"
 ghdl -e --std=93 -fexplicit -fsynopsys -C --syn-binding --workdir="$WORK" pad_ring
 echo "pad_ring elaborated OK"
+
+if [ "$MODE" = "coremark" ]; then
+  # 5. Task 8b cosim payload: build cosim.bin (crt0 + core_portme + eth_report
+  #    + cosim_main only -- NOT the CoreMark vendor sources), then generate
+  #    the flash-slave model's byte-array package from it, sized to exactly
+  #    match cpus_coremark.vhd's fixed PAYLOAD_WORDS=8192 (32 KiB) so the
+  #    flash model has a byte to serve for the whole Fast-Read stream.
+  make -C targets/boards/icesugar/rom/coremark cosim.bin
+  perl tools/genflashpkg \
+      targets/boards/icesugar/rom/coremark/cosim.bin \
+      8192 \
+      > targets/boards/icesugar/flash_image_pkg.vhd
+
+  echo "=== coremark_cosim_tb ==="
+  ghdl -a --std=93 -fexplicit -fsynopsys -C --workdir="$WORK" \
+      targets/boards/icesugar/flash_image_pkg.vhd \
+      targets/boards/icesugar/tb/coremark_cosim_tb.vhd
+  ghdl -e --std=93 -fexplicit -fsynopsys -C --syn-binding --workdir="$WORK" coremark_cosim_tb
+  ghdl -r --std=93 -fexplicit -fsynopsys -C --syn-binding --workdir="$WORK" coremark_cosim_tb \
+      --stop-time=100ms --assert-level=error
+  exit 0
+fi
 
 # 4. top-level banner testbench: drive 12 MHz, decode ser_tx, assert the banner.
 echo "=== icesugar_top_tb ==="
