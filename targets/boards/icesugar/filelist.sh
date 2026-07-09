@@ -75,9 +75,23 @@ FILES+=(
   components/misc/ice_i2c_io.vhd
   components/misc/aic_edgedet.vhd
   components/misc/aic.vhd
-  # soc_gen-generated SoC: the EBR-only cpus arch + its soc_cpus_config (binds
-  # cpu_synth_j1) must precede soc.vhd; devices.vhd precedes soc.vhd.
-  $BRD/cpus_one_ebr.vhd
+  # XIP demand-paged arch (one_cpu_xip, Task 8): spi_page_cache MMIO/window/
+  # fault core (embeds spi_flash_fill) + ice_spi_io flash pad wrapper.
+  # cpus_xip.vhd's cpu_decode_direct_pagefault configuration hardwires the
+  # DIRECT decode table (the pagefault microcode overlay is only validated
+  # against DIRECT, see cpus_xip.vhd header) regardless of this board's
+  # cpu.decode: rom design.yaml key -- so decode_table_direct.vhd must be
+  # analyzed even though $CPU/decode/decode_table_rom.vhd (spliced in from
+  # cpu_synth_files.list above) is the one soc_gen picked for cpu_synth_j1_dsp.
+  $CPU/decode/decode_table_direct.vhd
+  components/misc/spi_page_cache_pkg.vhd
+  components/misc/spi_flash_fill.vhd
+  components/misc/spi_page_cache.vhd
+  components/misc/ice_spi_io.vhd
+  # soc_gen-generated SoC: the cpus arch (one_cpu_xip) + its soc_cpus_config
+  # (binds cpu_synth_j1_dsp_pf) must precede soc.vhd; devices.vhd precedes
+  # soc.vhd.
+  $BRD/cpus_xip.vhd
   $BRD/cpus_config.vhd
   $BRD/devices.vhd
   $BRD/soc.vhd

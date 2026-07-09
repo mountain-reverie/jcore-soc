@@ -44,18 +44,96 @@ use work.spi_page_cache_pack.all;
 -- outputs tied off (single-core board), same as cpus_one_ebr.
 -- Binds cpu_core(arch)'s embedded `u_cpu : cpu` component instantiation
 -- (unconfigured -- decode_core's decode_type/reset_vector generics need an
--- explicit variant selection) to the same iCESugar J1-DSP synth variant
--- cpus_config.vhd's soc_cpus_config uses for cpus_one_ebr's core0. Declared
--- here (rather than relying on an external top-level configuration, as
--- cpus_one_ebr/cpus_config.vhd do) because core0 below is a direct entity
--- instantiation (needed for cpu_core(arch)'s new Task 4 ports/generics, which
--- the stale `cpu_core` component in cpu_core_pkg.vhd doesn't expose) --
--- direct entity instantiations can only be bound via a configuration
--- instantiation of themselves, not an enclosing top-level configuration.
+-- explicit variant selection). Declared here (rather than relying on an
+-- external top-level configuration, as cpus_one_ebr/cpus_config.vhd do)
+-- because core0 below is a direct entity instantiation (needed for
+-- cpu_core(arch)'s new Task 4 ports/generics, which the stale `cpu_core`
+-- component in cpu_core_pkg.vhd doesn't expose) -- direct entity
+-- instantiations can only be bound via a configuration instantiation of
+-- themselves, not an enclosing top-level configuration.
+--
+-- This is a HAND-EXPANDED copy of synth/cpu_synth_j1_dsp (the iCESugar J1-DSP
+-- synth variant: SB_MAC16 multiplier, DSP_ALU add/sub, EBR register file,
+-- sequential shifter) with ONE deliberate change: u_decode binds
+-- cpu_decode_direct_pagefault (the DIRECT decode table + PAGE_FAULT_ARCH=>true)
+-- instead of cpu_synth_j1_dsp's cpu_decode_rom. Rationale:
+--   * The Page Fault I/D exception microcode overlay (spec/pagefault, built via
+--     `make -C decode generate-pagefault`) is only VALIDATED against the DIRECT
+--     decode table (components/cpu/sim/pagefault_sim.sh drives cpu_sim_pagefault
+--     -> cpu_decode_direct_pagefault, sub-project A). The ROM decode table's
+--     page-fault overlay is currently non-functional (the CPU never leaves the
+--     reset microcode -> pc stuck at 0), so cpu_decode_rom + page fault does not
+--     execute at all. The DIRECT table is functionally equivalent (ROM is a
+--     LUT-area optimisation only) and is the correct choice for this cosim.
+--   * The DSP ALU / SB_MAC16 multiplier bindings are kept identical to
+--     cpu_synth_j1_dsp so the cosim exercises the same datapath the FPGA build
+--     uses (the sb_mac16_sim.vhd behavioural model binds these under sim).
+-- NB (Task 8 / synth): the real iCESugar XIP FPGA build still selects
+-- cpu_decode_rom, so the ROM-decode page-fault overlay must be fixed (or the
+-- synth variant switched to DIRECT decode) before the paged design will run on
+-- hardware; this cosim proves the paging RTL/software but not the ROM decoder.
+-- cpu_decode_direct_pagefault: DIRECT decode table + PAGE_FAULT_ARCH=>true,
+-- copied verbatim from components/cpu/core/cpu_config.vhd (the config validated
+-- by sub-project A's pagefault_sim.sh). Declared locally here rather than
+-- pulling in the whole core/cpu_config.vhd (which also references cpu_decode_rom
+-- / cpu_decode_direct_mmu / dsp_arith and would impose a large extra
+-- analysis-order burden on this reduced file list). Self-contained: needs only
+-- decode_core(arch), decode_table(direct_logic) and DEC_CORE_RESET (decode_pkg).
+configuration cpu_decode_direct_pagefault of decode is
+  for arch
+    for core : decode_core
+      use entity work.decode_core(arch)
+        generic map (
+          decode_type => DIRECT,
+          reset_vector => DEC_CORE_RESET,
+          MMU_ARCH => false,
+          PAGE_FAULT_ARCH => true);
+    end for;
+    for table : decode_table
+      use entity work.decode_table(direct_logic);
+    end for;
+  end for;
+end configuration;
+
+-- cpu_synth_j1_dsp_pf: a verbatim copy of synth/cpu_synth_j1_dsp (configuration
+-- OF cpu) with the single decode change described above (cpu_decode_rom ->
+-- cpu_decode_direct_pagefault). Declared as a configuration OF cpu (not nested
+-- inside the cpu_core config) so the component names mult/decode/datapath/
+-- register_file/shifter/dsp_arith resolve from cpu(stru)'s own declarative
+-- region -- exactly as the original cpu_synth_j1_dsp_config.vhd does (which
+-- likewise carries no use clauses).
+configuration cpu_synth_j1_dsp_pf of cpu is
+  for stru
+    for u_mult : mult
+      use entity work.mult(ice40dsp);
+    end for;
+    for u_decode : decode
+      use configuration work.cpu_decode_direct_pagefault;
+    end for;
+    for u_datapath : datapath
+      use entity work.datapath(stru)
+        generic map (EARLY_REGFILE_READ => true, DSP_ALU => true);
+      for stru
+        for u_regfile : register_file
+          use entity work.register_file(ebr);
+        end for;
+        for u_shifter : shifter
+          use entity work.shifter(seq);
+        end for;
+        for dsp_alu_gen
+          for u_dsp_arith : dsp_arith
+            use entity work.dsp_arith(ice40dsp);
+          end for;
+        end for;
+      end for;
+    end for;
+  end for;
+end configuration;
+
 configuration one_cpu_xip_core_cfg of cpu_core is
   for arch
     for u_cpu : cpu
-      use configuration work.cpu_synth_j1_dsp;
+      use configuration work.cpu_synth_j1_dsp_pf;
     end for;
   end for;
 end configuration;
@@ -104,17 +182,7 @@ architecture one_cpu_xip of cpus is
   signal pc_reg_i : cpu_data_i_t;
   signal pc_reg_o : cpu_data_o_t;
   signal pc_mmio_sel : std_logic;
-  signal pc_d_cs_n  : std_logic;
-  signal pc_d_sck   : std_logic;
-  signal pc_d_mosi  : std_logic;
-  signal pc_d_miso  : std_logic;
 
-  -- ice_spi_io pad-side signals: no cpus-entity pin ports exist yet (see
-  -- header note), so these are left internal/unconnected (Task 8).
-  signal pin_cs_n  : std_logic;
-  signal pin_sck   : std_logic;
-  signal pin_mosi  : std_logic;
-  signal pin_miso  : std_logic := '0';
 begin
   -- label is core0 (not cpu0) to avoid clashing with the synopsys group "cpu0"
   -- declared in the cpus entity, which ghdl does not skip.
@@ -186,7 +254,7 @@ begin
       page_fault_o => pc_fault,
       reg_i => pc_reg_o,
       reg_o => pc_reg_i,
-      d_cs_n => pc_d_cs_n, d_sck => pc_d_sck, d_mosi => pc_d_mosi, d_miso => pc_d_miso);
+      d_cs_n => spi_d_cs_n, d_sck => spi_d_sck, d_mosi => spi_d_mosi, d_miso => spi_d_miso);
 
   -- DEV_DDR sub-decode: the window/frame nibble (a(31:20) in {x"108",x"109"})
   -- is served by the page cache; everything else in the DEV_DDR range (the
@@ -194,12 +262,13 @@ begin
   instr_bus_i(DEV_DDR) <= pc_instr_win_i when pc_win_instr_sel = '1' else spram_ibus_i;
   data_bus_i(DEV_DDR)  <= pc_data_win_i  when pc_win_data_sel  = '1' else spram_dbus_i;
 
-  -- Config-flash SPI pins (digital side wired; pad side is internal-only
-  -- until Task 8's padring work exposes real cpus-entity pin ports).
-  spi_io : entity work.ice_spi_io
-    port map (
-      d_cs_n => pc_d_cs_n, d_sck => pc_d_sck, d_mosi => pc_d_mosi, d_miso => pc_d_miso,
-      pin_cs_n => pin_cs_n, pin_sck => pin_sck, pin_mosi => pin_mosi, pin_miso => pin_miso);
+  -- Config-flash SPI: digital side (spi_d_cs_n/sck/mosi/miso) driven straight
+  -- from the page cache's fill controller (spi_page_cache's own d_* ports)
+  -- out through the cpus entity's spi_d_* ports (Task 8). The pad/SB_IO side
+  -- (ice_spi_io) is instantiated at the padring level (design.yaml
+  -- padring-entities), not inside cpus -- see cpus.vhd header comment on
+  -- these ports for why (inout ports can't bubble through the soc.vhd
+  -- nesting level the way ordinary in/out signals do).
 
   -- Single-core board: tie off all cpu1_* outputs.
   cpu1_periph_dbus_o <= NULL_DATA_O;

@@ -56,7 +56,24 @@ entity cpus is
     cpu0_copro_o : out cop_o_t;
     cpu0_copro_i : in  cop_i_t;
     cpu1_copro_o : out cop_o_t;
-    cpu1_copro_i : in  cop_i_t);
+    cpu1_copro_i : in  cop_i_t;
+
+    -- Config-SPI flash digital signals (SG48 reused post-config XIP pins),
+    -- only driven by the one_cpu_xip architecture (iCESugar Task 8). These
+    -- are the d_* (digital-logic) side of ice_spi_io; the pad/SB_IO side is
+    -- instantiated at the padring level (design.yaml padring-entities),
+    -- mirroring the i2c_io/clkgen pattern -- ordinary in/out ports (not
+    -- inout) so they bubble through soc_gen's normal top-entity port
+    -- pass-through instead of the inout/entity-pad path (which assumes a
+    -- single hierarchy level and can't reach a port nested inside `cpus`
+    -- inside `soc`). Defaulted so every other architecture of this entity
+    -- (and every board's already soc_gen-generated soc.vhd, which
+    -- instantiates `cpus` with a fixed port map that predates these ports)
+    -- elaborates unchanged without mapping them explicitly.
+    spi_d_cs_n : out std_logic := '1';
+    spi_d_sck : out std_logic := '0';
+    spi_d_mosi : out std_logic := '0';
+    spi_d_miso : in std_logic := '0');
 
 -- synopsys translate_off
   group global_sigs : global_ports(

@@ -34,6 +34,15 @@ VHDL_FILES += targets/boards/icesugar/ice_clkgen.vhd
 VHDL_FILES += components/misc/ice_irq_in.vhd
 VHDL_FILES += components/misc/ice_i2c_io.vhd
 VHDL_FILES += components/memory/bootram_infer.vhd
+# XIP demand-paged arch (one_cpu_xip, Task 8): spi_page_cache MMIO/window/fault
+# core (embeds spi_flash_fill) + ice_spi_io flash pad wrapper, and the arch
+# itself. Analysis order: pkg, then the entities that use it, then the arch.
+VHDL_FILES += components/cpu/decode/decode_table_direct.vhd
+VHDL_FILES += components/misc/spi_page_cache_pkg.vhd
+VHDL_FILES += components/misc/spi_flash_fill.vhd
+VHDL_FILES += components/misc/spi_page_cache.vhd
+VHDL_FILES += components/misc/ice_spi_io.vhd
+VHDL_FILES += targets/boards/icesugar/cpus_xip.vhd
 
 project = $(BOARD_NAME)
 top_module = pad_ring

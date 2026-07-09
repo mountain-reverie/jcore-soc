@@ -30,3 +30,10 @@ w5500_int 34
 i2c_pad0 44
 i2c_pad1 45
 rtc_sqw 43
+
+# Config-SPI flash (reused post-config for XIP). UP5K SG48 dedicated SPI pins
+# (parked branch feat/icesugar-aic-spiboot pad_ring.vhd confirms this mapping).
+spi_cs_pin 16
+spi_sck_pin 15
+spi_mosi_pin 14
+spi_miso_pin 17

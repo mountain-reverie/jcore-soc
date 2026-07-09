@@ -28,9 +28,21 @@ padring-entities:
   i2c_io:
     entity: ice_i2c_io
     ports: { d_o: i2c_do, d_t: i2c_dt, d_i: i2c_di, pin: i2c_pad }
+  # Config-SPI flash pin wrappers for XIP: the cpus entity's spi_d_* ports
+  # (driven by the one_cpu_xip arch's embedded spi_page_cache/spi_flash_fill)
+  # route through SB_IO (ice_spi_io) to the reused config-SPI pads.
+  spi_flash:
+    entity: ice_spi_io
+    ports: { d_cs_n: spi_d_cs_n, d_sck: spi_d_sck, d_mosi: spi_d_mosi, d_miso: spi_d_miso,
+             pin_cs_n: spi_cs_pin, pin_sck: spi_sck_pin, pin_mosi: spi_mosi_pin, pin_miso: spi_miso_pin }
 
 cpu:
-  architecture: one_cpu_ebr
+  # one_cpu_xip (targets/boards/icesugar/cpus_xip.vhd): PAGE_FAULT_ARCH single-J1
+  # arch with an embedded spi_page_cache XIP demand-pager for the config-SPI
+  # flash (window/frame nibble sub-decoded off DEV_DDR above the SPRAM; MMIO
+  # regs sub-decoded off DEV_PERIPH inside the arch itself -- see cpus_xip.vhd
+  # header comment). Flash pads routed via spi_*_pin ports below.
+  architecture: one_cpu_xip
   cores: 1
   model: j1
   decode: rom
@@ -131,3 +143,16 @@ pins:
     - { match: i2c_pad0, signal: i2c_pad, entity-pad: true }   # DS3231 I2C SCL (bidir open-drain, bit0)
     - { match: i2c_pad1, signal: i2c_pad, entity-pad: true }   # DS3231 I2C SDA (bit1)
     - { match: rtc_sqw, signal: rtc_sqw_net }                # DS3231 SQW/INT -> aic irq(1)
+    # Config-SPI flash pads (SG48 dedicated config pins, reused post-config for
+    # XIP). The spi_flash padring-entity above (ice_spi_io/SB_IO) already
+    # produces pad-level signals -- straight passthrough (buff: false), no
+    # additional IO buffer inference needed. NB: soc_gen's bare-signal
+    # direction inference can't distinguish MISO (input-only) from
+    # CS#/SCK/MOSI (output-only) on ice_spi_io's uniformly-`inout` pin_* ports
+    # and defaults all four to `out` in the generated pad_ring.vhd; synth.sh
+    # patches the MISO leg back to `in` post-generation (see its Task 8
+    # comment + task-8-report.md).
+    - { match: spi_cs_pin, signal: true, buff: false }
+    - { match: spi_sck_pin, signal: true, buff: false }
+    - { match: spi_mosi_pin, signal: true, buff: false }
+    - { match: spi_miso_pin, signal: true, buff: false }

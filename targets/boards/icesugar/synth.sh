@@ -20,6 +20,19 @@ LD_LIBRARY_PATH='' perl tools/v2p < components/misc/gpio2.vhm > components/misc/
 # 2. soc_gen: regenerate the SoC + pcf.
 make icesugar TARGET=soc_gen
 
+# 2b. soc_gen direction-inference fixup (Task 8): ice_spi_io's pin_* ports are
+# uniformly `inout` (they wrap a shared SB_IO PACKAGE_PIN primitive), so
+# soc_gen's bare-signal pin-direction inference can't tell MISO (input-only,
+# OUTPUT_ENABLE tied '0' inside ice_spi_io) apart from CS#/SCK/MOSI
+# (output-only) and defaults every spi_*_pin leg in pad_ring.vhd to `out`.
+# Hand-correct just the MISO leg here post-generation (top-level port mode +
+# the assignment direction) so nextpnr sees a real input pad instead of an
+# undriven output. See task-8-report.md for the full analysis.
+sed -i \
+  -e 's/pin_spi_miso_pin : out std_logic;/pin_spi_miso_pin : in std_logic;/' \
+  -e 's/pin_spi_miso_pin <= spi_miso_pin;/spi_miso_pin <= pin_spi_miso_pin;/' \
+  targets/boards/icesugar/pad_ring.vhd
+
 # 3. file list.
 source targets/boards/icesugar/filelist.sh   # defines FILES=( ... )
 

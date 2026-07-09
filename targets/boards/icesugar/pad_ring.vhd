@@ -23,6 +23,10 @@ entity pad_ring is
         pin_rtc_sqw : in std_logic;
         pin_ser_rx : in std_logic;
         pin_ser_tx : out std_logic;
+        pin_spi_cs_pin : out std_logic;
+        pin_spi_miso_pin : in std_logic;
+        pin_spi_mosi_pin : out std_logic;
+        pin_spi_sck_pin : out std_logic;
         pin_w5500_cs : out std_logic;
         pin_w5500_int : in std_logic;
         pin_w5500_miso : in std_logic;
@@ -45,6 +49,14 @@ architecture impl of pad_ring is
     signal i2c_dt : std_logic_vector(1 downto 0);
     signal reset : std_logic;
     signal rtc_sqw_net : std_logic;
+    signal spi_cs_pin : std_logic;
+    signal spi_d_cs_n : std_logic;
+    signal spi_d_miso : std_logic;
+    signal spi_d_mosi : std_logic;
+    signal spi_d_sck : std_logic;
+    signal spi_miso_pin : std_logic;
+    signal spi_mosi_pin : std_logic;
+    signal spi_sck_pin : std_logic;
     signal uart0_rx : std_logic;
     signal uart0_tx : std_logic;
 begin
@@ -61,6 +73,10 @@ begin
             i2c_do => i2c_do,
             i2c_dt => i2c_dt,
             reset => reset,
+            spi_d_cs_n => spi_d_cs_n,
+            spi_d_miso => spi_d_miso,
+            spi_d_mosi => spi_d_mosi,
+            spi_d_sck => spi_d_sck,
             uart0_rx => uart0_rx,
             uart0_tx => uart0_tx
         );
@@ -85,6 +101,17 @@ begin
             rtc_sqw => rtc_sqw_net,
             w5500_int_n => eth_int
         );
+    spi_flash : entity work.ice_spi_io(rtl)
+        port map (
+            d_cs_n => spi_d_cs_n,
+            d_miso => spi_d_miso,
+            d_mosi => spi_d_mosi,
+            d_sck => spi_d_sck,
+            pin_cs_n => spi_cs_pin,
+            pin_miso => spi_miso_pin,
+            pin_mosi => spi_mosi_pin,
+            pin_sck => spi_sck_pin
+        );
     clk <= pin_clk;
     pin_ledb_n <= not gpio_do(2);
     pin_ledg_n <= not gpio_do(1);
@@ -92,6 +119,10 @@ begin
     rtc_sqw_net <= pin_rtc_sqw;
     uart0_rx <= pin_ser_rx;
     pin_ser_tx <= uart0_tx;
+    pin_spi_cs_pin <= spi_cs_pin;
+    spi_miso_pin <= pin_spi_miso_pin;
+    pin_spi_mosi_pin <= spi_mosi_pin;
+    pin_spi_sck_pin <= spi_sck_pin;
     pin_w5500_cs <= eth_cs(0);
     eth_int <= pin_w5500_int;
     eth_miso <= pin_w5500_miso;

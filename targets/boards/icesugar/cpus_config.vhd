@@ -1,5 +1,5 @@
 configuration soc_cpus_config of cpus is
-  for one_cpu_ebr
+  for one_cpu_xip
     for all : cpu_core
       use entity work.cpu_core(arch);
       for arch

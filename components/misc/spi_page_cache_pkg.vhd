@@ -12,7 +12,12 @@ package spi_page_cache_pack is
   constant PC_FRAME_BASE : std_logic_vector(31 downto 0) := x"10900000"; -- CPU-addressable frames
   constant PC_FRAME_TAG  : std_logic_vector(11 downto 0) := x"109";  -- frames = a(31 downto 20)=x"109"
   constant PC_MMIO_BASE  : std_logic_vector(31 downto 0) := x"ABCD0400";
-  constant PC_NFRAMES    : natural := 4;
+  -- Contingency ladder (Task 8 §Fit): the UP5K synth first landed at
+  -- ICESTORM_LC 5861/5280 (111%) + ICESTORM_RAM 44/30 (146%) with 4 frames
+  -- (8 EBR/4 comparators); dropped to 2 frames (4 EBR/2 comparators) per the
+  -- spec's first contingency rung -- see task-8-report.md for the re-run
+  -- numbers.
+  constant PC_NFRAMES    : natural := 2;
   constant PC_PAGE_BITS  : natural := 12;                 -- 4 KB pages
 
   subtype  pc_pageno_t is std_logic_vector(7 downto 0);   -- VA(19 downto 12)

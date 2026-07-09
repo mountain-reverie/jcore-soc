@@ -140,6 +140,14 @@ begin
     hit_data(i)  <= tags(i).valid when tags(i).page = data_master_o.a(19 downto 12)  else '0';
   end generate;
 
+  -- Contingency ladder rung 2 (Task 8 §Fit) was TRIED and REVERTED: forcing
+  -- hit_instr_any/hit_data_any to '0' (drop the transparent-hit read path,
+  -- fault every window access) measured a NET WORSE ICESTORM_LC (5770 vs
+  -- 5759 with rung 1 alone) -- the tag-compare/priority-encode logic this
+  -- rung targets is a small fraction of total LC; the UP5K overshoot is
+  -- dominated by the base CPU/decode/DSP/peripheral set, not spi_page_cache.
+  -- See task-8-report.md. Keeping the transparent-hit path (real function)
+  -- since disabling it bought nothing.
   hit_instr_any <= '0' when hit_instr = (hit_instr'range => '0') else '1';
   hit_data_any  <= '0' when hit_data  = (hit_data'range => '0')  else '1';
 
@@ -205,11 +213,27 @@ begin
         -- single shared read port (instr-fetch priority), 1-cycle latency.
         -- instr hit is served whenever present; a colliding data hit is
         -- withheld this cycle (data_ack low) so the CPU retries later.
+        --
+        -- ACK ON MISS TOO (Task 7 integration fix): a window access that MISSES
+        -- also gets an ack, not just a hit. A faulting instruction fetch that is
+        -- never acked would stall the CPU's fetch pipe indefinitely, so the
+        -- page-fault exception could never dispatch (the CPU would wedge
+        -- re-presenting the faulting window address forever). This mirrors the
+        -- validated sub-project-A contract (components/cpu/sim/cpu_tb.vhd): the
+        -- faulting fetch is acked in the SAME window that page_fault_o.en is
+        -- asserted, and the CPU's precise-exception squash (PAGE_FAULT_ARCH)
+        -- discards the fetched word before it retires -- so the miss-ack data is
+        -- a genuine don't-care (rd_word_r, whatever the shared read port holds).
+        -- After the handler fills the frame + validates the tag and RTEs, the
+        -- re-fetch HITS and returns real data.
         rd_word_r   <= frame_ram(rd_index);
-        instr_ack_r <= win_instr_sel_i and hit_instr_any;
+        instr_ack_r <= win_instr_sel_i;
         instr_hi_r  <= instr_master_o.a(1);
-        data_ack_r  <= (win_data_sel_i and hit_data_any) and
-                       not (win_instr_sel_i and hit_instr_any);
+        -- data window ack: served unless an instruction window access competes
+        -- for the shared read port (instr-fetch priority). Withheld only on a
+        -- real instr HIT (which actually uses the read port); an instr miss does
+        -- not read, so a co-incident data access may still be acked.
+        data_ack_r  <= win_data_sel_i and not (win_instr_sel_i and hit_instr_any);
 
         -- fault latch (priority instr-side, matches page_fault_o.kind above)
         if miss_instr = '1' then
@@ -235,11 +259,15 @@ begin
               tags(1).valid <= reg_i.d(8);
               tags(1).page  <= reg_i.d(7 downto 0);
             when SEL_TAG2 =>
-              tags(2).valid <= reg_i.d(8);
-              tags(2).page  <= reg_i.d(7 downto 0);
+              if PC_NFRAMES > 2 then
+                tags(2).valid <= reg_i.d(8);
+                tags(2).page  <= reg_i.d(7 downto 0);
+              end if;
             when SEL_TAG3 =>
-              tags(3).valid <= reg_i.d(8);
-              tags(3).page  <= reg_i.d(7 downto 0);
+              if PC_NFRAMES > 3 then
+                tags(3).valid <= reg_i.d(8);
+                tags(3).page  <= reg_i.d(7 downto 0);
+              end if;
             when SEL_STATUS =>
               if reg_i.d(0) = '1' then
                 status_pending <= '0';
@@ -277,11 +305,15 @@ begin
         reg_o_d(8)          <= tags(1).valid;
         reg_o_d(7 downto 0) <= tags(1).page;
       when SEL_TAG2 =>
-        reg_o_d(8)          <= tags(2).valid;
-        reg_o_d(7 downto 0) <= tags(2).page;
+        if PC_NFRAMES > 2 then
+          reg_o_d(8)          <= tags(2).valid;
+          reg_o_d(7 downto 0) <= tags(2).page;
+        end if;
       when SEL_TAG3 =>
-        reg_o_d(8)          <= tags(3).valid;
-        reg_o_d(7 downto 0) <= tags(3).page;
+        if PC_NFRAMES > 3 then
+          reg_o_d(8)          <= tags(3).valid;
+          reg_o_d(7 downto 0) <= tags(3).page;
+        end if;
       when SEL_FAULT_VA =>
         reg_o_d <= fault_va_r;
       when SEL_STATUS =>

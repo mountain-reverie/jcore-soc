@@ -25,6 +25,10 @@ entity soc is
         i2c_do : out std_logic_vector(1 downto 0);
         i2c_dt : out std_logic_vector(1 downto 0);
         reset : in std_logic;
+        spi_d_cs_n : out std_logic;
+        spi_d_miso : in std_logic;
+        spi_d_mosi : out std_logic;
+        spi_d_sck : out std_logic;
         uart0_rx : in std_logic;
         uart0_tx : out std_logic
     );
@@ -82,7 +86,11 @@ begin
             cpu1eni => '0',
             debug_i => debug_i,
             debug_o => open,
-            rst => reset
+            rst => reset,
+            spi_d_cs_n => spi_d_cs_n,
+            spi_d_miso => spi_d_miso,
+            spi_d_mosi => spi_d_mosi,
+            spi_d_sck => spi_d_sck
         );
     devices : entity work.devices(impl)
         port map (
