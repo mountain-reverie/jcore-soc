@@ -85,7 +85,7 @@ begin
   boot_start <= '1' when (rst = '0' and started = '0') else '0';
 
   -- Hold core0 in reset until the flash-boot load has completed.
-  core0_rst <= rst or not boot_done;
+  core0_rst <= rst or (not boot_done) or boot_active_r;
 
   -- label is core0 (not cpu0) to avoid clashing with the synopsys group "cpu0"
   -- declared in the cpus entity, which ghdl does not skip.

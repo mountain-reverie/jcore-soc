@@ -64,21 +64,15 @@ FILES+=(
   components/misc/spi2.vhd
   # Free-running 32-bit read-only cycle counter (cycle_counter device class).
   components/misc/cycle_counter.vhd
-  # soc_gen-generated SoC: the EBR-only cpus arch + its soc_cpus_config (binds
-  # cpu_synth_j1) must precede soc.vhd; devices.vhd precedes soc.vhd.
+  # Second, hand-maintained cpus architecture kept analyzable alongside the
+  # active one (not referenced by the generated cpus_config.vhd binding).
   $BRD/cpus_one_ebr.vhd
-  $BRD/cpus_config.vhd
-  $BRD/devices.vhd
-  $BRD/soc.vhd
-  # Board top (soc_gen-generated pad_ring) + 12 MHz clkgen.
-  $BRD/ice_clkgen.vhd
-  $BRD/pad_ring.vhd
-  # cpus_coremark: flash-boot arch (Task 7b). Not wired into design.yaml /
-  # soc_gen yet (Task 8), registered here so it analyzes as part of the
-  # icesugar file set. flash_boot_reader.vhd / ice_spi_io.vhd are pulled in
-  # transitively via components/misc/build.mk's file list, but this
-  # filelist.sh is hand-maintained (not build.mk-driven), so list them
-  # explicitly.
+  # cpus_coremark: flash-boot arch (Task 7b), activated via design.yaml's
+  # cpu.architecture (Task 8a) -- soc_gen's generated cpus_config.vhd binds
+  # this architecture, so its dependencies must analyze before cpus_config.vhd.
+  # flash_boot_reader.vhd / ice_spi_io.vhd are pulled in transitively via
+  # components/misc/build.mk's file list, but this filelist.sh is
+  # hand-maintained (not build.mk-driven), so list them explicitly.
   components/misc/flash_boot_reader.vhd
   components/misc/ice_spi_io.vhd
   components/memory/dev_ddr_spram_boot.vhd
@@ -86,4 +80,12 @@ FILES+=(
   components/memory/bootram_infer_coremark.vhd
   $BRD/cpus_coremark.vhd
   $BRD/cpus_coremark_config.vhd
+  # soc_gen-generated SoC: cpus_config.vhd binds cpus_coremark to
+  # cpu_synth_j1_dsp; devices.vhd precedes soc.vhd.
+  $BRD/cpus_config.vhd
+  $BRD/devices.vhd
+  $BRD/soc.vhd
+  # Board top (soc_gen-generated pad_ring) + 12 MHz clkgen.
+  $BRD/ice_clkgen.vhd
+  $BRD/pad_ring.vhd
 )
