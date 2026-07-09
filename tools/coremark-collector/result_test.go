@@ -101,3 +101,20 @@ func TestListenerReceivesGolden(t *testing.T) {
 		t.Errorf("ClkHz: got %#x, want %#x", r.ClkHz, 0x05f5e100)
 	}
 }
+
+func TestParseZeroCycle(t *testing.T) {
+	// Test that ParseResult successfully parses a packet with Cycles=0
+	// (it parses fine, but main.go guards against accepting it as a valid result)
+	b := make([]byte, 24)
+	copy(b, []byte{0x4A, 0x43, 0x4D, 0x4B})
+	b[16], b[17], b[18], b[19] = 0x00, 0x00, 0x00, 0x00 // cycles = 0
+	r, err := ParseResult(b)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if r.Cycles != 0 {
+		t.Fatalf("expected Cycles=0, got %d", r.Cycles)
+	}
+	// Verify that the result would be invalid (division by zero protection in main.go guard)
+	// The collector's main() function checks if r.Cycles == 0 and continues to ignore the packet
+}

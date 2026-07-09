@@ -33,6 +33,9 @@ func main() {
 		if perr != nil {
 			continue // ignore stray traffic
 		}
+		if r.Cycles == 0 {
+			continue // ignore zero-cycle (invalid) results
+		}
 		ips := float64(r.ClkHz) / float64(r.Cycles) * float64(r.Iterations)
 		fmt.Printf("coremark git=%#x crc=%#x iterations=%d cycles=%d iters_per_sec=%.2f\n",
 			r.GitRev, r.CRC, r.Iterations, r.Cycles, ips)
