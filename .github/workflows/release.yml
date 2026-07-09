@@ -1,0 +1,59 @@
+name: release
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Same toolchain container board-synth.yml uses to build FPGA bitstreams
+    # (yosys/nextpnr-ice40 for the icesugar UP5K target). synth.sh runs a
+    # fit+timing gate for icesugar and exits nonzero on a regression, so a
+    # release that doesn't fit will FAIL this job — that is intentional:
+    # we don't want to publish a bitstream that doesn't actually fit the
+    # board. Task 12 is expected to gate this further upstream in CI.
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/jcore-cpu-ci:latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Regenerate SoC (soc_gen)
+        run: |
+          # Checkout runs as a different user than the container; allow git
+          # ops (matches board-synth.yml's bitstream job).
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          make icesugar TARGET=soc_gen
+
+      - name: Build icesugar CoreMark-runner bitstream
+        run: ./targets/boards/icesugar/synth.sh
+
+      - name: Build mkflash (linux/amd64)
+        working-directory: tools/mkflash
+        run: GOOS=linux GOARCH=amd64 go build -o ../../mkflash .
+
+      - name: Build coremark-collector (linux/amd64)
+        working-directory: tools/coremark-collector
+        run: GOOS=linux GOARCH=amd64 go build -o ../../collector .
+
+      - name: Package coremark payload sources
+        run: tar czf payload-src.tar.gz -C targets/boards/icesugar/rom coremark
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            targets/boards/icesugar/build/icesugar.bin
+            mkflash
+            collector
+            payload-src.tar.gz
