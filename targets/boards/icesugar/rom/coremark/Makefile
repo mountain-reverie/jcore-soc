@@ -16,7 +16,7 @@ OBJDUMP := $(CROSS_COMPILE)objdump
 CFLAGS := -m2 -mb -O2 -ffreestanding -fno-builtin -nostdlib -Wall \
           -I. -Ivendor -DITERATIONS=1000 -DGIT_REV=$(GIT_REV)
 LDSCRIPT := coremark.ld
-OBJS := crt0.o core_portme.o \
+OBJS := crt0.o core_portme.o eth_report.o \
         vendor/core_main.o vendor/core_list_join.o vendor/core_matrix.o \
         vendor/core_state.o vendor/core_util.o
 coremark.elf: $(OBJS) $(LDSCRIPT)

@@ -9,6 +9,16 @@
 #define CMK_CLK_HZ        12000000u
 #define CMK_COLLECTOR_PORT 47000u
 
+/* Board network identity, reused verbatim from banner.c's hardware-tested
+   W5500 config (targets/boards/icesugar/rom/banner.c w5500_init_ping()) so
+   the board keeps a single network identity across banner and coremark
+   payloads. */
+#define CMK_BOARD_MAC     {0x02,0x00,0x00,0x00,0x00,0x01}
+#define CMK_BOARD_IP      {192,168,1,10}
+#define CMK_SUBNET        {255,255,255,0}
+#define CMK_GATEWAY       {192,168,1,1}
+#define CMK_COLLECTOR_IP  {192,168,1,1}   /* runner host = gateway; adjust here only */
+
 struct coremark_result {
   uint32_t magic;
   uint32_t git_rev;
