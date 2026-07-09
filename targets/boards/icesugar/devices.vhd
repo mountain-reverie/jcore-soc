@@ -16,23 +16,15 @@ use work.data_bus_pack.all;
 entity devices is
     port (
         clk_sys : in std_logic;
-        cpu0_data_master_ack : in std_logic;
-        cpu0_data_master_en : in std_logic;
-        cpu0_event_i : out cpu_event_i_t;
-        cpu0_event_o : in cpu_event_o_t;
         cpu0_periph_dbus_i : out cpu_data_i_t;
         cpu0_periph_dbus_o : in cpu_data_o_t;
         cpu1_periph_dbus_i : out cpu_data_i_t;
         cpu1_periph_dbus_o : in cpu_data_o_t;
         eth_clk : out std_logic;
         eth_cs : out std_logic_vector(1 downto 0);
-        eth_irq_vec : in std_logic_vector(7 downto 0);
         eth_miso : in std_logic;
         eth_mosi : out std_logic;
         gpio_do : out std_logic_vector(2 downto 0);
-        i2c_di : in std_logic_vector(1 downto 0);
-        i2c_do : out std_logic_vector(1 downto 0);
-        i2c_dt : out std_logic_vector(1 downto 0);
         reset : in std_logic;
         uart0_rx : in std_logic;
         uart0_tx : out std_logic
@@ -71,7 +63,6 @@ architecture impl of devices is
         end if;
         return NONE;
     end;
-    signal irqs0 : std_logic_vector(7 downto 0) := (others => '0');
 begin
     -- Disconnected peripheral buses
     cpu1_periph_dbus_i <= loopback_bus(cpu1_periph_dbus_o);
@@ -119,20 +110,6 @@ begin
             d_t => open,
             db_i => devs_bus_o(DEV_GPIO0),
             db_o => devs_bus_i(DEV_GPIO0),
-            irq => open,
-            rst => reset
-        );
-    i2c : entity work.gpio2(arch)
-        generic map (
-            width => 2
-        )
-        port map (
-            clk => clk_sys,
-            d_i => i2c_di,
-            d_o => i2c_do,
-            d_t => i2c_dt,
-            db_i => devs_bus_o(DEV_I2C),
-            db_o => devs_bus_i(DEV_I2C),
             irq => open,
             rst => reset
         );

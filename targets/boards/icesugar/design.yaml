@@ -58,13 +58,6 @@ devices:
     # register/mux/toggle/set/clear datapath lanes to reclaim LCs on the up5k.
     generics: { width: 3 }
     ports: { d_o: gpio_do, d_i: gpio_di }
-  # Bit-banged I2C master for the DS3231 RTC: a 2-bit tristate gpio2 (bit0=SCL,
-  # bit1=SDA) driven open-drain through ice_i2c_io. Software bit-bangs I2C.
-  - class: gpio2
-    name: i2c
-    base-addr: 0xabcd0300
-    generics: { width: 2 }
-    ports: { d_o: i2c_do, d_t: i2c_dt, d_i: i2c_di }
   # W5500 Ethernet controller (WIZ850io PMOD) driven over SPI. Replaces the
   # PHY-less 10BASE-T eth: the W5500 does PHY+MAC+TCP/IP in silicon; the J1
   # drives its registers via this spi master. num_cs=1 (single W5500).
