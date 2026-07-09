@@ -15,20 +15,16 @@ use work.cpu2j0_pack.all;
 entity pad_ring is
     port (
         pin_clk : in std_logic;
-        pin_i2c_pad0 : inout std_logic;
-        pin_i2c_pad1 : inout std_logic;
         pin_ledb_n : out std_logic;
         pin_ledg_n : out std_logic;
         pin_ledr_n : out std_logic;
-        pin_rtc_sqw : in std_logic;
         pin_ser_rx : in std_logic;
         pin_ser_tx : out std_logic;
         pin_spi_cs_pin : out std_logic;
-        pin_spi_miso_pin : in std_logic;
+        pin_spi_miso_pin : out std_logic;
         pin_spi_mosi_pin : out std_logic;
         pin_spi_sck_pin : out std_logic;
         pin_w5500_cs : out std_logic;
-        pin_w5500_int : in std_logic;
         pin_w5500_miso : in std_logic;
         pin_w5500_mosi : out std_logic;
         pin_w5500_sclk : out std_logic
@@ -39,8 +35,6 @@ architecture impl of pad_ring is
     signal clk_sys : std_logic;
     signal eth_clk : std_logic;
     signal eth_cs : std_logic_vector(1 downto 0);
-    signal eth_int : std_logic;
-    signal eth_irq_vec : std_logic_vector(7 downto 0);
     signal eth_miso : std_logic;
     signal eth_mosi : std_logic;
     signal fl_cs_n : std_logic;
@@ -48,9 +42,6 @@ architecture impl of pad_ring is
     signal fl_mosi : std_logic;
     signal fl_sck : std_logic;
     signal gpio_do : std_logic_vector(2 downto 0);
-    signal i2c_di : std_logic_vector(1 downto 0);
-    signal i2c_do : std_logic_vector(1 downto 0);
-    signal i2c_dt : std_logic_vector(1 downto 0);
     signal reset : std_logic;
     signal spi_cs_pin : std_logic;
     signal spi_miso_pin : std_logic;
@@ -64,7 +55,6 @@ begin
             clk_sys => clk_sys,
             eth_clk => eth_clk,
             eth_cs => eth_cs,
-            eth_irq_vec => eth_irq_vec,
             eth_miso => eth_miso,
             eth_mosi => eth_mosi,
             fl_cs_n => fl_cs_n,
@@ -72,9 +62,6 @@ begin
             fl_mosi => fl_mosi,
             fl_sck => fl_sck,
             gpio_do => gpio_do,
-            i2c_di => i2c_di,
-            i2c_do => i2c_do,
-            i2c_dt => i2c_dt,
             reset => reset,
             uart0_rx => uart0_rx,
             uart0_tx => uart0_tx
@@ -101,15 +88,13 @@ begin
     pin_ledb_n <= not gpio_do(2);
     pin_ledg_n <= not gpio_do(1);
     pin_ledr_n <= not gpio_do(0);
-    rtc_sqw_net <= pin_rtc_sqw;
     uart0_rx <= pin_ser_rx;
     pin_ser_tx <= uart0_tx;
     pin_spi_cs_pin <= spi_cs_pin;
-    spi_miso_pin <= pin_spi_miso_pin;
+    pin_spi_miso_pin <= spi_miso_pin;
     pin_spi_mosi_pin <= spi_mosi_pin;
     pin_spi_sck_pin <= spi_sck_pin;
     pin_w5500_cs <= eth_cs(0);
-    eth_int <= pin_w5500_int;
     eth_miso <= pin_w5500_miso;
     pin_w5500_mosi <= eth_mosi;
     pin_w5500_sclk <= eth_clk;

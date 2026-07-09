@@ -52,18 +52,6 @@
 			reg = <0x0 0x10>; // ABCD0000-ABCD000F
 		};
 
-		gpio2@300 {
-			compatible = "jcore,gpio2";
-			reg = <0x300 0x10>; // ABCD0300-ABCD030F
-		};
-
-		interrupt-controller {
-			#interrupt-cells = <1>;
-			compatible = "jcore,aic1";
-			interrupt-controller;
-			reg = <0x200 0x40>; // ABCD0200-ABCD023F
-		};
-
 		serial {
 			compatible = "jcore,uartlite", "xlnx,xps-uartlite-1.00.a";
 			device_type = "serial";

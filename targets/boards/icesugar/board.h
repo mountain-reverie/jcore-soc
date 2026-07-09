@@ -18,28 +18,12 @@ struct cycle_counter_regs {
 };
 #define DEVICE_CYCCNT ((volatile struct cycle_counter_regs *) DEVICE_CYCCNT_ADDR)
 
-struct aic_regs {
-  uint32_t ctrl0;
-  uint32_t brkadd;
-  uint32_t ilevels;
-  uint32_t ctrl1;
-  uint32_t pit_throttle;
-  uint32_t pit_counter;
-  uint32_t clock_period; // read-only
-  uint32_t ignore0;
-  uint32_t rtc_sec_hi;
-  uint32_t rtc_sec_lo;
-  uint32_t rtc_nsec;
-};
-#define DEVICE_AIC0 ((volatile struct aic_regs *) DEVICE_AIC0_ADDR)
-
 struct gpio2_regs {
   uint32_t value;
   uint32_t in_out;
   uint32_t toggle;
 };
 #define DEVICE_GPIO0 ((volatile struct gpio2_regs *) DEVICE_GPIO0_ADDR)
-#define DEVICE_I2C ((volatile struct gpio2_regs *) DEVICE_I2C_ADDR)
 
 struct spi_regs {
   uint32_t ctrl; // only byte 3
