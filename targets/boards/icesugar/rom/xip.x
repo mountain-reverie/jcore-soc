@@ -49,18 +49,22 @@ SECTIONS {
     *(.rodata) *(.rodata.*)
   } > WINDOW
 
-  /* Resident data: xip_test.c has no initialised globals, so .data is
-     expected empty; keep it in SPRAM with VMA==LMA (no copy needed) in
-     case that ever changes. */
-  .data 0x10000000 : { *(.data) *(.data.*) } > SPRAM
+  /* Resident data in SPRAM. Force the location counter to SPRAM explicitly:
+     an empty output section with only a `region` directive does NOT drag the
+     bare `.` counter to the region base, so __bss_start/__bss_end computed
+     from `.` would otherwise inherit the WINDOW address left by .text
+     (0x108xxxxx) instead of SPRAM -- harmless only because bss is empty, but
+     wrong. Setting `. = 0x10000000` here makes the symbols correct SPRAM. */
+  . = 0x10000000;
+  .data : { *(.data) *(.data.*) } > SPRAM
 
   . = ALIGN(4); __bss_start = .;
   .bss (NOLOAD) : { *(.bss) *(.bss.*) *(COMMON) } > SPRAM
   . = ALIGN(4); __bss_end = .;
 
   . = ALIGN(8);
+  __stack_top = . + 4K;
   .stack (NOLOAD) : { . += 4K; } > SPRAM
-  __stack_top = .;
 
   /DISCARD/ : { *(.comment) *(.note*) }
 }

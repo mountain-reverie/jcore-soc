@@ -39,5 +39,13 @@ xip_test.elf: xip_handler.s xip_test.c $(XIP_LDSCRIPT)
 xip_test.img: xip_test.elf
 	$(OBJCOPY) -O binary --only-section=.text $< $@
 
+# The resident boot-EBR set (reset vectors + crt0 + _pf_handler + the
+# round-robin victim counter): .vectors/.boot.text/.boot.data, VMA 0x0..0xf8
+# (248 bytes). This is what actually gets packed into bootram_infer's
+# boot_image_pkg.vhd (via tools/genbootpkg) for the Task-7 cosim -- NOT
+# xip_test.img (that is the flash payload, see above).
+xip_boot.bin: xip_test.elf
+	$(OBJCOPY) -O binary --only-section=.vectors --only-section=.boot.text --only-section=.boot.data $< $@
+
 clean:
-	rm -f boot.elf boot.bin xip_test.elf xip_test.img
+	rm -f boot.elf boot.bin xip_test.elf xip_test.img xip_boot.bin
