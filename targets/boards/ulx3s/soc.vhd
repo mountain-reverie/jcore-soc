@@ -59,6 +59,7 @@ architecture impl of soc is
     signal ddr_bus_o : cpu_data_o_t;
     signal debug_i : cpu_debug_i_t;
     signal dma_dbus_o : bus_ddr_o_t;
+    signal fl_miso : std_logic;
 begin
     aic_irq_gen : entity work.aic_irq_gen(rtl)
         port map (
@@ -103,6 +104,10 @@ begin
             cpu1eni => '0',
             debug_i => debug_i,
             debug_o => open,
+            fl_cs_n => open,
+            fl_miso => fl_miso,
+            fl_mosi => open,
+            fl_sck => open,
             rst => reset
         );
     ddr_ram_mux : configuration work.ddr_ram_mux_one_cpu_idcache_fpga
