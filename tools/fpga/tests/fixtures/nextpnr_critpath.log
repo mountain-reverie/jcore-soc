@@ -1,0 +1,23 @@
+Info: Critical path report for clock 'slow_clk' (posedge -> negedge):
+Info:     curr    total
+Info:      0.5     0.5  Source src_reg_TRELLIS_FF_Q.Q
+Info:      2.0     2.5    Net n0 (10,10) -> (20,20)
+Info:                      Sink mid_lut.A
+Info:      3.0     5.5  Setup sink_ram.CEB
+Info:  1.0 ns logic, 4.5 ns routing
+Info: Max frequency for clock 'slow_clk': 99.00 MHz (PASS at 12.00 MHz)
+Info: Critical path report for clock 'slow_clk' (posedge -> negedge):
+Info:     curr    total
+Info:      0.5     0.5  Source real_src_TRELLIS_FF_Q.Q
+Info:      2.0     2.5    Net n1 (10,10) -> (90,90)
+Info:                      Sink mid2_lut.A
+Info:      0.5     5.5  Source mid2_lut.F
+Info:      3.0     8.5    Net n2 (90,90) -> (95,95)
+Info:                      Sink real_sink_ram.CEB
+Info:  1.2 ns logic, 8.0 ns routing
+Info: Critical path report for cross-domain path 'posedge slow_clk' -> '<async>':
+Info:      0.5     0.5  Source bogus_reg.Q
+Info:                      Sink bogus_pin.T
+Info:  0.5 ns logic, 4.0 ns routing
+Info: Max frequency for clock 'slow_clk': 20.00 MHz (PASS at 12.00 MHz)
+Info: Max frequency for clock 'fast_clk': 200.00 MHz (PASS at 100.00 MHz)

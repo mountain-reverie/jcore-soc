@@ -42,6 +42,35 @@ class TestParseNextpnr(unittest.TestCase):
         self.assertTrue(emit_metrics.timing_failed(text))
 
 
+class TestParseCriticalPath(unittest.TestCase):
+    def test_binding_clock_final_setup_path(self):
+        crit = emit_metrics.parse_critical_path(read("nextpnr_critpath.log"))
+        # slow_clk (20 MHz) is binding over fast_clk (200 MHz).
+        self.assertEqual(crit["clock"], "slow_clk")
+        self.assertAlmostEqual(crit["mhz"], 20.00)
+        # The LAST setup block for the binding clock (not the superseded 99 MHz
+        # estimate) and not the trailing cross-domain '<async>' block.
+        self.assertEqual(crit["source"], "real_src_TRELLIS_FF_Q.Q")
+        self.assertEqual(crit["sink"], "real_sink_ram.CEB")
+        self.assertAlmostEqual(crit["logic_ns"], 1.2)
+        self.assertAlmostEqual(crit["routing_ns"], 8.0)
+
+    def test_none_when_absent(self):
+        self.assertIsNone(emit_metrics.parse_critical_path("no timing here\n"))
+
+    def test_rides_along_in_doc(self):
+        parsed = emit_metrics.parse_nextpnr_log(read("nextpnr_ecp5.log"))
+        parsed["critical_path"] = {"clock": "x", "mhz": 1.0, "source": "s",
+                                   "sink": "k", "logic_ns": 0.1, "routing_ns": 0.2}
+        doc = emit_metrics.build_ecp5(parsed, board="ulx3s", commit="c")
+        self.assertEqual(doc["critical_path"]["sink"], "k")
+        # Absent when not parsed.
+        doc2 = emit_metrics.build_ecp5(
+            emit_metrics.parse_nextpnr_log(read("nextpnr_ecp5.log")),
+            board="ulx3s", commit="c")
+        self.assertNotIn("critical_path", doc2)
+
+
 class TestBuildDoc(unittest.TestCase):
     def test_canonical_doc(self):
         doc = emit_metrics.build_ecp5(

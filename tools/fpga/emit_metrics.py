@@ -67,6 +67,63 @@ def parse_nextpnr_ice40_log(text):
     return {"util": util, "fmax": fmax}
 
 
+def parse_critical_path(text):
+    """nextpnr-ecp5 stdout -> diagnostic summary of the *binding* clock's final
+    setup critical path, or None if not present.
+
+    The binding clock is the one with the lowest final Fmax (matching build_ecp5's
+    reported figure). nextpnr prints its "Critical path report for clock '<name>'
+    (edge -> edge):" block several times (intermediate estimates, then the final
+    post-route one); we keep the LAST block for the binding clock and extract the
+    source register, the final sink, and the logic/routing split. This is what a
+    reader needs to see *where* the limit is without scraping raw CI job logs.
+
+    Returns e.g. {"clock": "...", "mhz": 23.83, "source": "...FF.Q",
+    "sink": "...CEB", "logic_ns": 0.8, "routing_ns": 5.2}.
+    """
+    # Final Fmax per clock (last wins), then pick the binding (slowest) one.
+    fmax = {}
+    for line in text.splitlines():
+        m = re.search(r"Max frequency for clock '([^']+)':\s+([\d.]+)\s*MHz", line)
+        if m:
+            fmax[m.group(1)] = float(m.group(2))
+    if not fmax:
+        return None
+    binding = min(fmax, key=fmax.get)
+
+    # Walk the lines, tracking the last setup-path block for the binding clock.
+    lines = text.splitlines()
+    hdr = re.compile(r"Critical path report for clock '([^']+)' \((?:pos|neg)edge")
+    start = None
+    for i, line in enumerate(lines):
+        m = hdr.search(line)
+        if m and m.group(1) == binding:
+            start = i
+    if start is None:
+        return None
+
+    source = sink = None
+    logic_ns = routing_ns = None
+    for line in lines[start + 1:]:
+        # Stop at the end of this block: the next report header (e.g. a
+        # cross-domain '<async>' block) or the closing Fmax verdict. Otherwise
+        # the sink/logic/routing would bleed into the following block.
+        if "Critical path report for" in line or "Max frequency for clock" in line:
+            break
+        m = re.search(r"\bSource (\S+)", line)
+        if m and source is None:
+            source = m.group(1)
+        m = re.search(r"\bSink (\S+)", line)
+        if m:
+            sink = m.group(1)
+        m = re.search(r"([\d.]+) ns logic, ([\d.]+) ns routing", line)
+        if m:
+            logic_ns, routing_ns = float(m.group(1)), float(m.group(2))
+    return {"clock": binding, "mhz": round(fmax[binding], 2),
+            "source": source, "sink": sink,
+            "logic_ns": logic_ns, "routing_ns": routing_ns}
+
+
 def parse_yosys_stat(text):
     """yosys `stat` (post synth_ice40) -> {cell: count}.
 
@@ -131,8 +188,14 @@ def build_ecp5(parsed, board, commit, variant=None):
     if fmax:
         metrics_.append(_metric(_vname(board, variant, "Fmax"), "MHz",
                                 round(min(fmax.values()), 2), "bigger"))
-    return {"target": "ecp5-lfe5u-85f", "board": board, "commit": commit,
-            "metrics": metrics_}
+    doc = {"target": "ecp5-lfe5u-85f", "board": board, "commit": commit,
+           "metrics": metrics_}
+    crit = parsed.get("critical_path")
+    if crit:
+        # Diagnostic only: to_gha_bench.convert() reads doc["metrics"] and ignores
+        # other keys, so this rides along without touching the charted series.
+        doc["critical_path"] = crit
+    return doc
 
 
 def build_ice40(stat, parsed_pnr, board, commit, variant=None):
@@ -185,7 +248,10 @@ def main(argv=None):
     if a.flow == "ecp5":
         if not a.nextpnr:
             p.error("--nextpnr is required for ecp5 flow")
-        doc = build_ecp5(parse_nextpnr_log(_read(a.nextpnr)), a.board, a.commit, a.variant)
+        pnr_text = _read(a.nextpnr)
+        parsed = parse_nextpnr_log(pnr_text)
+        parsed["critical_path"] = parse_critical_path(pnr_text)
+        doc = build_ecp5(parsed, a.board, a.commit, a.variant)
     elif a.flow == "ice40":
         if not a.yosys_stat:
             p.error("--yosys-stat is required for ice40 flow")
