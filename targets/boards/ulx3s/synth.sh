@@ -69,9 +69,19 @@ yosys -m ghdl -p "$GHDL_BASE -e pad_ring; synth_ecp5 -top pad_ring; check -asser
 #    The full M2 SoC (CPU+caches+SDRAM+AIC+GPIO) is congestion-limited on the
 #    -6 85F: bias placement toward timing (--placer-heap-timingweight, default
 #    23) to recover Fmax on the CPU cache-load critical path.
+#
+#    Dual-core variants add a pre-place floorplan: the sdram_clk limiter is a
+#    half-cycle path through the shared-RAM lock arbiter that the router
+#    otherwise spreads across the whole die. floorplan_dual.py co-locates that
+#    lock cluster into a central region (~+6% Fmax, placement-only). Single-core
+#    variants have no cross-core lock path, so they don't get it.
+FLOORPLAN=()
+case "$VARIANT" in
+  *-dual) FLOORPLAN=(--pre-place targets/boards/ulx3s/floorplan_dual.py) ;;
+esac
 nextpnr-ecp5 --85k --package CABGA381 \
   --json "$OUT/ulx3s.json" --lpf targets/boards/ulx3s/ulx3s.lpf \
-  --placer-heap-timingweight 35 \
+  --placer-heap-timingweight 35 "${FLOORPLAN[@]}" \
   --timing-allow-fail --textcfg "$OUT/ulx3s.config" 2>&1 | tee "$OUT/nextpnr.log"
 ecppack "$OUT/ulx3s.config" "$OUT/ulx3s.bit"
 echo "built $OUT/ulx3s.bit"
