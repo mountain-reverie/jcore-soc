@@ -50,6 +50,33 @@ func CPUSynthConfig(model, decode, mult string) (string, map[string]string, []st
 	return e.cfg, e.generics, e.files, nil
 }
 
+// cpuSynthFPGAOpt maps (model, decode, mult) to the FPGA-optimised cpu_synth
+// configuration -- same core, but with the register file in ECP5 block RAM
+// (register_file(ebr)) instead of ~1.4k LUT4 of distributed RAM. Used for the
+// FPGA-optimised core (core0) of an asymmetric dual; the peer core keeps the
+// standard (portable / ASIC-representative) config from cpuSynth. The extra
+// files are the ebr regfile arch + the *_ebr synth config; the shared decode
+// tables come from the standard config's files (analyzed once).
+var cpuSynthFPGAOpt = map[[3]string]struct {
+	cfg      string
+	generics map[string]string
+	files    []string
+}{
+	{"j4", "rom", ""}: {"cpu_synth_j4_rom_ebr",
+		map[string]string{"PRIV_ARCH": "true", "MMU_ARCH": "true"},
+		[]string{"core/register_file_ebr.vhd", "synth/cpu_synth_j4_rom_ebr_config.vhd"}},
+}
+
+// CPUSynthConfigFPGAOpt returns the FPGA-optimised cpu_synth config for a
+// (model, decode, mult) triple, or an error if no FPGA-optimised variant exists.
+func CPUSynthConfigFPGAOpt(model, decode, mult string) (string, map[string]string, []string, error) {
+	e, ok := cpuSynthFPGAOpt[[3]string{model, decode, mult}]
+	if !ok {
+		return "", nil, nil, fmt.Errorf("no FPGA-optimised cpu variant for model/decode/mult %q/%q/%q", model, decode, mult)
+	}
+	return e.cfg, e.generics, e.files, nil
+}
+
 var ramMux = map[[2]any]struct {
 	cfg   string
 	files []string

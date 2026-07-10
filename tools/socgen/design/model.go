@@ -297,6 +297,12 @@ type CPU struct {
 	Mult         string `yaml:"mult"`         // "" (native) | dsp (iCE40 SB_MAC16)
 	Copro        bool   `yaml:"copro"`
 	Cache        string `yaml:"cache"` // none | i | id
+	// FpgaOptCore0: asymmetric dual (cores==2). Bind core0 to the FPGA-optimised
+	// config (register file in ECP5 block RAM) while core1 keeps the standard
+	// (portable / ASIC-representative) config -- reclaiming LUTs + congestion on
+	// core0 while core1 validates the ASIC-faithful register-file logic. Mirrors
+	// the turtle board's per-core rodimix split.
+	FpgaOptCore0 bool `yaml:"fpga-opt-core0"`
 }
 
 type Reg struct {

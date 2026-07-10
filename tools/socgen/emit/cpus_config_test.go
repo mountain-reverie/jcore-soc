@@ -77,3 +77,53 @@ func TestCPUsConfigReparses(t *testing.T) {
 		t.Fatalf("generated cpus config does not re-parse: %v\n%s", perr, src)
 	}
 }
+
+func TestCPUsConfigAsymmetricEBR(t *testing.T) {
+	// fpga-opt-core0: core0 binds the FPGA-optimised (ebr) config, core1 the
+	// standard config, each with a distinct CORE_ID so the two cpu instances get
+	// distinct ghdl->yosys module names.
+	_, src, files, err := CPUsConfig(&design.CPU{
+		Architecture: "two_cpu_m0", Cores: 2, Model: "j4", Decode: "rom", Cache: "id",
+		FpgaOptCore0: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"for core0 : cpu_core",
+		"for core1 : cpu_core",
+		"use configuration work.cpu_synth_j4_rom_ebr",
+		"use configuration work.cpu_synth_j4_rom\n", // core1 standard (not _ebr)
+		"CORE_ID => 0",
+		"CORE_ID => 1",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("asymmetric config missing %q:\n%s", want, src)
+		}
+	}
+	if strings.Contains(src, "for all : cpu_core") {
+		t.Errorf("asymmetric config must be per-core, not `for all`:\n%s", src)
+	}
+	// ebr regfile + its synth config must be in the filelist.
+	for _, want := range []string{"core/register_file_ebr.vhd", "synth/cpu_synth_j4_rom_ebr_config.vhd"} {
+		found := false
+		for _, f := range files {
+			if f == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("asymmetric filelist missing %q; got %v", want, files)
+		}
+	}
+}
+
+func TestCPUsConfigAsymmetricRequiresTwoCores(t *testing.T) {
+	_, _, _, err := CPUsConfig(&design.CPU{
+		Architecture: "one_cpu_m0", Cores: 1, Model: "j4", Decode: "rom", Cache: "id",
+		FpgaOptCore0: true,
+	})
+	if err == nil {
+		t.Errorf("fpga-opt-core0 with cores=1 must error")
+	}
+}
