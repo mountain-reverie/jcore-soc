@@ -49,10 +49,20 @@ function boot() {
     .catch(function (e) { console.error("no benchmark data available", e); });
 }
 
+// Renamed variants: fold the historical metric name into the current one so the
+// series stays continuous across the rename (data before the rename was emitted
+// under the old label). j2-direct-dual -> j2-dual, j4-rom-dual -> j4-dual.
+var VARIANT_ALIAS = {
+  "j2-direct-dual": "j2-dual",
+  "j4-rom-dual": "j4-dual",
+};
+
 // Variant suffix: "ulx3s [j4-rom]/LUT4" (after the " · ") -> "j4-rom"; "" if none.
+// Renamed variants are folded to their current label via VARIANT_ALIAS.
 function variantOf2(name) {
   var m = /\[([^\]]+)\]\//.exec(name || "");
-  return m ? m[1] : "";
+  if (!m) return "";
+  return VARIANT_ALIAS[m[1]] || m[1];
 }
 // Chart key: strip the " [variant]" so all variants of a board+metric group on one chart.
 function baseName2(name) {
