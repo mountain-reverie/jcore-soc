@@ -86,6 +86,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <libgen.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -337,6 +338,41 @@ skip_whitespace(const char *p)
 
 
 /*
+ * exec a test program, given its path relative to (or absolute from) the
+ * runtests process's original working directory.  GHDL mcode test wrapper
+ * scripts invoke `ghdl -r <entity>` against a work library that only exists
+ * in the test's own directory, so we chdir there before exec'ing rather than
+ * running the test from wherever runtests itself was started.  Only
+ * returns on failure (mirroring execl's -1 return).
+ */
+static int
+exec_test_chdir(const char *path)
+{
+    char *dir_copy, *base_copy, *dir, *base, *rel;
+    int ret;
+
+    dir_copy = xstrdup(path);
+    base_copy = xstrdup(path);
+    dir = dirname(dir_copy);
+    base = basename(base_copy);
+
+    if (chdir(dir) != 0) {
+        free(dir_copy);
+        free(base_copy);
+        return -1;
+    }
+
+    rel = xmalloc(strlen(base) + 3);
+    sprintf(rel, "./%s", base);
+    ret = execl(rel, rel, (char *) 0);
+    free(rel);
+    free(dir_copy);
+    free(base_copy);
+    return ret;
+}
+
+
+/*
  * Start a program, connecting its stdout to a pipe on our end and its stderr
  * to /dev/null, and storing the file descriptor to read from in the two
  * argument.  Returns the PID of the new process.  Errors are fatal.
@@ -385,7 +421,7 @@ test_start(const char *path, int *fd)
 	    _exit(CHILDERR_PGID);
 
         /* Now, exec our process. */
-        if (execl(path, path, (char *) 0) == -1)
+        if (exec_test_chdir(path) == -1)
             _exit(CHILDERR_EXEC);
     } else {
         /* In parent.  Close the extra file descriptor. */
@@ -1199,7 +1235,7 @@ test_single(const char *program, const char *source, const char *build)
         }
 
         /* Now, exec our process. */
-        if (execl(ts.path, ts.path, (char *) 0) == -1) {
+        if (exec_test_chdir(ts.path) == -1) {
             printf("ABORTED (execution failed) %m\n");
             _exit(CHILDERR_EXEC);
         }
