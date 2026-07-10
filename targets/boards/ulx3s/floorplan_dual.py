@@ -1,6 +1,6 @@
 # nextpnr-ecp5 --pre-place floorplan for the ULX3S dual-core variants.
 #
-# The dual-core (j2-direct-dual / j4-rom-dual) Fmax is limited by a half-cycle
+# The dual-core (j2-dual / j4-dual) Fmax is limited by a half-cycle
 # path on sdram_clk (shared_ram is clocked on the falling edge):
 #
 #   coreN.data_master -> core0/core1 u_datapath.mem[lock]
@@ -17,7 +17,7 @@
 # (the cluster is ~85% of all cells; caging it all just reproduces full-die
 # placement and helps nothing).
 #
-# Measured on j4-rom-dual (commit under test): 23.83 MHz -> 25.18 MHz (+5.7%),
+# Measured on j4-dual (commit under test): 23.83 MHz -> 25.18 MHz (+5.7%),
 # well above the +/-0.5 MHz seed noise. This is a placement-only, no-RTL change;
 # the real structural fix is to pipeline the arbiter path so it is no longer a
 # half-cycle constraint.
