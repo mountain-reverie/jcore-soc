@@ -35,6 +35,12 @@ architecture two_cpu_m0 of cpus is
   signal cpu0ram_a_en : std_logic;
   signal cpu1ram_a_en : std_logic;
 
+  -- A2 (fix/dual-shared-ram-arb-pipeline): 1-cycle-delayed shared_ram ack that
+  -- accompanies moving shared_ram from the falling edge (clkn) to the rising
+  -- edge (clk). See the shared_ram instance and the ack process below.
+  signal cpu0_ram_ack_r : std_logic;
+  signal cpu1_ram_ack_r : std_logic;
+
   signal clkn : std_logic;
 
   signal cpu0_lock : std_logic;
@@ -186,7 +192,11 @@ begin
 
   -- 2KB of shared RAM
 
-  -- caution: 0.5cycle SRAM access critical path. (caution again)
+  -- A2: shared_ram is now clocked on the rising edge (clk), NOT clkn -- this
+  -- removes the historical 0.5-cycle SRAM access critical path (the deep
+  -- datapath this_c cone + the lock arbiter no longer have to settle within a
+  -- half cycle). Read data lands one cycle later; the ack below is delayed one
+  -- cycle to match, so every shared_ram access costs +1 wait state.
 
   shared_ram : entity work.ram_2rw(inferred)
     generic map (
@@ -194,10 +204,10 @@ begin
       SUBWORD_NUM   => 4,
       ADDR_WIDTH    => 9)
     port map (
-      rst0 => rst, clk0 => clkn,
+      rst0 => rst, clk0 => clk,
       en0  => cpu0_ram_o.en, wr0 => cpu0_ram_o.wr, we0 => cpu0_ram_o.we,
       a0   => cpu0_ram_o.a(10 downto 2), dw0 => cpu0_ram_o.d, dr0 => cpu0_ram_i.d,
-      rst1 => rst, clk1 => clkn,
+      rst1 => rst, clk1 => clk,
       en1  => cpu1_ram_o.en, wr1 => cpu1_ram_o.wr, we1 => cpu1_ram_o.we,
       a1   => cpu1_ram_o.a(10 downto 2), dw1 => cpu1_ram_o.d,
       dr1  => cpu1_data_bus_i(DEV_SRAM).d,
@@ -221,9 +231,24 @@ begin
   cpu1_ram_o.a   <= cpu1_data_bus_o(DEV_SRAM).a;
   cpu1_ram_o.d   <= cpu1_data_bus_o(DEV_SRAM).d;
 
-  -- ack for shared_ram (reflecting arbitration)
-  cpu0_ram_i.ack                <= cpu0_ram_o.en;
-  cpu1_data_bus_i(DEV_SRAM).ack <= cpu1_ram_o.en;
+  -- ack for shared_ram: the RAM is now rising-edge clocked (clk0/clk1 => clk),
+  -- so read data lands one cycle after the request. Assert ack for exactly the
+  -- cycle the data is valid. "en and not ack_r" is a one-cycle pulse per access
+  -- (1 wait state) that self-clears while en is still held, so back-to-back
+  -- accesses each ack exactly once. A blocked access (a_en=0 -> en=0) never
+  -- acks, so the losing core stalls until the lock releases -- same as before.
+  arb_ack : process(clk, rst)
+  begin
+    if rst = '1' then
+      cpu0_ram_ack_r <= '0';
+      cpu1_ram_ack_r <= '0';
+    elsif clk'event and clk = '1' then
+      cpu0_ram_ack_r <= cpu0_ram_o.en and not cpu0_ram_ack_r;
+      cpu1_ram_ack_r <= cpu1_ram_o.en and not cpu1_ram_ack_r;
+    end if;
+  end process;
+  cpu0_ram_i.ack                <= cpu0_ram_ack_r;
+  cpu1_data_bus_i(DEV_SRAM).ack <= cpu1_ram_ack_r;
 
   cpumreg : entity work.cpumreg
     port map (
