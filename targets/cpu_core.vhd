@@ -9,8 +9,16 @@ use work.misc_pack.all;
 use work.config.all;
 
 entity cpu_core is
-  generic ( 
-    COPRO_DECODE : boolean := true);
+  generic (
+    COPRO_DECODE : boolean := true;
+    -- Distinguishes the two cores of an asymmetric dual so the ghdl->yosys
+    -- frontend elaborates them as separate modules. Without it, both cores bind
+    -- cpu_core(arch) with identical generics and hash to the same module name --
+    -- a "Re-definition of module" error when their nested u_cpu configs differ
+    -- (e.g. core0=register_file(ebr), core1=register_file(two_bank)). Purely an
+    -- elaboration tag; no functional effect (P&R treats instances separately
+    -- regardless, so symmetric duals are unaffected).
+    CORE_ID : integer := 0);
   port (
     clk : in std_logic;
     rst : in std_logic;
@@ -49,7 +57,7 @@ architecture arch of cpu_core is
 
 begin
   u_cpu : cpu
-    generic map ( COPRO_DECODE => COPRO_DECODE )
+    generic map ( COPRO_DECODE => COPRO_DECODE, CORE_ID => CORE_ID )
     port map (
       clk => clk,
       rst => rst,

@@ -21,6 +21,11 @@ cpu:
   decode: rom
   copro: false
   cache: id
+  # Asymmetric dual (mirrors the turtle board's per-core split): core0 binds the
+  # FPGA-optimised config (register file in ECP5 block RAM -> ~1.4k LUT4 + FFs
+  # reclaimed, less congestion), core1 keeps register_file(two_bank) to keep
+  # validating the portable / ASIC-representative register-file logic on the FPGA.
+  fpga-opt-core0: true
 
 peripheral-buses:
   cpu1: true

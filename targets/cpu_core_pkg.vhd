@@ -80,8 +80,11 @@ package cpu_core_pack is
   end component;
 
   component cpu_core is
-    generic ( 
-      COPRO_DECODE : boolean := true);
+    generic (
+      COPRO_DECODE : boolean := true;
+      -- Elaboration tag distinguishing the two cores of an asymmetric dual (see
+      -- cpu_core entity). No functional effect.
+      CORE_ID : integer := 0);
     port (
       clk : in std_logic;
       rst : in std_logic;

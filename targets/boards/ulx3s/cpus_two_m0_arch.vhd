@@ -95,7 +95,7 @@ begin
   -- labels are core0/core1 (not cpu0/cpu1) to avoid clashing with the synopsys
   -- groups "cpu0"/"cpu1" declared in the cpus entity, which ghdl does not skip.
   core0 : cpu_core
-    generic map ( COPRO_DECODE => false )
+    generic map ( COPRO_DECODE => false, CORE_ID => 0 )
     port map (
       clk => clk,
       rst => rst,
@@ -123,7 +123,7 @@ begin
   cpu0_data_bus_i(DEV_DDR) <= cpu0_ddr_dbus_i;
 
   core1 : cpu_core
-    generic map ( COPRO_DECODE => false )
+    generic map ( COPRO_DECODE => false, CORE_ID => 1 )
     port map (
       clk => clk,
       rst => rst,
