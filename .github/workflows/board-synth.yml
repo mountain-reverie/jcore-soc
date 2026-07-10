@@ -107,6 +107,18 @@ jobs:
           name: metrics-${{ matrix.board }}-${{ matrix.variant }}
           path: targets/boards/${{ matrix.board }}/build/metrics.json
           if-no-files-found: error
+      - name: Upload P&R logs
+        if: always()   # keep the placer/router logs even on a timing-gate miss
+        uses: actions/upload-artifact@v4
+        with:
+          # The nextpnr log carries the binding critical path (source -> sink,
+          # logic/routing split); metrics.json now summarises it, but the raw
+          # log is needed to read the full path without scraping CI job logs.
+          name: pnr-logs-${{ matrix.board }}-${{ matrix.variant }}
+          path: |
+            targets/boards/${{ matrix.board }}/build/nextpnr.log
+            targets/boards/${{ matrix.board }}/build/yosys.log
+          if-no-files-found: ignore
 
   bitstream-icesugar:
     needs: sim
