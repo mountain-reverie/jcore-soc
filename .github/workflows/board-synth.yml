@@ -30,14 +30,14 @@ jobs:
       fail-fast: false
       matrix:
         # Single-core baselines (j2-direct, j4-rom) + dual-core functional SMP
-        # (j2-direct-dual, j4-rom-dual). sim.sh sets EXPECT_SMP for the *-dual
+        # (j2-dual, j4-dual). sim.sh sets EXPECT_SMP for the *-dual
         # variants, so their tb additionally requires cpu1's "CPU1 OK" mailbox
         # report to pass.
         include:
           - { board: ulx3s, variant: j2-direct }
-          - { board: ulx3s, variant: j2-direct-dual }
+          - { board: ulx3s, variant: j2-dual }
           - { board: ulx3s, variant: j4-rom }
-          - { board: ulx3s, variant: j4-rom-dual }
+          - { board: ulx3s, variant: j4-dual }
     defaults:
       run:
         shell: bash
@@ -68,8 +68,8 @@ jobs:
         include:
           - { board: ulx3s, variant: j2-direct, experimental: false }
           - { board: ulx3s, variant: j4-rom,   experimental: true }
-          - { board: ulx3s, variant: j2-direct-dual, experimental: true }
-          - { board: ulx3s, variant: j4-rom-dual,   experimental: true }
+          - { board: ulx3s, variant: j2-dual, experimental: true }
+          - { board: ulx3s, variant: j4-dual,   experimental: true }
     defaults:
       run:
         shell: bash

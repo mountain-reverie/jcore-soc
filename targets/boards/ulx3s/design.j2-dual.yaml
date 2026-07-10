@@ -1,0 +1,17 @@
+# ULX3S DualJ2 variant (j2-dual): two j2-direct cores (two_cpu_m0 arch), id-cache.
+# Symmetric dual — both cores bind the standard (portable / ASIC-representative)
+# register_file(two_bank) config. Unlike j4-dual there is NO fpga-opt-core0 here:
+# no FPGA-optimised J2 synth config (cpu_synth_direct_ebr) exists in cpumap.go /
+# the cpu submodule yet, so an EBR core0 cannot be bound for j2/direct.
+#
+# Everything the second core needs (cpu1 bus, aic1, icache1) lives in
+# design.dual-common.yaml, which itself includes base.yaml. This variant only
+# restates the `cpu:` block.
+<<: !include design.dual-common.yaml
+cpu:
+  architecture: two_cpu_m0
+  cores: 2
+  model: j2
+  decode: direct
+  copro: false
+  cache: id

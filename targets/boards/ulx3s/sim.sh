@@ -22,7 +22,7 @@ cd "$ROOT"
 rm -rf "$WORK" "$UNITWORK"; mkdir -p "$WORK" "$UNITWORK"
 
 # VARIANT selects the socgen design (j2-direct, j4-rom, or the dual-core
-# j2-direct-dual/j4-rom-dual variants). j2-direct is the committed default —
+# j2-dual/j4-dual variants). j2-direct is the committed default —
 # only for that variant do we assert the committed devices/soc/pad_ring trio
 # (+ build.mk/ulx3s.lpf) is byte-identical to what socgen still emits (the
 # drift check below). Other variants regenerate on demand and are NOT
@@ -95,7 +95,7 @@ ghdl -e --std=93 -fexplicit -fsynopsys --syn-binding --workdir="$WORK" ulx3s_gen
 # EXPECT_SMP makes the tb require it (a dual build that fails to bring up cpu1
 # then times out instead of passing on the cpu0 banner alone).
 SMP_GEN=""
-case "$VARIANT" in j2-direct-dual|j4-rom-dual) SMP_GEN="-gEXPECT_SMP=true" ;; esac
+case "$VARIANT" in j2-dual|j4-dual) SMP_GEN="-gEXPECT_SMP=true" ;; esac
 ghdl -r --std=93 -fexplicit -fsynopsys --syn-binding --workdir="$WORK" ulx3s_gen_tb $SMP_GEN --stop-time=20ms --assert-level=error
 
 # 5. bootram unit testbench (separate work lib: uses the deadbeef test image)
