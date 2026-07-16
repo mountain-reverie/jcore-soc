@@ -20,14 +20,19 @@
 peripheral-buses:
   cpu1: true
 
-# Only aic1 is new; base's gpio0/aic0/uart0/spi2 are appended by list-concat.
+# Only aic1/ipi0 are new; base's gpio0/aic0/uart0/spi2 are appended by
+# list-concat.
 devices:
   - class: aic
     name: aic1
     base-addr: 0xabcd0500
     dt-node: false
+    cpu: 1
     generics:
       c_busperiod: CFG_CLK_CPU_PERIOD_NS
+      # index 3 -> vector 0x14, matching aic0/turtle (index 3 is free; the
+      # ipi device below targets irq:3 on each cpu).
+      vector_numbers: '(x"11", x"12", x"13", x"14", x"15", x"16", x"17", x"18")'
     ports:
       bstb_i: 0
       back_i: 0
@@ -35,8 +40,40 @@ devices:
       event_i: cpu1_event_o
       event_o: cpu1_event_i
 
-# Enable icache1 via nested map deep-merge into ddr_ram_mux.ports.
+  # Cross-core IPI (reused icache_modereg, socgen 'ipi' class). dt-node:false
+  # suppresses the bare soc-child node the generic ipi class would otherwise
+  # emit; ipiNode2 still finds this device (class "ipi") and emits the
+  # correct ROOT-level "ipi" node (device_tree.clj to-dt parity, matching
+  # mimas_v2/turtle's cache_ctrl-carried ipi-info). int1->irqs1(3) auto-wires
+  # to aic1 (no explicit irq_i there); int0->irqs0(3) is combined into aic0's
+  # board-owned aic_irq by the aic_irq_combine top-entity below (aic0's
+  # irq_i is NOT auto-wired since base.yaml maps it explicitly to aic_irq).
+  - class: ipi
+    name: ipi0
+    base-addr: 0xabcd00c0
+    dt-node: false
+    irq:
+      int0: { cpu: 0, irq: 3 }
+      int1: { cpu: 1, irq: 3, "dt?": false }
+
+# Enable icache1 via nested map deep-merge into ddr_ram_mux.ports. Also
+# retarget aic_irq_gen's output to aic_irq_ext (dual-only rename) and add the
+# aic_irq_combine top-entity that ORs it with ipi0's int0 (irqs0(3)) back
+# onto the "aic_irq" signal aic0.irq_i already consumes. base.yaml (shared
+# with j2-direct/j4-rom) is left untouched, so those variants stay
+# byte-identical: aic_irq_gen.irq -> aic_irq direct, no combiner there.
 top-entities:
   ddr_ram_mux:
     ports:
       icache1_ctrl: CACHE_CTRL_ON
+
+  aic_irq_gen:
+    ports:
+      irq: aic_irq_ext
+
+  aic_irq_combine:
+    entity: aic_irq_combine
+    ports:
+      ext_i: aic_irq_ext
+      ipi_i: irqs0(3)
+      combined_o: aic_irq
