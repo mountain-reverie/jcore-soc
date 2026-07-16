@@ -82,6 +82,7 @@ devices:
   - class: aic
     name: aic0
     base-addr: 0xabcd0040
+    dt-label: aic
     generics:
       c_busperiod: CFG_CLK_CPU_PERIOD_NS
       # external IRQ line vectors (irq_i(0)=button -> 0x11), matching the
@@ -98,6 +99,8 @@ devices:
   - class: uartlite
     name: uart0
     base-addr: 0xabcd0100
+    dt-label: uart
+    dt-stdout: true
     generics:
       intcfg: 1
       bps: 115200e0

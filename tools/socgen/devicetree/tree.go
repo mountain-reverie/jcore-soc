@@ -158,6 +158,9 @@ func DeviceTree(b *board.Board, res *elaborate.Resolution) (*dts.Node, error) {
 
 		vec, hasIRQ := deviceVector(s.dev)
 		node := devToDT(s.dev, s.cls, nn, busBase, vec, hasIRQ)
+		if s.dev.DtStdout && s.dtLabel != "" {
+			addConsoleUartProps(node, s.dev, freq)
+		}
 		children = append(children, child{key: nn, node: node})
 	}
 
@@ -166,17 +169,33 @@ func DeviceTree(b *board.Board, res *elaborate.Resolution) (*dts.Node, error) {
 		socChildren = append(socChildren, c.node)
 	}
 
-	// stdout device -> "/soc@<busBaseHex>/<node-name>".
+	// stdout device: when the device has a dt-label, it is exposed as an
+	// aliased Linux console (root "aliases" node + "chosen" stdout-path/
+	// bootargs referring to the alias, plus current-speed/clock-frequency on
+	// the uart node itself, added above). When it has no dt-label, fall back
+	// to the legacy "/soc@<busBaseHex>/<node-name>" stdout-path form (no
+	// aliases, no bootargs) — this is the form the already-migrated boards
+	// (mimas/microboard/turtle) rely on, and it MUST stay byte-identical for
+	// them.
 	stdoutPath := ""
+	consoleLabel := ""
+	bootargs := ""
 	for _, s := range sel {
-		if s.dev.DtStdout {
+		if !s.dev.DtStdout {
+			continue
+		}
+		if s.dtLabel != "" {
+			consoleLabel = s.dtLabel
+			stdoutPath = "serial0:115200n8"
+			bootargs = "console=ttyUL0 earlycon"
+		} else {
 			name := s.dtName
 			if nameFreq[s.dtName] > 1 {
 				name = fmt.Sprintf("%s@%x", s.dtName, s.base-busBase)
 			}
 			stdoutPath = fmt.Sprintf("/soc@%x/%s", busBase, name)
-			break
 		}
+		break
 	}
 
 	// SMP additions (device_tree.clj / irq.clj). is-smp = the "cpu1" peripheral
@@ -191,7 +210,71 @@ func DeviceTree(b *board.Board, res *elaborate.Resolution) (*dts.Node, error) {
 		ipiNode = n
 	}
 
-	return buildRoot(b.Name, freq, dram, busBase, busWidth, stdoutPath, socChildren, isSMP, ipiNode), nil
+	cpuModel := ""
+	if b.Design.CPU != nil {
+		cpuModel = b.Design.CPU.Model
+	}
+
+	return buildRoot(b.Name, cpuModel, freq, dram, busBase, busWidth, stdoutPath, consoleLabel, bootargs, socChildren, isSMP, ipiNode), nil
+}
+
+// cpuCompatible maps a design's cpu model (j1/j2/j4) to its dt "compatible"
+// string, defaulting to "jcore,j2" when the model is unset (matching every
+// migrated board's implicit J2 default).
+func cpuCompatible(model string) string {
+	switch strings.ToLower(strings.TrimSpace(model)) {
+	case "j1":
+		return "jcore,j1"
+	case "j4":
+		return "jcore,j4"
+	default:
+		return "jcore,j2"
+	}
+}
+
+// consoleBaud returns the console baud rate for the "current-speed" prop of
+// the stdout uart, taken from its "bps" generic (a KindFloat/KindInt scalar
+// like `115200e0`); defaults to 115200 when absent or of an unexpected kind.
+func consoleBaud(dev *design.Device) uint64 {
+	if dev.Generics == nil {
+		return 115200
+	}
+	v, ok := dev.Generics["bps"]
+	if !ok {
+		return 115200
+	}
+	switch v.Kind {
+	case design.KindFloat:
+		return uint64(v.Float)
+	case design.KindInt:
+		return uint64(v.Int)
+	default:
+		return 115200
+	}
+}
+
+// addConsoleUartProps inserts "clock-frequency" and "current-speed" onto the
+// stdout uart's dt node, matching the hand-authored ulx3s console form: the
+// two props are inserted right before "reg" (i.e. after the alphabetically
+// sorted merged dt-props but before the trailing default reg/interrupts),
+// which is NOT the alphabetical dtProps sort order.
+func addConsoleUartProps(n *dts.Node, dev *design.Device, freq int) {
+	extra := []*dts.Prop{
+		{Name: "clock-frequency", Values: []dts.Value{dts.Cells{Nums: []uint64{uint64(freq)}}}},
+		{Name: "current-speed", Values: []dts.Value{dts.Cells{Nums: []uint64{consoleBaud(dev)}}}},
+	}
+	idx := len(n.Props)
+	for i, p := range n.Props {
+		if p.Name == "reg" {
+			idx = i
+			break
+		}
+	}
+	props := make([]*dts.Prop, 0, len(n.Props)+len(extra))
+	props = append(props, n.Props[:idx]...)
+	props = append(props, extra...)
+	props = append(props, n.Props[idx:]...)
+	n.Props = props
 }
 
 // ipiNode2 builds the root-level "ipi" node for an SMP design (device_tree.clj
@@ -255,20 +338,30 @@ func ipiNode2(b *board.Board, _ *elaborate.Resolution) (*dts.Node, error) {
 // buildRoot assembles the "/" boilerplate around the soc children. When isSMP,
 // the cpus node gains enable-method + a cpu@1 child, and ipiNode (when non-nil)
 // is appended as a root child.
-func buildRoot(model string, freq int, dram [2]uint64, busBase, busWidth uint64, stdoutPath string, socChildren []*dts.Node, isSMP bool, ipiNode *dts.Node) *dts.Node {
+func buildRoot(model, cpuModel string, freq int, dram [2]uint64, busBase, busWidth uint64, stdoutPath, consoleLabel, bootargs string, socChildren []*dts.Node, isSMP bool, ipiNode *dts.Node) *dts.Node {
 	// cpu props shared by cpu@0 and cpu@1 (the Clojure cpu-props, before reg).
 	cpuPropsBase := func() []*dts.Prop {
 		return []*dts.Prop{
 			{Name: "device_type", Values: []dts.Value{dts.Str("cpu")}},
-			{Name: "compatible", Values: []dts.Value{dts.Str("jcore,j2")}},
+			{Name: "compatible", Values: []dts.Value{dts.Str(cpuCompatible(cpuModel))}},
 			{Name: "clock-frequency", Values: []dts.Value{dts.Cells{Nums: []uint64{uint64(freq)}}}},
 		}
 	}
 	cpu0Props := append(cpuPropsBase(), &dts.Prop{Name: "reg", Values: []dts.Value{dts.Cells{Nums: []uint64{0}}}})
 
+	var aliases *dts.Node
+	if consoleLabel != "" {
+		aliases = &dts.Node{Name: "aliases", Props: []*dts.Prop{
+			{Name: "serial0", Values: []dts.Value{dts.Ref(consoleLabel)}},
+		}}
+	}
+
 	chosen := &dts.Node{Name: "chosen"}
 	if stdoutPath != "" {
-		chosen.Props = []*dts.Prop{{Name: "stdout-path", Values: []dts.Value{dts.Str(stdoutPath)}}}
+		chosen.Props = append(chosen.Props, &dts.Prop{Name: "stdout-path", Values: []dts.Value{dts.Str(stdoutPath)}})
+	}
+	if bootargs != "" {
+		chosen.Props = append(chosen.Props, &dts.Prop{Name: "bootargs", Values: []dts.Value{dts.Str(bootargs)}})
 	}
 
 	cpusProps := []*dts.Prop{
@@ -321,7 +414,11 @@ func buildRoot(model string, freq int, dram [2]uint64, busBase, busWidth uint64,
 	// root children: chosen, cpus, clocks, memory, soc, cpuid, then (SMP) ipi.
 	// The Clojure to-dt lists ipi last, after cpuid (it is `(when (and is-smp
 	// ipi-info) [...])` at the tail of the "/" children).
-	rootChildren := []*dts.Node{chosen, cpus, clocks, memory, soc, cpuid}
+	rootChildren := []*dts.Node{}
+	if aliases != nil {
+		rootChildren = append(rootChildren, aliases)
+	}
+	rootChildren = append(rootChildren, chosen, cpus, clocks, memory, soc, cpuid)
 	if isSMP && ipiNode != nil {
 		rootChildren = append(rootChildren, ipiNode)
 	}

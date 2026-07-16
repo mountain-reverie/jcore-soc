@@ -60,6 +60,13 @@ func (c Cells) render() string {
 	return "<" + strings.Join(parts, " ") + ">"
 }
 
+// Ref is a bare phandle reference value ("&name", no surrounding "<...>"), used
+// by nodes like "aliases" whose values are phandles rather than cell arrays
+// (contrast Cells.Refs, which renders "<&name>").
+type Ref string
+
+func (r Ref) render() string { return "&" + string(r) }
+
 // Bytes is a [..] byte-string value, rendered as space-separated two-digit hex.
 type Bytes []byte
 
