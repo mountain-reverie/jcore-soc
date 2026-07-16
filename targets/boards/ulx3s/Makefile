@@ -31,6 +31,7 @@ VHDL_FILES += targets/boards/ulx3s/ulx3s_clkgen.vhd
 VHDL_FILES += targets/boards/ulx3s/ulx3s_clkgen_ecp5.vhd
 VHDL_FILES += targets/boards/ulx3s/reset_sync.vhd
 VHDL_FILES += targets/boards/ulx3s/aic_irq_gen.vhd
+VHDL_FILES += targets/boards/ulx3s/aic_irq_combine.vhd
 # SDRAM controller + ASIC-portable IO cells (the BufEntity inout pad target).
 VHDL_FILES += components/sdram/sdram_pkg.vhd
 VHDL_FILES += components/sdram/sdram_ctrl.vhd
