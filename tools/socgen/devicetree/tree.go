@@ -294,7 +294,7 @@ func ipiNode2(b *board.Board, _ *elaborate.Resolution) (*dts.Node, error) {
 	var cache *design.Device
 	for _, dev := range b.Design.Devices {
 		c := lc(dev.Class)
-		if c == "cache_ctrl" || c == "cache_ctrl_wsbu" {
+		if c == "cache_ctrl" || c == "cache_ctrl_wsbu" || c == "ipi" {
 			cache = dev
 			break
 		}

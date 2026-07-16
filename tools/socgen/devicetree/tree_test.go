@@ -260,6 +260,55 @@ func TestDeviceTreeSMPMultiIPIIRQ(t *testing.T) {
 	}
 }
 
+// smpIpiBoard is like smpBoard but declares the device under the generic
+// "ipi" class (icache_modereg reused stand-alone, no cache-control regs)
+// instead of "cache_ctrl", as a hardwired-cache board (e.g. ULX3S) would.
+func smpIpiBoard() (*board.Board, *elaborate.Resolution) {
+	b, res := synthBoard()
+	b.Design.PeripheralBuses = map[string]bool{"cpu1": true}
+
+	ipiCls := &design.DeviceClass{Entity: "icache_modereg", DtName: "ipi", LeftAddrBit: 5}
+	b.Design.DeviceClasses["ipi"] = ipiCls
+
+	b.Design.Devices = append(b.Design.Devices,
+		&design.Device{Class: "aic", Name: "aic1", CPU: intp(1), DtLabel: "aic1", BaseAddr: hexp(0xabcd0300)},
+		&design.Device{Class: "ipi", Name: "ipi0", BaseAddr: hexp(0xabcd00c0),
+			IRQ: &design.IRQRef{Named: map[string]*design.IRQEntry{
+				"int0": {CPU: 0, IRQ: 3},
+				"int1": {CPU: 1, IRQ: 3, DT: boolp(false)},
+			}}},
+	)
+	res.Classes["ipi"] = &elaborate.ResolvedClass{Name: "ipi", LeftAddrBit: 5}
+	res.Devices = append(res.Devices,
+		&elaborate.ResolvedDevice{Name: "aic1", Class: "aic", BaseAddr: u64p(0xabcd0300), DataBus: true},
+		&elaborate.ResolvedDevice{Name: "ipi0", Class: "ipi", BaseAddr: u64p(0xabcd00c0), DataBus: true},
+	)
+	return b, res
+}
+
+// TestDeviceTreeSMPGenericIPIClass locks that a board declaring the generic
+// "ipi" device class (rather than turtle's cache_ctrl) still gets the
+// byte-correct root "ipi" node from ipiNode2.
+func TestDeviceTreeSMPGenericIPIClass(t *testing.T) {
+	b, res := smpIpiBoard()
+	root, err := DeviceTree(b, res)
+	if err != nil {
+		t.Fatalf("DeviceTree (SMP generic ipi class): %v", err)
+	}
+	out := dts.Print(root)
+
+	for _, w := range []string{
+		"ipi {",
+		`compatible = "jcore,ipi-controller";`,
+		"reg = <0xabcd00c0 0x8>;",
+		"interrupts = <0x14>;", // AIC vector = 0x11 + raw irq 3
+	} {
+		if !strings.Contains(out, w) {
+			t.Errorf("SMP generic-ipi-class DeviceTree output missing %q:\n%s", w, out)
+		}
+	}
+}
+
 func TestDeviceTreeNilSystemDefaultDram(t *testing.T) {
 	b, res := synthBoard()
 	b.Design.System = nil
