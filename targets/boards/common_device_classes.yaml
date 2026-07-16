@@ -242,6 +242,22 @@ cache_ctrl:
     - { name: temp_cpu1_instr_addr }
     - { name: sel_ctrl_temp, addr: 0x3c }
 
+ipi:
+  # Generic cross-core IPI trigger, reusing icache_modereg without the
+  # cache-control regs/dt-props (those are turtle/cache_ctrl-specific). Any
+  # SMP board can instantiate this to get IPI; the entity's cache-control
+  # (cache0/1_ctrl_ic/dc, cache01sel_ctrl_temp) and debug
+  # (cpu0/1_ddr_ibus_o, ddr_status) ports resolve via soc_port_global_name
+  # like any other global signal and are simply left undriven/unread when
+  # no cache_ctrl device is present on the board -- no explicit "open"
+  # override is needed.
+  entity: icache_modereg
+  dt-name: ipi
+  left-addr-bit: 5
+  regs:
+    - { name: ctrl0 }
+    - { name: ctrl1 }
+
 cache_ctrl_wsbu:
   entity: icache_modereg_wsbu
   dt-name: cache-controller
