@@ -7,7 +7,14 @@
 	#size-cells = <1>;
 	interrupt-parent = <&aic>;
 
-	chosen { };
+	aliases {
+		serial0 = &uart;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+		bootargs = "console=ttyUL0 earlycon";
+	};
 
 	cpus {
 		#address-cells = <1>;
@@ -53,16 +60,18 @@
 			reg = <0x0 0x10>; // ABCD0000-ABCD000F
 		};
 
-		interrupt-controller {
+		aic: interrupt-controller {
 			#interrupt-cells = <1>;
 			compatible = "jcore,aic1";
 			interrupt-controller;
 			reg = <0x40 0x40>; // ABCD0040-ABCD007F
 		};
 
-		serial {
+		uart: serial {
 			compatible = "jcore,uartlite", "xlnx,xps-uartlite-1.00.a";
 			device_type = "serial";
+			clock-frequency = <20000000>;
+			current-speed = <115200>;
 			reg = <0x100 0x10>; // ABCD0100-ABCD010F
 		};
 
