@@ -116,6 +116,10 @@ FILES+=(
   # padring entities soc_gen instantiates but does not emit (leaves).
   targets/boards/ulx3s/reset_sync.vhd
   targets/boards/ulx3s/aic_irq_gen.vhd
+  # aic_irq_combine: SMP-only leaf that ORs the ipi int0 into aic0's irq_i on
+  # the dual-core variants (soc_gen instantiates it in dual-common but does not
+  # emit it). Analyzed for all variants (unused/uninstantiated on single-core).
+  targets/boards/ulx3s/aic_irq_combine.vhd
   # the soc_gen-generated trio (leaf-first: devices <- soc <- pad_ring), now the
   # synthesized/elaborated board top (replaces the retired hand-written
   # ulx3s_top.vhd). The ECP5 clkgen arch (clkgen(ecp5)/EHXPLLL) that pad_ring
