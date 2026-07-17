@@ -22,15 +22,19 @@ perl -0pe 's/-- synopsys translate_off.*?-- synopsys translate_on\n//s;
            s/^\s*attribute soc_port_global_name of .*?;\n//mg' \
   targets/ddr_ram_mux/ddr_ram_mux.vhd > "$GEN/ddr_ram_mux.vhd"
 
-# gpio2 + uartlitedb carry an `soc_port_irq` attribute on their irq/int output
-# port (socgen metadata marking the AIC source line). ghdl --synth cannot handle
-# it ("unhandled attribute") and, in the dual-core netlist topology, asserts on
-# it in synth-vhdl_decls -- the SAME Synth_Attribute_Port assertion the
-# soc_port_global_name strip above sidesteps. The attribute is inert for the
-# ghdl flow (socgen reads the original component sources, not these copies), so
-# strip it into synth-staging copies the filelist analyzes in their place.
-for _src in components/misc/gpio2.vhd components/uartlite/uartlitedb.vhd; do
-  perl -0pe 's/^\s*attribute soc_port_irq of .*?;\n//mg' \
+# Several component entities carry socgen `soc_port_*` port attributes (irq
+# lines, global net names, ...): gpio2/uartlitedb (soc_port_irq) and the
+# icache_modereg IPI block (soc_port_global_name, dual-core only). ghdl --synth
+# cannot handle them ("unhandled attribute") and asserts on them in
+# synth-vhdl_decls (Synth_Attribute_Port) in the dual-core netlist topology --
+# the SAME assertion the soc_port_global_name strip above sidesteps for
+# ddr_ram_mux. They are socgen-only metadata (socgen reads the original
+# component sources, not these copies), so strip every soc_port_* application
+# into synth-staging copies the filelist analyzes in their place. (icache_modereg
+# is v2p'd from .vhm before this script runs -- see synth.sh/sim.sh step 2.)
+for _src in components/misc/gpio2.vhd components/uartlite/uartlitedb.vhd \
+            components/misc/spi2.vhd components/cpu/cache/icache_modereg.vhd; do
+  perl -0pe 's/^\s*attribute soc_port_\w+ of .*?;\n//mg' \
     "$_src" > "$GEN/$(basename "$_src")"
 done
 

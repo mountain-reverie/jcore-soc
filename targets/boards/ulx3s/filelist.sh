@@ -72,8 +72,10 @@ FILES+=(
   # (bit-28 -> per-core int). Single-core variants never instantiated it; the
   # dual variants' generated devices.vhd does (as the socgen `ipi` device), so
   # it must be v2p'd (synth.sh/sim.sh) + analyzed. Deps (cache_pkg/data_bus_pkg/
-  # ddrc_cnt_pkg/attr_pkg) are all above.
-  components/cpu/cache/icache_modereg.vhd
+  # ddrc_cnt_pkg/attr_pkg) are all above. Analyze the soc_port_*-stripped $GEN
+  # copy (gen_synth_sources.sh) -- its soc_port_global_name attrs make ghdl
+  # --synth assert in the dual netlist (synth-vhdl_decls), same as gpio2 below.
+  $GEN/icache_modereg.vhd
   components/cpu/cache/dcache.vhd  # posedge _sc CDC (cache_clkmode_sc); Part B
   components/cpu/cache/icache.vhd
   components/cpu/cache/cache_config_fpga.vhd
@@ -107,7 +109,7 @@ FILES+=(
   components/misc/aic_edgedet.vhd
   components/misc/aic.vhd
   $GEN/gpio2.vhd
-  components/misc/spi2.vhd
+  $GEN/spi2.vhd                       # soc_port_local_name stripped (see above)
   targets/boards/ulx3s/periph_mux.vhd
   targets/boards/ulx3s/boot_image_pkg.vhd
   components/memory/bootram_infer.vhd
