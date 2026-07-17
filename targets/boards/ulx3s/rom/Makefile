@@ -2,6 +2,12 @@ CROSS_COMPILE ?= sh2-elf-
 TOP_DIR       := $(realpath ../../../..)
 BOARD_DIR     := $(realpath ..)
 
+# CPU1 bring-up mode (default 0 = cpu1 left halted for the kernel spin-table,
+# used by the bootable SD image). The dual-core self-checking sim tb needs the
+# in-ROM SMP demo (=1) so cpu0 releases cpu1 and prints "CPU1 OK"; sim.sh
+# overrides this to 1 for the j2-dual/j4-dual board testbenches.
+CONFIG_CPU1_DIAG ?= 0
+
 # The boot/ submodule hardcodes -mj2 which is not recognised by a plain
 # sh2-elf GCC 14 toolchain. Use a compiler wrapper that translates -mj2 → -m2.
 WRAPPER_DIR   := $(CURDIR)/.cc-wrapper
@@ -33,7 +39,7 @@ BOOT_FLAGS = \
 		CONFIG_CPU_TESTS=0 \
 		CONFIG_TEST_MEM=0 \
 		CONFIG_SPI_LOOPBACK_TEST=1 \
-		CONFIG_CPU1_DIAG=0 \
+		CONFIG_CPU1_DIAG=$(CONFIG_CPU1_DIAG) \
 		NEED_LIBC=1
 
 boot.elf: $(WRAPPER_CC)
