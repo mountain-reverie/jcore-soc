@@ -45,23 +45,27 @@ devices:
   # emit; ipiNode2 still finds this device (class "ipi") and emits the
   # correct ROOT-level "ipi" node (device_tree.clj to-dt parity, matching
   # mimas_v2/turtle's cache_ctrl-carried ipi-info). int1->irqs1(3) auto-wires
-  # to aic1 (no explicit irq_i there); int0->irqs0(3) is combined into aic0's
-  # board-owned aic_irq by the aic_irq_combine top-entity below (aic0's
-  # irq_i is NOT auto-wired since base.yaml maps it explicitly to aic_irq).
+  # to aic1 (no explicit irq_i there). int0 is NOT put on the irq map: aic0 has
+  # a board-owned irq_i (aic_irq, from aic_irq_gen), so it cannot consume the
+  # devices-scope irqs0 vector. Instead int0 drives a plain scalar (ipi0_int0)
+  # that socgen crosses devices->soc as a device-output port (the same crossing
+  # aic_irq uses, reversed); the soc-level aic_irq_combine ORs it into aic_irq.
+  # The DT ipi-node vector (0x14) still comes from int1's irq:3.
   - class: ipi
     name: ipi0
     base-addr: 0xabcd00c0
     dt-node: false
+    ports:
+      int0: ipi0_int0
     irq:
-      int0: { cpu: 0, irq: 3 }
-      int1: { cpu: 1, irq: 3, "dt?": false }
+      int1: { cpu: 1, irq: 3 }
 
 # Enable icache1 via nested map deep-merge into ddr_ram_mux.ports. Also
 # retarget aic_irq_gen's output to aic_irq_ext (dual-only rename) and add the
-# aic_irq_combine top-entity that ORs it with ipi0's int0 (irqs0(3)) back
-# onto the "aic_irq" signal aic0.irq_i already consumes. base.yaml (shared
-# with j2-direct/j4-rom) is left untouched, so those variants stay
-# byte-identical: aic_irq_gen.irq -> aic_irq direct, no combiner there.
+# aic_irq_combine top-entity that ORs it with ipi0's int0 (the ipi0_int0 scalar
+# socgen crosses devices->soc) back onto the "aic_irq" signal aic0.irq_i already
+# consumes. base.yaml (shared with j2-direct/j4-rom) is left untouched, so those
+# variants stay byte-identical: aic_irq_gen.irq -> aic_irq direct, no combiner.
 top-entities:
   ddr_ram_mux:
     ports:
@@ -75,5 +79,5 @@ top-entities:
     entity: aic_irq_combine
     ports:
       ext_i: aic_irq_ext
-      ipi_i: irqs0(3)
+      ipi_i: ipi0_int0
       combined_o: aic_irq
