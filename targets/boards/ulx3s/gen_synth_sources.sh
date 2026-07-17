@@ -22,6 +22,18 @@ perl -0pe 's/-- synopsys translate_off.*?-- synopsys translate_on\n//s;
            s/^\s*attribute soc_port_global_name of .*?;\n//mg' \
   targets/ddr_ram_mux/ddr_ram_mux.vhd > "$GEN/ddr_ram_mux.vhd"
 
+# gpio2 + uartlitedb carry an `soc_port_irq` attribute on their irq/int output
+# port (socgen metadata marking the AIC source line). ghdl --synth cannot handle
+# it ("unhandled attribute") and, in the dual-core netlist topology, asserts on
+# it in synth-vhdl_decls -- the SAME Synth_Attribute_Port assertion the
+# soc_port_global_name strip above sidesteps. The attribute is inert for the
+# ghdl flow (socgen reads the original component sources, not these copies), so
+# strip it into synth-staging copies the filelist analyzes in their place.
+for _src in components/misc/gpio2.vhd components/uartlite/uartlitedb.vhd; do
+  perl -0pe 's/^\s*attribute soc_port_irq of .*?;\n//mg' \
+    "$_src" > "$GEN/$(basename "$_src")"
+done
+
 # cpus_config: the soc_gen-generated `configuration soc_cpus_config of cpus`
 # (binds the variant's cpu_synth config). It carries no soc_gen-only metadata,
 # so a plain copy into the synth-staging dir suffices; the filelist references
