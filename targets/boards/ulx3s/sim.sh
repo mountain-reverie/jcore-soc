@@ -53,8 +53,17 @@ if [ "$VARIANT" = "j2-direct" ]; then
   rm -rf "$SNAP"
 fi
 
-# 2. boot image
-make -C targets/boards/ulx3s/rom all
+# 2. boot image. Dual-core variants run the self-checking SMP tb (EXPECT_SMP),
+# which requires the in-ROM CPU1 demo (cpu0 releases cpu1, verifies its result,
+# prints "CPU1 OK"). That demo is CONFIG_CPU1_DIAG-gated and off by default (the
+# bootable SD image leaves cpu1 halted for the kernel spin-table), so turn it on
+# here for the dual variants only.
+ROM_DIAG=0
+case "$VARIANT" in j2-dual|j4-dual) ROM_DIAG=1 ;; esac
+# clean first: make cannot see the CONFIG_CPU1_DIAG value change between runs,
+# so a stale boot.bin from a different variant would otherwise be reused.
+make -C targets/boards/ulx3s/rom clean
+make -C targets/boards/ulx3s/rom all CONFIG_CPU1_DIAG="$ROM_DIAG"
 perl tools/genbootpkg \
     targets/boards/ulx3s/rom/boot.bin \
     4096 \
