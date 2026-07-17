@@ -98,12 +98,15 @@ FILES+=(
   lib/hwutils/instr_bus_delay.vhd
   components/uartlite/uart_pkg.vhd
   components/uartlite/uart.vhd
-  components/uartlite/uartlitedb.vhd
+  # uartlitedb + gpio2 (below) carry an soc_port_irq attribute that ghdl --synth
+  # asserts on (synth-vhdl_decls) in the dual-core netlist; gen_synth_sources.sh
+  # writes attribute-stripped copies into $GEN that we analyze in their place.
+  $GEN/uartlitedb.vhd
   # M2: AIC v1 (interrupt controller + RTC + PIT) + peripheral bus mux
   components/misc/aic2_pkg.vhd
   components/misc/aic_edgedet.vhd
   components/misc/aic.vhd
-  components/misc/gpio2.vhd
+  $GEN/gpio2.vhd
   components/misc/spi2.vhd
   targets/boards/ulx3s/periph_mux.vhd
   targets/boards/ulx3s/boot_image_pkg.vhd
