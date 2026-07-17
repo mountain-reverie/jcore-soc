@@ -68,6 +68,12 @@ FILES+=(
   components/cpu/cache/dcache_mcl.vhd
   components/cpu/cache/icache_ccl.vhd
   components/cpu/cache/icache_mcl.vhd
+  # icache_modereg: the cache-mode register that also hosts the SMP IPI trigger
+  # (bit-28 -> per-core int). Single-core variants never instantiated it; the
+  # dual variants' generated devices.vhd does (as the socgen `ipi` device), so
+  # it must be v2p'd (synth.sh/sim.sh) + analyzed. Deps (cache_pkg/data_bus_pkg/
+  # ddrc_cnt_pkg/attr_pkg) are all above.
+  components/cpu/cache/icache_modereg.vhd
   components/cpu/cache/dcache.vhd  # posedge _sc CDC (cache_clkmode_sc); Part B
   components/cpu/cache/icache.vhd
   components/cpu/cache/cache_config_fpga.vhd
