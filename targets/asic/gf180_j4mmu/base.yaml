@@ -1,0 +1,130 @@
+# GF180 ASIC board registration for soc_gen.
+#
+# This is a *logical* top: no pad_ring FPGA primitives, no PLL (EHXPLLL/
+# SB_PLL40), no board pin constraints (.lpf/.pcf). The device topology (ring
+# bus, SDRAM controller, UART, SPI, GPIO, AIC, caches) is copied verbatim from
+# targets/boards/ulx3s/base.yaml (the validated j4-rom SoC) so the RTL matches
+# byte-for-byte in device addressing/IRQ wiring. The only thing omitted is the
+# `padring-entities:` (clkgen/reset_sync -- ECP5 PLL + reset synchronizer) and
+# `pins:` sections: soc_gen's `soc` entity is already logical (clk_sys/reset
+# are plain std_logic ports on `soc`; only `pad_ring.vhd` -- which this target
+# does not use -- carries the FPGA-specific clock/pin wiring). See
+# targets/boards/ulx3s/soc.vhd for reference: its `soc` entity already has no
+# ECP5 primitives; the PLL only appears inside pad_ring.vhd's clkgen instance.
+target: gf180
+plugins: !include ../../boards/default_plugins.yaml
+
+device-classes: !include ../../boards/common_device_classes.yaml
+
+top-entities:
+  cpus:
+    ports:
+      cpu0_copro_i: NULL_COPR_I
+      cpu1_copro_i: NULL_COPR_I
+      cpu1eni: 0
+    generics:
+      INSERT_WRITE_DELAY_BOOT_MEM: false
+      INSERT_READ_DELAY_BOOT_MEM: false
+      INSERT_INST_DELAY_BOOT_MEM: false
+
+  ddr_ram_mux:
+    ports:
+      # Caches hardwired on (no cache-control device on this ASIC target,
+      # matching the ulx3s board this topology is copied from).
+      icache0_ctrl: CACHE_CTRL_ON
+      icache1_ctrl: CACHE_CTRL_ON
+      dcache0_ctrl: CACHE_CTRL_ON
+      dcache1_ctrl: CACHE_CTRL_ON
+
+  aic_irq_gen:
+    entity: aic_irq_gen
+    ports:
+      clk: clk_sys
+      pi_in: gpio_di
+      irq: aic_irq
+
+  sdram_ctrl:
+    entity: sdram_ctrl
+    ports:
+      clk: clk_sys
+      req: ddr_bus_o
+      bst: ddr_burst
+      resp: ddr_bus_i
+      ack_r: ddr_bus_ack_r
+      cmd: sd_cmd
+      dq_o: sd_dq_o
+      dq_oe: sd_dq_oe
+      dq_i: sd_dq_i
+
+devices:
+  - class: gpio2
+    name: gpio0
+    base-addr: 0xabcd0000
+    ports:
+      d_o: gpio_do
+      d_i: gpio_di
+
+  - class: aic
+    name: aic0
+    base-addr: 0xabcd0040
+    dt-label: aic
+    generics:
+      c_busperiod: CFG_CLK_CPU_PERIOD_NS
+      # external IRQ line vectors, matching the ulx3s board this topology is
+      # copied from (socgen otherwise emits all-zero).
+      vector_numbers: '(x"11", x"12", x"13", x"14", x"15", x"16", x"17", x"18")'
+    ports:
+      bstb_i: 0
+      back_i: 0
+      enmi_i: 1
+      irq_i: aic_irq
+      event_i: cpu0_event_o
+      event_o: cpu0_event_i
+
+  - class: uartlite
+    name: uart0
+    base-addr: 0xabcd0100
+    dt-label: uart
+    dt-stdout: true
+    generics:
+      intcfg: 1
+      bps: 115200e0
+      fclk: CFG_CLK_CPU_FREQ_HZ
+
+  - class: spi
+    name: spi2
+    base-addr: 0xabcd0200
+    generics:
+      clk_freq: CFG_CLK_CPU_FREQ_HZ
+    ports:
+      clk: clk_sys
+      cpha: 0
+      cpol: 0
+
+peripheral-buses:
+  cpu1: false
+
+merge-signals:
+  clk_sys: [clk_mem]
+
+# Caches hardwired on above (no cache_ctrl device on this ASIC target). CPU1
+# unused on single-core variants.
+zero-signals:
+  - dma_dbus_o
+  - debug_i
+  - cache01sel_ctrl_temp
+  - cpu1_event_i
+
+system:
+  data-bus-decode: exact
+  dram: [0x10000000, 0x2000000]
+
+# Logical (pad-less) pin list: each entry marks a net as a `soc` boundary
+# port (direction auto-inferred: driven-elsewhere nets become soc inputs,
+# device-driven nets become soc outputs -- see gf180_j4mmu.pins). No Pad
+# column, no LOC/IOSTANDARD attrs, no lpf/pcf (target is not ecp5/ice40).
+pins:
+  file: ../pins/gf180_j4mmu.pins
+  type: pin-names
+  rules:
+    - { match: ".*", signal: true, buff: false }

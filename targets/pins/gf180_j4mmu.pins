@@ -1,0 +1,24 @@
+# gf180_j4mmu logical pins: these are NOT physical package balls (this target
+# has no pad_ring/pin constraints -- see targets/asic/gf180_j4mmu/README.md).
+# Each entry here is a plain net name; base.yaml's catch-all pins rule
+# (`signal: true`) marks it as a boundary port so it surfaces as a `soc`
+# entity port with no LOC/pad. No Pad column (pad-less: soc_gen leaves
+# Pad=="" and emits no location attribute).
+clk_sys
+reset
+
+gpio_di
+gpio_do
+
+sd_cmd
+sd_dq_i
+sd_dq_o
+sd_dq_oe
+
+uart0_rx
+uart0_tx
+
+spi2_clk
+spi2_cs
+spi2_miso
+spi2_mosi
