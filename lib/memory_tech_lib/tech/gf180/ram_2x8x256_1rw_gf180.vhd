@@ -10,6 +10,14 @@
 -- the vendor behavioral .v: write_flag = !CEN & !GWEN & !(&WEN), read_flag
 -- = !CEN & GWEN):
 --   CEN  <= not en                         -- chip enable, active-low
+--   PRECONDITION: this per-subword GWEN assumes both `we` bits are driven
+--   identically per cycle (a symmetric write). Both real callers do exactly
+--   that (icache_ram.vhd / dcache_ram.vhd tie the subword we bits together),
+--   so it matches tech/sim. An ASYMMETRIC write (we bits differing) would let
+--   the un-written subword's macro do a READ that cycle, diverging from
+--   tech/sim's "no read during any write" semantics -- do NOT reuse this
+--   wrapper with independent per-subword write-enables without revisiting this.
+--
 --   GWEN <= not (wr and we(i))             -- per-subword global write
 --                                              enable, active-low; when
 --                                              GWEN='1' the macro performs
