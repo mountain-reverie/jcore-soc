@@ -35,9 +35,44 @@ source targets/asic/gf180_j4mmu/metrics/gen_synth_sources.sh   # exports GHDL_BA
 # when it differs from the ghdl -e elaboration target (e.g. j4_core elaborates
 # a per-variant configuration but the underlying module is still `cpu`).
 # Defaults to the elaboration target.
+# Vendor single-port SRAM Liberty (gf180mcu_fd_ip_sram), derived from the
+# standard-cell Liberty's PDK location. Used to give the cache_tag macro's
+# vendor black boxes real area (see the cache_tag special case below).
+GF180_SRAM_LIB="${GF180_SRAM_LIB:-$(dirname "$GF180_LIB")/../../gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram256x8m8wm1__tt_025C_5v00.lib}"
+
 while read -r macro elab_top synth_top rest; do
   case "$macro" in ''|\#*) continue;; esac
   synth_top="${synth_top:-$elab_top}"
+
+  # cache_tag: the cache TAG RAM (ram_2x8x256_1rw) synthesized STANDALONE onto
+  # the tech/gf180 vendor hard IP (gf180mcu_fd_ip_sram), NOT through the SoC
+  # source set above (which uses tech/inferred). This reports the tag's REAL
+  # vendor-macro silicon area (2x sram256x8 + a few glue cells) as its own
+  # series -- unlike icache/dcache, whose adapter-level numbers stay inferred/
+  # memory-inflated until the data-RAM arbiter lands. read_liberty -lib gives
+  # the vendor macro area; stat sums it with the std-cell glue.
+  if [ "$macro" = "cache_tag" ]; then
+    yosys -m ghdl -p "ghdl --std=93 -fexplicit -fsynopsys --syn-binding \
+        --workdir=$OUT/tagwork \
+        lib/memory_tech_lib/memory_pkg.vhd \
+        lib/memory_tech_lib/ram_2x8x256_1rw.vhd \
+        lib/memory_tech_lib/tech/gf180/gf180mcu_fd_ip_sram_comp.vhd \
+        lib/memory_tech_lib/tech/gf180/ram_2x8x256_1rw_gf180.vhd \
+        -e ram_2x8x256_1rw; read_liberty -lib $GF180_SRAM_LIB; \
+      synth -top ram_2x8x256_1rw -flatten; \
+      dfflibmap -liberty $GF180_LIB; abc -liberty $GF180_LIB; \
+      stat -liberty $GF180_LIB -liberty $GF180_SRAM_LIB" 2>&1 | tee "$OUT/$macro.yosys.log" \
+      | awk '
+          /Number of cells/ { buf = ""; capture = 1 }
+          capture { buf = buf $0 "\n" }
+          /of which used for sequential elements/ { last = buf; capture = 0 }
+          /Chip area for module/ { last = buf; capture = 0 }
+          END { printf "%s", last }
+        ' > "$OUT/$macro.stat.txt"
+    rm -rf "$OUT/tagwork"
+    continue
+  fi
+
   yosys -m ghdl -p "$GHDL_BASE -e $elab_top; synth -top $synth_top -flatten; \
     dfflibmap -liberty $GF180_LIB; abc -liberty $GF180_LIB; \
     stat -liberty $GF180_LIB" 2>&1 | tee "$OUT/$macro.yosys.log" \

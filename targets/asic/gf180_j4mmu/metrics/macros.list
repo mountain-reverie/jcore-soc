@@ -37,6 +37,14 @@ j4_core       cpu_synth_j4  cpu         inflated
 cache_ctrl.icache  icache       icache      inflated
 cache_ctrl.dcache  dcache       dcache      inflated
 #
+# cache_tag: the cache TAG RAM (ram_2x8x256_1rw) synthesized STANDALONE onto the
+# tech/gf180 vendor hard IP (gf180mcu_fd_ip_sram, single-port), reporting its
+# REAL vendor-macro silicon area (2x sram256x8 + glue) -- NOT memory-inflated,
+# unlike the icache/dcache adapter rows above whose data RAM is still inferred
+# flops. synth_gf180.sh special-cases this macro (standalone file set + vendor
+# .lib); the elab/synth columns below are informational. See tech/gf180/.
+cache_tag          ram_2x8x256_1rw  ram_2x8x256_1rw  real
+#
 # soc_cluster: no single `soc_glue` entity either. The ring-bus/peripheral
 # cluster (everything in `soc` excluding the CPU and caches) is the
 # soc_gen-generated `devices` entity (UART/SPI/GPIO/AIC/periph mux) plus the

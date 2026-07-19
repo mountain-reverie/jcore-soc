@@ -221,6 +221,7 @@ jobs:
             j4_core=targets/asic/gf180_j4mmu/build/j4_core.stat.txt \
             cache_ctrl.icache=targets/asic/gf180_j4mmu/build/cache_ctrl.icache.stat.txt \
             cache_ctrl.dcache=targets/asic/gf180_j4mmu/build/cache_ctrl.dcache.stat.txt \
+            cache_tag=targets/asic/gf180_j4mmu/build/cache_tag.stat.txt \
             soc_cluster.devices=targets/asic/gf180_j4mmu/build/soc_cluster.devices.stat.txt \
             soc_cluster.sdram_ctrl=targets/asic/gf180_j4mmu/build/soc_cluster.sdram_ctrl.stat.txt \
             top=targets/asic/gf180_j4mmu/build/top.stat.txt \
