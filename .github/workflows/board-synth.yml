@@ -157,8 +157,80 @@ jobs:
           path: targets/boards/icesugar/build/icesugar.bin
           if-no-files-found: ignore
 
+  gf180-synth-metrics:
+    # GF180 ASIC target: synth-only (yosys generic synth -> gf180mcu Liberty
+    # -> stat, NO place & route) per-macro metrics, folded into this
+    # workflow's benchmark/deploy-pages pipeline so they actually reach
+    # mountain-reverie.github.io/jcore-soc (the standalone asic-metrics.yml
+    # job this replaced only ever upload-artifact'd -- see that workflow's
+    # NOTE). Independent of the sim/ bitstream/ bitstream-icesugar jobs
+    # above (no `needs:`); the RTL hard gate lives in asic-metrics.yml's
+    # rtl-sim job, which is a separate required check.
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/jcore-cpu-ci:latest
+    env:
+      PDK_PIN: f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Cache GF180 PDK (ciel)
+        # The PDK is multi-GB; cache it keyed on the pin so a run only
+        # re-downloads when the pin changes.
+        uses: actions/cache@v4
+        with:
+          path: ~/.ciel
+          key: gf180mcu-pdk-${{ env.PDK_PIN }}
+
+      - name: Toolchain deps not in the container (ciel, pytest)
+        # yosys-ghdl ships in the jcore-cpu-ci container image already (used
+        # by board-synth's other jobs).
+        run: pip install --quiet ciel pytest
+
+      - name: Fetch GF180 PDK (pinned)
+        run: ciel enable --pdk-family gf180mcu "$PDK_PIN"
+
+      - name: Test the metrics emitter
+        run: python3 -m pytest tools/asic/
+
+      - name: Regenerate SoC + shared v2p'd sources (final-review C1 fix)
+        # Fresh-clone prep shared with sim/rtl.sh (decode generate + v2p
+        # loop) -- without this, gen_synth_sources.sh/filelist.sh abort deep
+        # inside synth_gf180.sh on missing generated VHDL.
+        run: targets/asic/gf180_j4mmu/prep_sources.sh
+
+      - name: Per-macro GF180 synth-only stats
+        run: |
+          export GF180_LIB="$(find "$HOME/.ciel" -name 'gf180mcu_fd_sc_mcu7t5v0__tt_025C_5v00.lib' | head -1)"
+          targets/asic/gf180_j4mmu/metrics/synth_gf180.sh
+
+      - name: Emit canonical metrics-gf180.json
+        run: |
+          mkdir -p metrics-gf180
+          python3 tools/asic/emit_gf180_metrics.py \
+            j4_core=targets/asic/gf180_j4mmu/build/j4_core.stat.txt \
+            cache_ctrl.icache=targets/asic/gf180_j4mmu/build/cache_ctrl.icache.stat.txt \
+            cache_ctrl.dcache=targets/asic/gf180_j4mmu/build/cache_ctrl.dcache.stat.txt \
+            soc_cluster.devices=targets/asic/gf180_j4mmu/build/soc_cluster.devices.stat.txt \
+            soc_cluster.sdram_ctrl=targets/asic/gf180_j4mmu/build/soc_cluster.sdram_ctrl.stat.txt \
+            top=targets/asic/gf180_j4mmu/build/top.stat.txt \
+            --commit "${{ github.sha }}" \
+            --out metrics-gf180/metrics-gf180.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          # name MUST match the `metrics-*` glob the benchmark job's
+          # download-artifact step consumes.
+          name: metrics-gf180
+          path: metrics-gf180/metrics-gf180.json
+
   benchmark:
-    needs: [bitstream, bitstream-icesugar]
+    needs: [bitstream, bitstream-icesugar, gf180-synth-metrics]
     # Chart whatever metrics were produced. Synth legs that miss their gate
     # (j4-rom timing, iCESugar UP5K fit) are non-fatal and still upload metrics
     # via `if: always()`, so run regardless of any leg's pass/fail; the

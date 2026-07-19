@@ -23,33 +23,10 @@ rm -rf "$WORK"; mkdir -p "$WORK"
 
 BD=targets/asic/gf180_j4mmu
 
-# 0. board-discovery guard: targets/boards/gf180_j4mmu must resolve to this
-# directory (soc_gen's board loader and the top-level Makefile's board
-# discovery both hardcode targets/boards/<name> -- see BD/README.md). Fail
-# loudly here rather than deep inside a confusing soc_gen/make error if a
-# future board-discovery refactor drops or breaks the symlink.
-LINK=targets/boards/gf180_j4mmu
-if [ ! -L "$LINK" ]; then
-  echo "ERROR: $LINK is missing or not a symlink (expected -> ../asic/gf180_j4mmu)." >&2
-  echo "       soc_gen's board loader and the top-level Makefile board discovery" >&2
-  echo "       both hardcode targets/boards/<name>; without this shim symlink" >&2
-  echo "       'make gf180_j4mmu ...' cannot find this target. See $BD/README.md." >&2
-  exit 1
-fi
-if [ ! -e "$LINK" ]; then
-  echo "ERROR: $LINK exists but does not resolve (dangling symlink)." >&2
-  exit 1
-fi
-RESOLVED="$(cd "$LINK" && pwd -P)"
-EXPECTED="$(cd "$BD" && pwd -P)"
-if [ "$RESOLVED" != "$EXPECTED" ]; then
-  echo "ERROR: $LINK resolves to $RESOLVED, expected $EXPECTED." >&2
-  exit 1
-fi
-
-# 1. regenerate the SoC + clock config from design.yaml.
-make gf180_j4mmu TARGET=soc_gen
-make gf180_j4mmu TARGET=vhdl_list.txt
+# 0-1. board-discovery guard + SoC/shared-source regeneration (decode
+# generate + v2p): shared with the synth job, extracted into prep_sources.sh
+# (final-review C1 fix -- see that script's header).
+"$BD/prep_sources.sh"
 
 # 2. real boot image. The committed boot_image_pkg.vhd is an all-zero
 # placeholder (CPU boots nothing) -- build a real one exactly as
@@ -63,20 +40,8 @@ perl tools/genbootpkg \
     4096 \
     > "$BD/boot_image_pkg.vhd"
 
-# 3. generated sources shared with ulx3s: cpu (decode generate + v2p),
-# uartlite, cache/bus cores (mirrors targets/boards/ulx3s/sim.sh step 3).
-make -C components/cpu/decode generate
-( cd components/cpu && for f in core/mult core/datapath decode/decode_core; do
-    LD_LIBRARY_PATH='' perl ../../tools/v2p < "$f.vhm" > "$f.vhd"; done )
-LD_LIBRARY_PATH='' perl tools/v2p < components/uartlite/uart.vhm > components/uartlite/uart.vhd
-for f in components/cpu/cache/dcache_ccl components/cpu/cache/dcache_mcl \
-         components/cpu/cache/icache_ccl components/cpu/cache/icache_mcl \
-         components/cpu/cache/icache_modereg \
-         components/misc/bus_mux_typecsub components/misc/bus_mux_typec \
-         components/misc/gpio2 components/misc/spi2; do
-  LD_LIBRARY_PATH='' perl tools/v2p < "$f.vhm" > "$f.vhd"
-done
-LD_LIBRARY_PATH='' perl tools/v2p < targets/cpumreg.vhm > targets/cpumreg.vhd
+# 3. (generated sources shared with ulx3s -- cpu decode generate + v2p,
+# uartlite, cache/bus cores -- now done by prep_sources.sh above.)
 
 # 4. full design analyze + run the self-checking banner testbench.
 echo "=== gf180_j4mmu_gen_tb (generated soc, no pad_ring) ==="
