@@ -26,61 +26,13 @@ jobs:
         # so no "git diff --exit-code" clean-tree assertion is added here.
         run: targets/asic/gf180_j4mmu/sim/rtl.sh --mmu
 
-  # Synth-only (yosys generic synth -> gf180mcu Liberty -> stat, NO place &
-  # route) per-macro metrics, published as artifacts for the metrics
-  # dashboard. Gated on rtl-sim so a broken RTL PR doesn't burn the PDK
-  # download + synth time. This job runs ALL macros in macros.list, including
-  # the whole-SoC `top` sanity total (~9 min / ~2.6 GB peak per Task 4's
-  # measurements) -- well within a GitHub-hosted ubuntu-latest runner's
-  # budget, so we do NOT defer `top` to a separate nightly/manual trigger.
-  # If future macro growth makes `top` too slow for a per-PR gate, split this
-  # job's macro loop (fast logic macros here, `top` on workflow_dispatch/
-  # schedule) rather than silently dropping it.
-  gf180-synth-metrics:
-    runs-on: ubuntu-latest
-    needs: rtl-sim
-    env:
-      PDK_PIN: f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Cache GF180 PDK (ciel)
-        # The PDK is multi-GB; cache it keyed on the pin so a run only
-        # re-downloads when the pin changes.
-        uses: actions/cache@v4
-        with:
-          path: ~/.ciel
-          key: gf180mcu-pdk-${{ env.PDK_PIN }}
-
-      - name: Toolchain deps (yosys-ghdl, ciel, pytest)
-        run: |
-          pip install --quiet ciel pytest
-
-      - name: Fetch GF180 PDK (pinned)
-        run: ciel enable --pdk-family gf180mcu "$PDK_PIN"
-
-      - name: Test the metrics emitter
-        run: python3 -m pytest tools/asic/
-
-      - name: Per-macro GF180 synth-only stats
-        run: |
-          export GF180_LIB="$(find "$HOME/.ciel" -name 'gf180mcu_fd_sc_mcu7t5v0__tt_025C_5v00.lib' | head -1)"
-          make gf180_j4mmu TARGET=soc_gen
-          targets/asic/gf180_j4mmu/metrics/synth_gf180.sh
-
-      - name: Emit canonical metric JSON per macro
-        run: |
-          for m in j4_core cache_ctrl.icache cache_ctrl.dcache \
-                   soc_cluster.devices soc_cluster.sdram_ctrl top; do
-            python3 tools/asic/emit_gf180_metrics.py --macro "$m" \
-              --commit "${{ github.sha }}" \
-              --stat "targets/asic/gf180_j4mmu/build/$m.stat.txt" \
-              --out "targets/asic/gf180_j4mmu/build/metrics-$m.json"
-          done
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: metrics-gf180
-          path: targets/asic/gf180_j4mmu/build/metrics-*.json
+  # NOTE: the GF180 synth-only per-macro metrics job used to live here, but
+  # (a) it could not pass on a fresh clone (final-review C1: it never ran the
+  # decode-generate + v2p source prep that sim/rtl.sh does) and (b) it only
+  # upload-artifact'd, never reaching the mountain-reverie.github.io/jcore-soc
+  # dashboard (that pipeline is fed exclusively by board-synth.yml's
+  # benchmark/deploy-pages jobs). Both are fixed by moving the GF180 synth
+  # leg into board-synth.yml's `gf180-synth-metrics` job (uses the new
+  # targets/asic/gf180_j4mmu/prep_sources.sh for the C1 fix, and publishes
+  # canonical metrics-gf180.json into the benchmark job's `needs:`). This
+  # workflow stays RTL-gate-only.
