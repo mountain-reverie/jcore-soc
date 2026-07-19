@@ -22,12 +22,12 @@
 # itself elaborates (`ghdl -e cpu`) but decode_core's generics (decode_type,
 # reset_vector) are only bound by a configuration -- ghdl errors "no actual
 # for generic" without one. Elaborate the target's own variant configuration
-# (cpu_synth_j4_rom, components/cpu/synth/cpu_synth_j4_rom_config.vhd, the
+# (cpu_synth_j4, components/cpu/synth/cpu_synth_j4_config.vhd, the
 # same config filelist.sh/cpu_synth_files.list selects for this target's
 # j4-rom decode) instead of the bare entity; `synth -top cpu` still names the
 # underlying `cpu` module for the report. Carries the CPU regfile/TLB RAM
 # inference -> inflated.
-j4_core       cpu_synth_j4_rom  cpu         inflated
+j4_core       cpu_synth_j4  cpu         inflated
 #
 # cache_ctrl: there is no single `cache` wrapper entity. The real id-cache
 # controller is two peer entities, icache + dcache (components/cpu/cache/),
