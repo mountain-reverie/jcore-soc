@@ -4,7 +4,7 @@ configuration soc_cpus_config of cpus is
       use entity work.cpu_core(arch);
       for arch
         for u_cpu : cpu
-          use configuration work.cpu_synth_j4_rom
+          use configuration work.cpu_synth_j4
             generic map (
               MMU_ARCH => true,
               PRIV_ARCH => true

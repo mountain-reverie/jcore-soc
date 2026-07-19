@@ -1,3 +1,3 @@
-decode/decode_table_rom.vhd
-decode/decode_table_rom_config.vhd
-synth/cpu_synth_j4_rom_config.vhd
+decode/decode_table_direct.vhd
+decode/decode_table_direct_config.vhd
+synth/cpu_synth_j4_config.vhd
