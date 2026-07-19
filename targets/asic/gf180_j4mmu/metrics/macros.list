@@ -1,0 +1,54 @@
+# macro        ghdl_top_entity   notes
+#
+# Mapping from the Plan 2 conceptual floorplan macros to real synthesizable
+# top entities in this design (confirmed against Task 1's authoritative
+# entity list + `grep -i 'entity .* is'` on the generated gf180_j4mmu
+# sources). The brief's macros.list draft used placeholder entity names
+# (`cache`, `soc_glue`) that do not exist as single wrapping entities in this
+# RTL -- see the per-row notes below for the real decomposition.
+#
+# j4_core: entity `cpu` (components/cpu/core/cpu.vhd) synthesizes standalone
+# and includes the MMU/TLB (work.tlb bound in the MMU_ARCH generate). `cpu`
+# itself elaborates (`ghdl -e cpu`) but decode_core's generics (decode_type,
+# reset_vector) are only bound by a configuration -- ghdl errors "no actual
+# for generic" without one. Elaborate the target's own variant configuration
+# (cpu_synth_j4_rom, components/cpu/synth/cpu_synth_j4_rom_config.vhd, the
+# same config filelist.sh/cpu_synth_files.list selects for this target's
+# j4-rom decode) instead of the bare entity; `synth -top cpu` still names the
+# underlying `cpu` module for the report.
+j4_core       cpu_synth_j4_rom  cpu
+#
+# cache_ctrl: there is no single `cache` wrapper entity. The real id-cache
+# controller is two peer entities, icache + dcache (components/cpu/cache/),
+# bound via the ddr_ram_mux_one_cpu_idcache_fpga config. We synthesize both
+# and report cache_ctrl as their sum (two rows below, tagged cache_ctrl.*).
+cache_ctrl.icache  icache
+cache_ctrl.dcache  dcache
+#
+# soc_cluster: no single `soc_glue` entity either. The ring-bus/peripheral
+# cluster (everything in `soc` excluding the CPU and caches) is the
+# soc_gen-generated `devices` entity (UART/SPI/GPIO/AIC/periph mux) plus the
+# SDRAM controller `sdram_ctrl` (components/sdram/sdram_ctrl.vhd), which
+# `soc` instantiates directly (not via devices). We synthesize both and
+# report soc_cluster as their sum (two rows below, tagged soc_cluster.*).
+soc_cluster.devices     devices
+soc_cluster.sdram_ctrl  sdram_ctrl
+#
+# top: whole-SoC sanity total (entity `soc`, targets/asic/gf180_j4mmu/soc.vhd).
+top           soc
+#
+# MEMORY-AS-FLOPS CAVEAT: GHDL's own elaboration (ghdl-yosys `-e`, which runs
+# before yosys sees the design) expands this design's inferred cache/regfile
+# RAM (lib/memory_tech_lib/tech/inferred/ram_{1,2}rw_infer.vhd -- indexed
+# array in a clocked process) directly into per-bit flip-flops; no ram_1rw/
+# ram_2rw module boundary survives `-e` to `blackbox`, and `stat` always
+# reports "Number of memories: 0". So icache/dcache/cpu (and top, which
+# includes them) are memory-inflated: their absolute area/cell numbers are an
+# upper bound assuming RAM-as-flops, not the real logic-only footprint (Plan
+# 2's real GF180 SRAM macros will be far smaller). devices/sdram_ctrl are not
+# memory-inflated (no inferred RAM in their cone). synth_gf180.sh's stat
+# capture always includes the `stat -liberty` "of which used for sequential
+# elements: NN%" line specifically so this is visible per macro without
+# fabricating a separate blackbox split. See synth_gf180.sh's header comment
+# for the full investigation (blackbox + `-run :coarse` both tried, neither
+# recovers a memory boundary at this stage of the flow).
