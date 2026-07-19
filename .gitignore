@@ -60,3 +60,15 @@ tools/tests/runtests.o
 
 # local Claude Code tool state (settings, worktrees)
 /.claude/
+
+# OpenRAM GF180 spike (Task 2): generated macro outputs are heavy and
+# reproducible from lib/memory_tech_lib/tech/gf180/openram/*.py + README.md;
+# keep configs/README/DECISION.md, drop generated {.gds,.lib,.lef,.v,.sp,.log}
+lib/memory_tech_lib/tech/gf180/openram/*.gds
+lib/memory_tech_lib/tech/gf180/openram/*.lib
+lib/memory_tech_lib/tech/gf180/openram/*.lef
+lib/memory_tech_lib/tech/gf180/openram/*.v
+lib/memory_tech_lib/tech/gf180/openram/*.sp
+lib/memory_tech_lib/tech/gf180/openram/*.log
+lib/memory_tech_lib/tech/gf180/openram/out/
+lib/memory_tech_lib/tech/gf180/openram/*.html
