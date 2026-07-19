@@ -3,6 +3,7 @@ targets/boards/ulx3s/boot_image_pkg.vhd
 targets/boards/ulx3s/rom/main.elf
 targets/boards/ulx3s/rom/main.bin
 targets/boards/*/build/
+targets/asic/*/build/
 
 docs/superpowers
 .superpowers
