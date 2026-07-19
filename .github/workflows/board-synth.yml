@@ -187,10 +187,15 @@ jobs:
           path: ~/.ciel
           key: gf180mcu-pdk-${{ env.PDK_PIN }}
 
-      - name: Toolchain deps not in the container (ciel, pytest)
-        # yosys-ghdl ships in the jcore-cpu-ci container image already (used
-        # by board-synth's other jobs).
-        run: pip install --quiet ciel pytest
+      - name: Toolchain deps not in the container (pip, ciel, pytest)
+        # yosys-ghdl + Go (socgen) already ship in the jcore-cpu-ci container
+        # (Ubuntu 24.04, root), but pip/ensurepip do NOT -- bootstrap pip via
+        # apt, then pip-install ciel (PDK manager) + pytest. --break-system-packages
+        # is required under PEP 668 (Ubuntu marks the system env externally-managed).
+        run: |
+          apt-get update -qq
+          apt-get install -y --no-install-recommends python3-pip
+          python3 -m pip install --quiet --break-system-packages ciel pytest
 
       - name: Fetch GF180 PDK (pinned)
         run: ciel enable --pdk-family gf180mcu "$PDK_PIN"
