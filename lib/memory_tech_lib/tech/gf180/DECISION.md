@@ -259,3 +259,27 @@ EOF
 ls <venv>/lib/python3.10/site-packages/openram/technology/gf180mcu/sp_lib/
 # -> only cell1rw.sp and gf180mcu_3v3__nand2_1_dec.sp: no dff, no other gates
 ```
+
+---
+
+## RESOLUTION (user decision, 2026-07-19)
+
+Spike verdict accepted: OpenRAM is a **NO-GO** for GF180 (no dual-port bitcell;
+single-port library incomplete). **Pivot to the vendor `gf180mcu_fd_ip_sram`
+single-port hard IP + a data-RAM arbiter (the KianV approach).** This IP is
+already shipped in the ciel PDK checkout (`gf180mcuD/.../gf180mcu_fd_ip_sram/`,
+sizes 64/128/256/512×8, full GDS/LEF/behavioral+blackbox `.v`/multi-corner `.lib`).
+
+Follow-up plan direction (supersedes the OpenRAM 2c–2e roadmap):
+- **Tags** (already plain `ram_1rw`, single-port) map directly onto the vendor IP.
+- **Data RAMs** (dcache 1RW+1W, icache 1R+1W) get an arbiter to time-share one
+  physical port. Open question to resolve FIRST (analysis/spike): does the
+  single-clock ASIC cache ever issue a port0 read concurrently with a port1
+  refill write (writes are already mutually exclusive)? If not, the arbiter is
+  transparent and cache RTL stays untouched; if so, a scoped cache-side
+  wait-state is needed — re-validated by the cache scoreboard (`sim/cache_sim.sh`).
+- Metrics: real area = logic + vendor macro area (from the IP `.lib`), tiled to
+  the 8 KB caches.
+
+The OpenRAM env/config in `openram/` is retained only as the reproducible
+evidence for this NO-GO; it is not used going forward.
