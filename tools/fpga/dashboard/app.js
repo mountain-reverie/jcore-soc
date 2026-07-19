@@ -14,7 +14,7 @@ var BUDGET = {
   "LC": 5280,
   "RAM": 30,
 };
-var BOARD_COLOR = ["#1f77b4", "#2ca02c", "#e6b800", "#d62728"]; // assigned per board
+var BOARD_COLOR = ["#1f77b4", "#2ca02c", "#e6b800", "#d62728", "#9467bd", "#17becf", "#8c564b"]; // per line (GF180 has ~5 macro lines)
 
 // Unit (MHz/cells) per full metric name, captured from the canonical `unit`
 // field as data is read (so we don't infer it from the name).
@@ -74,6 +74,7 @@ function familyOf(name) {
   var target = (name || "").split(" · ")[0];
   if (/^ecp5/.test(target)) return "ecp5";
   if (/^ice40/.test(target)) return "ice40";
+  if (/^gf180/.test(target)) return "gf180";
   return "";
 }
 
@@ -178,8 +179,9 @@ function lineCard(parent, name, boardMap) {
 function render() {
   var all = mergeCharts(seriesByName(window.__SIZE__), seriesByName(window.__SPEED__));
   var grids = { ecp5: document.getElementById("trends-ecp5"),
-                ice40: document.getElementById("trends-ice40") };
-  var seen = { ecp5: false, ice40: false };
+                ice40: document.getElementById("trends-ice40"),
+                gf180: document.getElementById("trends-gf180") };
+  var seen = { ecp5: false, ice40: false, gf180: false };
   Object.keys(all).sort().forEach(function (name) {
     var fam = familyOf(name);
     var grid = grids[fam];
@@ -189,12 +191,14 @@ function render() {
   });
   if (seen.ecp5) document.getElementById("sec-ecp5").hidden = false;
   if (seen.ice40) document.getElementById("sec-ice40").hidden = false;
+  if (seen.gf180) document.getElementById("sec-gf180").hidden = false;
   renderLatest(all);
 }
 
 function renderLatest(all) {
   renderLatestFamily(all, "ecp5", "latest-ecp5");
   renderLatestFamily(all, "ice40", "latest-ice40");
+  renderLatestFamily(all, "gf180", "latest-gf180");
 }
 
 function renderLatestFamily(all, fam, elId) {

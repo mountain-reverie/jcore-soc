@@ -16,7 +16,8 @@
 <body>
   <h1>jcore-soc board synthesis metrics</h1>
   <p class="muted">Per-commit FPGA utilisation &amp; Fmax from yosys + nextpnr,
-    grouped by device family. Dashed lines are the per-device resource budgets.
+    plus GF180 ASIC synth-only area, grouped by device family. Dashed lines are
+    the per-device resource budgets.
     Raw data:
     <a href="./bench-size/benchmark-data.json">size</a> ·
     <a href="./bench-speed/benchmark-data.json">speed</a>.</p>
@@ -33,6 +34,17 @@
     <div id="trends-ice40" class="grid"></div>
     <h3>Latest values</h3>
     <div id="latest-ice40"></div>
+  </section>
+
+  <section id="sec-gf180" hidden>
+    <h2>ASIC — GF180 (GlobalFoundries 180&nbsp;nm, synth-only)</h2>
+    <p class="muted">Per-macro yosys generic-synth cell count &amp; standard-cell area
+      mapped to the gf180mcu Liberty (no place &amp; route). Cache/regfile macros
+      labelled <code>incl-inferred-RAM</code> are memory-inflated (inferred RAM as
+      flip-flops) until real SRAM macros land; one line per synth macro.</p>
+    <div id="trends-gf180" class="grid"></div>
+    <h3>Latest values</h3>
+    <div id="latest-gf180"></div>
   </section>
 
   <script src="./app.js" defer></script>
