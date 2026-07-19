@@ -2,8 +2,8 @@
 
 GF180 ASIC scaffold target for soc_gen. Single J4 core (SH-4-class MMU is in
 the J4 RTL and is software-enabled by Linux `head_32.S` -- no MMU config knob
-needed here), ROM decode, id-cache -- the same CPU/cache variant as
-`targets/boards/ulx3s/design.j4-rom.yaml`.
+needed here), direct decode (ASIC-designed combinational decoder; drops the
+microcode ROM), id-cache.
 
 Unlike the FPGA boards under `targets/boards/`, this target has **no
 pad_ring FPGA primitives, no PLL, no board pin constraints (.lpf/.pcf)**.
@@ -41,12 +41,19 @@ target -- see above), `cpus_config.vhd`, `cpu_synth_files.list`, `build.mk`,
 
 See `filelist.sh` for the file list (adapted from
 `targets/boards/ulx3s/filelist.sh`: drops pad_ring/clkgen/PLL and the
-dual-core-only/attribute-stripped entries; adds the j4-rom decode table +
+dual-core-only/attribute-stripped entries; adds the j4 direct-decode table +
 cpu_synth config, `targets/asic/gf180_j4mmu/boot_image_pkg.vhd` -- an
 all-zero placeholder ROM, NOT a working bootloader, see that file's header
 comment -- and this target's own `devices.vhd`/`cpus_config.vhd`/`soc.vhd`).
 `-fexplicit -fsynopsys` are required (same as `targets/boards/ulx3s/sim.sh`)
 for `std_logic_unsigned`/overloaded-function usage in the shared RTL.
+
+**Note:** switching `decode: rom` -> `decode: direct` (this target now uses
+the ASIC-designed combinational decoder) is expected to step UP the `j4_core`
+cell/area numbers in any synth dashboard (~110 KB generated
+`decode_table_direct.vhd` vs ~37 KB for `decode_table_rom.vhd`): this is real
+combinational logic replacing what was effectively inferred-ROM-as-flops, not
+an area regression.
 
 ```
 cd /home/cedric/work/jcore/jcore-soc

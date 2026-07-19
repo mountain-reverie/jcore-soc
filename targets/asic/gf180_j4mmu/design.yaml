@@ -1,12 +1,13 @@
 # targets/asic/gf180_j4mmu/design.yaml
 # GF180 ASIC target: single J4 core (SH-4-class MMU is in the J4 RTL and is
-# software-enabled by Linux head_32.S), ROM decode, id-cache. No FPGA pad_ring
+# software-enabled by Linux head_32.S), direct decode (ASIC-designed
+# combinational decoder; drops the microcode ROM), id-cache. No FPGA pad_ring
 # or PLL -- see base.yaml for the logical clk/reset top.
 <<: !include base.yaml
 cpu:
   architecture: one_cpu_m0
   cores: 1
   model: j4
-  decode: rom
+  decode: direct
   copro: false
   cache: id
