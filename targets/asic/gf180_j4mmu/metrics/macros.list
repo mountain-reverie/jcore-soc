@@ -45,6 +45,17 @@ cache_ctrl.dcache  dcache       dcache      inflated
 # .lib); the elab/synth columns below are informational. See tech/gf180/.
 cache_tag          ram_2x8x256_1rw  ram_2x8x256_1rw  real
 #
+# cache_data: the cache DATA RAM (ram_2x8x2048_2rw) synthesized STANDALONE
+# onto the tech/gf180 vendor hard IP (gf180mcu_fd_ip_sram, single-port),
+# reporting its REAL vendor-macro silicon area (8x sram512x8 + mux/row-decode
+# glue) -- NOT memory-inflated, like cache_tag above. Relies on the
+# single-clock precondition that port0-READ and port1-WRITE never collide in
+# the same cycle (spike-verified, 0 collisions / 1019 dcache scoreboard
+# tests) -- see tech/gf180/ram_2x8x2048_2rw_gf180.vhd's header. synth_gf180.sh
+# special-cases this macro (standalone file set + vendor .lib); the elab/
+# synth columns below are informational. See tech/gf180/.
+cache_data         ram_2x8x2048_2rw  ram_2x8x2048_2rw  real
+#
 # soc_cluster: no single `soc_glue` entity either. The ring-bus/peripheral
 # cluster (everything in `soc` excluding the CPU and caches) is the
 # soc_gen-generated `devices` entity (UART/SPI/GPIO/AIC/periph mux) plus the
