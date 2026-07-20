@@ -64,3 +64,46 @@ WORKDIR="${WORKDIR:-$GEN/work}"
 mkdir -p "$WORKDIR"
 GHDL_BASE="ghdl --std=93 -fexplicit -fsynopsys --syn-binding --workdir=$WORKDIR $CFG targets/clk_config.vhd ${FILES[*]}"
 export GHDL_BASE
+
+# icache_gf180 / dcache_gf180 (synth_gf180.sh's cache_ctrl.*_gf180 special
+# cases): full icache_adapter_gf180/dcache_adapter_gf180 -- controller +
+# BOTH tag (ram_1rw) and data (ram_2rw) RAM bound to the tech/gf180 vendor
+# SRAM macros via lib/memory_tech_lib/tech/gf180/{mem_gf180_config,
+# cache_gf180_config}.vhd -- as opposed to the tech/inferred path FILES above
+# uses. Built by walking the same FILES list (leaf-first order already
+# correct) and substituting at the two divergence points: drop
+# tech/inferred/ram_{1,2}rw_infer.vhd for the gf180 memory-macro chain (named
+# macro entities, their (sim) archs for the two macros with no gf180 backend,
+# the (gf180) archs, the `memories` architectures, and mem_gf180_config.vhd),
+# and stop at (drop) cache_config_fpga.vhd -- replaced by
+# cache_gf180_config.vhd -- since nothing after that point (ddr_ram_mux /
+# devices / soc, which reference the *_fpga configurations by name) is needed
+# to elaborate icache_adapter_gf180/dcache_adapter_gf180 standalone.
+GF180_MEM_EXTRA=(
+  lib/memory_tech_lib/ram_18x2048_1rw.vhd
+  lib/memory_tech_lib/ram_32x1x512_2rw.vhd
+  lib/memory_tech_lib/ram_2x8x256_1rw.vhd
+  lib/memory_tech_lib/ram_2x8x2048_2rw.vhd
+  lib/memory_tech_lib/tech/sim/ram_18x2048_1rw_sim.vhd
+  lib/memory_tech_lib/tech/sim/ram_32x1x512_2rw_sim.vhd
+  lib/memory_tech_lib/tech/gf180/gf180mcu_fd_ip_sram_comp.vhd
+  lib/memory_tech_lib/tech/gf180/ram_2x8x256_1rw_gf180.vhd
+  lib/memory_tech_lib/tech/gf180/ram_2x8x2048_2rw_gf180.vhd
+  lib/memory_tech_lib/ram_1rw_mems.vhd
+  lib/memory_tech_lib/ram_2rw_mems.vhd
+  lib/memory_tech_lib/tech/gf180/mem_gf180_config.vhd
+)
+GF180_CACHE_FILES=()
+for _f in "${FILES[@]}"; do
+  case "$_f" in
+    lib/memory_tech_lib/tech/inferred/ram_1rw_infer.vhd) ;;
+    lib/memory_tech_lib/tech/inferred/ram_2rw_infer.vhd)
+      GF180_CACHE_FILES+=("${GF180_MEM_EXTRA[@]}") ;;
+    components/cpu/cache/cache_config_fpga.vhd)
+      GF180_CACHE_FILES+=(lib/memory_tech_lib/tech/gf180/cache_gf180_config.vhd)
+      break ;;
+    *) GF180_CACHE_FILES+=("$_f") ;;
+  esac
+done
+GHDL_BASE_GF180_CACHE="ghdl --std=93 -fexplicit -fsynopsys --syn-binding --workdir=$WORKDIR $CFG targets/clk_config.vhd ${GF180_CACHE_FILES[*]}"
+export GHDL_BASE_GF180_CACHE

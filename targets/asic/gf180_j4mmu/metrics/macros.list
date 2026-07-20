@@ -56,6 +56,19 @@ cache_tag          ram_2x8x256_1rw  ram_2x8x256_1rw  real
 # synth columns below are informational. See tech/gf180/.
 cache_data         ram_2x8x2048_2rw  ram_2x8x2048_2rw  real
 #
+# cache_ctrl.icache_gf180 / cache_ctrl.dcache_gf180: the FULL icache/dcache
+# macro (cache_ctrl.icache/.dcache's controller PLUS both tag and data RAM,
+# both bound to the tech/gf180 vendor SRAM macros -- unlike cache_ctrl.icache/
+# .dcache above, which use the tech/inferred RAM-as-flops path). Elaborates
+# icache_adapter_gf180 / dcache_adapter_gf180 (lib/memory_tech_lib/tech/gf180/
+# cache_gf180_config.vhd). synth_gf180.sh special-cases these two macros
+# (GHDL_BASE_GF180_CACHE file set + both vendor .lib files); the elab/synth
+# columns below match the elaboration target. real: the REAL total silicon
+# area (control logic + vendor macros), not memory-inflated -- "Number of
+# memory bits" must read 0.
+cache_ctrl.icache_gf180  icache_adapter_gf180  icache_adapter  real
+cache_ctrl.dcache_gf180  dcache_adapter_gf180  dcache_adapter  real
+#
 # soc_cluster: no single `soc_glue` entity either. The ring-bus/peripheral
 # cluster (everything in `soc` excluding the CPU and caches) is the
 # soc_gen-generated `devices` entity (UART/SPI/GPIO/AIC/periph mux) plus the
