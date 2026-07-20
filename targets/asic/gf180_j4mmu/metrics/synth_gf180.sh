@@ -103,6 +103,32 @@ while read -r macro elab_top synth_top rest; do
     continue
   fi
 
+  # cache_ctrl.icache_gf180 / cache_ctrl.dcache_gf180: the FULL icache/dcache
+  # macro (controller + BOTH tag and data RAM) synthesized with tag and data
+  # bound to the tech/gf180 vendor SRAM macros (icache_adapter_gf180 /
+  # dcache_adapter_gf180, see lib/memory_tech_lib/tech/gf180/
+  # cache_gf180_config.vhd), unlike cache_tag/cache_data above which only
+  # synthesize the RAM macros standalone. Reports the cache's REAL total
+  # silicon area (control logic + both vendor macros), not memory-inflated --
+  # "Number of memory bits" must read 0 and stat must show sram256x8/
+  # sram512x8 cells, not flops. Uses GHDL_BASE_GF180_CACHE (exported by
+  # gen_synth_sources.sh), a variant of GHDL_BASE with the tech/inferred
+  # ram_{1,2}rw_infer.vhd chain swapped for the tech/gf180 chain and
+  # cache_config_fpga.vhd swapped for cache_gf180_config.vhd.
+  if [ "$macro" = "cache_ctrl.icache_gf180" ] || [ "$macro" = "cache_ctrl.dcache_gf180" ]; then
+    yosys -m ghdl -p "$GHDL_BASE_GF180_CACHE -e $elab_top; synth -top $synth_top -flatten; \
+        dfflibmap -liberty $GF180_LIB; abc -liberty $GF180_LIB; \
+        stat -liberty $GF180_LIB -liberty $GF180_SRAM_LIB -liberty $GF180_SRAM_LIB_512" 2>&1 | tee "$OUT/$macro.yosys.log" \
+      | awk '
+          /Number of cells/ { buf = ""; capture = 1 }
+          capture { buf = buf $0 "\n" }
+          /of which used for sequential elements/ { last = buf; capture = 0 }
+          /Chip area for module/ { last = buf; capture = 0 }
+          END { printf "%s", last }
+        ' > "$OUT/$macro.stat.txt"
+    continue
+  fi
+
   yosys -m ghdl -p "$GHDL_BASE -e $elab_top; synth -top $synth_top -flatten; \
     dfflibmap -liberty $GF180_LIB; abc -liberty $GF180_LIB; \
     stat -liberty $GF180_LIB" 2>&1 | tee "$OUT/$macro.yosys.log" \
