@@ -126,6 +126,20 @@ while read -r macro elab_top synth_top rest; do
           /Chip area for module/ { last = buf; capture = 0 }
           END { printf "%s", last }
         ' > "$OUT/$macro.stat.txt"
+    # ROBUSTNESS GUARD: the ram_2rw->gf180 data binding reaches the nested
+    # `ram/sc/ram_s` generate via GHDL default binding (analyze-order dependent,
+    # same fragility as the production cache_config_fpga). Fail LOUDLY if the
+    # data RAM ever reverts to inferred flip-flops instead of the vendor
+    # sram512x8 macros, rather than silently charting a wrong (memory-inflated)
+    # number. Expect 32x sram512x8 (16 per cache x ... ) actually 16 per cache;
+    # here just require >=1 sram512x8 present AND zero memory bits.
+    if ! grep -q "gf180mcu_fd_ip_sram__sram512x8" "$OUT/$macro.yosys.log" \
+       || grep -qE "Number of memory bits: +[1-9]" "$OUT/$macro.yosys.log"; then
+      echo "ERROR: $macro data RAM did NOT map to vendor sram512x8 macros" >&2
+      echo "       (ram_2rw->gf180 binding regressed to inferred flops)." >&2
+      grep -E "sram512x8|Number of memory bits" "$OUT/$macro.yosys.log" | head >&2
+      exit 1
+    fi
     continue
   fi
 
