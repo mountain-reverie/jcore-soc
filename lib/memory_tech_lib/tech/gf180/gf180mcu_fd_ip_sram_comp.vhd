@@ -39,4 +39,19 @@ package gf180_sram_comp_pkg is
       Q    : out std_logic_vector(7 downto 0));
   end component;
 
+  -- 512-deep x 8-bit sibling macro (same port semantics/polarities as the
+  -- 256x8 variant above, just A(8:0) instead of A(7:0)). Used by the cache
+  -- DATA RAM wrapper (ram_2x8x2048_2rw_gf180.vhd), which tiles 8 of these
+  -- (4 row-banks x 2 byte-columns) to cover 2048-deep x 16-bit.
+  component \gf180mcu_fd_ip_sram__sram512x8m8wm1\ is
+    port (
+      CLK  : in  std_logic;
+      CEN  : in  std_logic;
+      GWEN : in  std_logic;
+      WEN  : in  std_logic_vector(7 downto 0);
+      A    : in  std_logic_vector(8 downto 0);
+      D    : in  std_logic_vector(7 downto 0);
+      Q    : out std_logic_vector(7 downto 0));
+  end component;
+
 end package gf180_sram_comp_pkg;

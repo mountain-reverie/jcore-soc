@@ -39,6 +39,9 @@ source targets/asic/gf180_j4mmu/metrics/gen_synth_sources.sh   # exports GHDL_BA
 # standard-cell Liberty's PDK location. Used to give the cache_tag macro's
 # vendor black boxes real area (see the cache_tag special case below).
 GF180_SRAM_LIB="${GF180_SRAM_LIB:-$(dirname "$GF180_LIB")/../../gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram256x8m8wm1__tt_025C_5v00.lib}"
+# Same vendor SRAM family, 512x8 variant -- used by the cache_data macro's
+# 8x sram512x8 tiling (see ram_2x8x2048_2rw_gf180.vhd).
+GF180_SRAM_LIB_512="${GF180_SRAM_LIB_512:-$(dirname "$GF180_LIB")/../../gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram512x8m8wm1__tt_025C_5v00.lib}"
 
 while read -r macro elab_top synth_top rest; do
   case "$macro" in ''|\#*) continue;; esac
@@ -70,6 +73,33 @@ while read -r macro elab_top synth_top rest; do
           END { printf "%s", last }
         ' > "$OUT/$macro.stat.txt"
     rm -rf "$OUT/tagwork"
+    continue
+  fi
+
+  # cache_data: the cache DATA RAM (ram_2x8x2048_2rw) synthesized STANDALONE
+  # onto the tech/gf180 vendor hard IP (gf180mcu_fd_ip_sram), analogous to
+  # the cache_tag special case above but tiling 8x sram512x8 (4 row-banks x
+  # 2 byte-columns) via ram_2x8x2048_2rw_gf180.vhd's mux/row-decode. Reports
+  # the DATA RAM's REAL vendor-macro silicon area, not memory-inflated.
+  if [ "$macro" = "cache_data" ]; then
+    yosys -m ghdl -p "ghdl --std=93 -fexplicit -fsynopsys --syn-binding \
+        --workdir=$OUT/datawork \
+        lib/memory_tech_lib/memory_pkg.vhd \
+        lib/memory_tech_lib/ram_2x8x2048_2rw.vhd \
+        lib/memory_tech_lib/tech/gf180/gf180mcu_fd_ip_sram_comp.vhd \
+        lib/memory_tech_lib/tech/gf180/ram_2x8x2048_2rw_gf180.vhd \
+        -e ram_2x8x2048_2rw; read_liberty -lib $GF180_SRAM_LIB_512; \
+      synth -top ram_2x8x2048_2rw -flatten; \
+      dfflibmap -liberty $GF180_LIB; abc -liberty $GF180_LIB; \
+      stat -liberty $GF180_LIB -liberty $GF180_SRAM_LIB_512" 2>&1 | tee "$OUT/$macro.yosys.log" \
+      | awk '
+          /Number of cells/ { buf = ""; capture = 1 }
+          capture { buf = buf $0 "\n" }
+          /of which used for sequential elements/ { last = buf; capture = 0 }
+          /Chip area for module/ { last = buf; capture = 0 }
+          END { printf "%s", last }
+        ' > "$OUT/$macro.stat.txt"
+    rm -rf "$OUT/datawork"
     continue
   fi
 
