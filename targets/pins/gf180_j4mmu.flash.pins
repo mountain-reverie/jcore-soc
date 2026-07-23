@@ -1,0 +1,30 @@
+# gf180_j4mmu FLASH-variant logical pins: same as gf180_j4mmu.pins (see that
+# file's header -- pad-less logical target, no LOC/pin constraints) plus the 6
+# qspi_flash_ctrl flash pins (fl_cs_n/fl_sck/fl_io_o/fl_io_oe/fl_io_i), which
+# design.flash.yaml's qspi_flash class already names directly (no
+# per-device prefix) via its `ports:` map, so they appear here as plain net
+# names like the sd_/spi2_ entries below.
+clk_sys
+reset
+
+gpio_di
+gpio_do
+
+sd_cmd
+sd_dq_i
+sd_dq_o
+sd_dq_oe
+
+uart0_rx
+uart0_tx
+
+spi2_clk
+spi2_cs
+spi2_miso
+spi2_mosi
+
+qfl_cs_n
+qfl_sck
+qfl_io_o
+qfl_io_oe
+qfl_io_i

@@ -1,0 +1,36 @@
+# gf180_j4mmu FLASH variant: adds the qspi_flash_ctrl memory-mapped QSPI NOR
+# flash controller (components/misc/qspi_flash_ctrl.vhd, SP1/PR #96) on top of
+# base.yaml. Opt-in only (select with VARIANT=flash); base.yaml itself stays
+# flash-less so the default gf180_j4mmu build is unchanged.
+#
+# Region: soc_gen requires every "device" base-addr to have bits 31-28 = 0xA
+# (the peripheral bus; see tools/socgen/elaborate/addr_validate.go) and to
+# not overlap the hard-coded `dram` reserved region [0x10000000,0x1fffffff].
+# 0x14000000 (the original plan) violated both. Relocated into the 0xA
+# peripheral space: 0xA1000000-0xA1FFFFFF (16 MiB) -- clear of both dram and
+# the existing 0xABCD00xx device cluster (aic0/gpio0/uart0/spi2 + the
+# 0xabcd0600-0xabcd06ff reserved cpumreg range).
+#
+# FLASH_BASE generic: qspi_flash_ctrl decodes `db_i.a` directly, and `db_i.a`
+# reaching this device is the FULL, un-relocated soc data-bus address (see
+# targets/data_bus_pkg.vhd's `mask_data_o`: it masks en/rd/wr only, `.a` is
+# copied through unchanged -- devices.vhd never subtracts a device's
+# base-addr before presenting the bus to a device instance). So
+# `in_range := a_u >= FLASH_BASE and a_u < FLASH_BASE + FLASH_SIZE` only
+# matches real bus cycles if FLASH_BASE equals this device's SoC base-addr
+# (0xA1000000), NOT a flash-internal offset of 0 -- with FLASH_BASE =
+# base-addr, "flash address 0" then correctly lands at db_i.a=base-addr, i.e.
+# flash-internal addressing (db_i.a - FLASH_BASE) still starts at 0 as
+# intended.
+<<: !include base.yaml
+
+devices:
+  - class: qspi_flash
+    name: qspi_flash0
+    base-addr: 0xA1000000
+    dt-node: true
+    generics:
+      flash_base: 0xA1000000
+
+pins:
+  file: ../pins/gf180_j4mmu.flash.pins

@@ -25,6 +25,11 @@ entity devices is
         cpu1_periph_dbus_o : in cpu_data_o_t;
         gpio_di : in std_logic_vector(31 downto 0);
         gpio_do : out std_logic_vector(31 downto 0);
+        qfl_cs_n : out std_logic;
+        qfl_io_i : in std_logic_vector(3 downto 0);
+        qfl_io_o : out std_logic_vector(3 downto 0);
+        qfl_io_oe : out std_logic_vector(3 downto 0);
+        qfl_sck : out std_logic;
         reset : in std_logic;
         spi2_clk : out std_logic;
         spi2_cs : out std_logic_vector(1 downto 0);
@@ -35,7 +40,7 @@ entity devices is
     );
 end;
 architecture impl of devices is
-    type device_t is (NONE, DEV_AIC0, DEV_GPIO0, DEV_SPI2, DEV_UART0);
+    type device_t is (NONE, DEV_AIC0, DEV_GPIO0, DEV_QSPI_FLASH0, DEV_SPI2, DEV_UART0);
     signal active_dev : device_t;
     type data_bus_i_t is array (device_t'left to device_t'right) of cpu_data_i_t;
     type data_bus_o_t is array (device_t'left to device_t'right) of cpu_data_o_t;
@@ -45,7 +50,10 @@ architecture impl of devices is
     begin
         -- Assumes addr(31 downto 28) = x"a".
         -- Address decoding closer to CPU checks those bits.
-        if addr(27 downto 10) = "101111001101000000" then
+        if addr(27 downto 24) = "0001" then
+            -- A1000000-A1FFFFFF
+            return DEV_QSPI_FLASH0;
+        elsif addr(27 downto 10) = "101111001101000000" then
             if addr(9) = '0' then
                 if addr(8 downto 7) = "00" then
                     if addr(6 downto 4) = "000" then
@@ -107,6 +115,23 @@ begin
             db_i => devs_bus_o(DEV_GPIO0),
             db_o => devs_bus_i(DEV_GPIO0),
             irq => open,
+            rst => reset
+        );
+    qspi_flash0 : entity work.qspi_flash_ctrl(rtl)
+        generic map (
+            dummy_cycles => 6,
+            flash_base => 2701131776,
+            lanes => 4
+        )
+        port map (
+            clk => clk_sys,
+            db_i => devs_bus_o(DEV_QSPI_FLASH0),
+            db_o => devs_bus_i(DEV_QSPI_FLASH0),
+            fl_cs_n => qfl_cs_n,
+            fl_io_i => qfl_io_i,
+            fl_io_o => qfl_io_o,
+            fl_io_oe => qfl_io_oe,
+            fl_sck => qfl_sck,
             rst => reset
         );
     spi2 : entity work.spi2(arch)
