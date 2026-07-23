@@ -22,11 +22,6 @@ entity pad_ring is
         pin_clk_sys : in std_logic;
         pin_gpio_di : in std_logic;
         pin_gpio_do : out std_logic;
-        pin_qfl_cs_n : out std_logic;
-        pin_qfl_io_i : in std_logic;
-        pin_qfl_io_o : out std_logic;
-        pin_qfl_io_oe : out std_logic;
-        pin_qfl_sck : out std_logic;
         pin_reset : in std_logic;
         pin_sd_cmd : out std_logic;
         pin_sd_dq_i : in std_logic;
@@ -44,11 +39,6 @@ architecture impl of pad_ring is
     signal clk_sys : std_logic;
     signal gpio_di : std_logic_vector(31 downto 0);
     signal gpio_do : std_logic_vector(31 downto 0);
-    signal qfl_cs_n : std_logic;
-    signal qfl_io_i : std_logic_vector(3 downto 0);
-    signal qfl_io_o : std_logic_vector(3 downto 0);
-    signal qfl_io_oe : std_logic_vector(3 downto 0);
-    signal qfl_sck : std_logic;
     signal reset : std_logic;
     signal sd_cmd : sdram_cmd_t;
     signal sd_dq_i : std_logic_vector(15 downto 0);
@@ -66,11 +56,6 @@ begin
             clk_sys => clk_sys,
             gpio_di => gpio_di,
             gpio_do => gpio_do,
-            qfl_cs_n => qfl_cs_n,
-            qfl_io_i => qfl_io_i,
-            qfl_io_o => qfl_io_o,
-            qfl_io_oe => qfl_io_oe,
-            qfl_sck => qfl_sck,
             reset => reset,
             sd_cmd => sd_cmd,
             sd_dq_i => sd_dq_i,
@@ -86,11 +71,6 @@ begin
     clk_sys <= pin_clk_sys;
     gpio_di <= pin_gpio_di;
     pin_gpio_do <= gpio_do;
-    pin_qfl_cs_n <= qfl_cs_n;
-    qfl_io_i <= pin_qfl_io_i;
-    pin_qfl_io_o <= qfl_io_o;
-    pin_qfl_io_oe <= qfl_io_oe;
-    pin_qfl_sck <= qfl_sck;
     reset <= pin_reset;
     pin_sd_cmd <= sd_cmd;
     sd_dq_i <= pin_sd_dq_i;
