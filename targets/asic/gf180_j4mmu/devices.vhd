@@ -120,7 +120,7 @@ begin
     qspi_flash0 : entity work.qspi_flash_ctrl(rtl)
         generic map (
             dummy_cycles => 6,
-            flash_base => 2701131776,
+            flash_base => x"A1000000",
             lanes => 4
         )
         port map (
