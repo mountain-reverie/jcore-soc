@@ -87,6 +87,13 @@ soc_cluster.sdram_ctrl  sdram_ctrl  sdram_ctrl  -
 # macros.list/synth_gf180.sh as a synth-only sanity check.
 top           soc         soc         inflated
 #
+# qspi_flash: the QSPI flash controller (components/misc/qspi_flash_ctrl.vhd)
+# synthesizes standalone as clean logic (control FSM + shift registers +
+# 2x32-byte ping-pong buffers). No inferred RAM in its cone -- a small logic
+# footprint, not memory-inflated. synth_gf180.sh routes it through the
+# standard per-macro path (line 146+, using GHDL_BASE).
+qspi_flash        qspi_flash_ctrl  qspi_flash_ctrl  -
+#
 # MEMORY-AS-FLOPS CAVEAT: GHDL's own elaboration (ghdl-yosys `-e`, which runs
 # before yosys sees the design) expands this design's inferred cache/regfile
 # RAM (lib/memory_tech_lib/tech/inferred/ram_{1,2}rw_infer.vhd -- indexed

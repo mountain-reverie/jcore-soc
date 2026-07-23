@@ -227,6 +227,7 @@ jobs:
             cache_ctrl.dcache_gf180=targets/asic/gf180_j4mmu/build/cache_ctrl.dcache_gf180.stat.txt \
             soc_cluster.devices=targets/asic/gf180_j4mmu/build/soc_cluster.devices.stat.txt \
             soc_cluster.sdram_ctrl=targets/asic/gf180_j4mmu/build/soc_cluster.sdram_ctrl.stat.txt \
+            qspi_flash=targets/asic/gf180_j4mmu/build/qspi_flash.stat.txt \
             top=targets/asic/gf180_j4mmu/build/top.stat.txt \
             --commit "${{ github.sha }}" \
             --out metrics-gf180/metrics-gf180.json
