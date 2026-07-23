@@ -8,11 +8,10 @@
 #define DRAM_BASE 0x10000000
 
 // Memory mapped peripherals
-#define DEVICE_AIC0_ADDR        0xabcd0040
-#define DEVICE_GPIO0_ADDR       0xabcd0000
-#define DEVICE_QSPI_FLASH0_ADDR 0xa1000000
-#define DEVICE_SPI2_ADDR        0xabcd0200
-#define DEVICE_UART0_ADDR       0xabcd0100
+#define DEVICE_AIC0_ADDR  0xabcd0040
+#define DEVICE_GPIO0_ADDR 0xabcd0000
+#define DEVICE_SPI2_ADDR  0xabcd0200
+#define DEVICE_UART0_ADDR 0xabcd0100
 
 struct aic_regs {
   uint32_t ctrl0;
@@ -35,11 +34,6 @@ struct gpio2_regs {
   uint32_t toggle;
 };
 #define DEVICE_GPIO0 ((volatile struct gpio2_regs *) DEVICE_GPIO0_ADDR)
-
-struct qspi_flash_regs {
-  uint32_t data[4194304]; // read-only
-};
-#define DEVICE_QSPI_FLASH0 ((volatile struct qspi_flash_regs *) DEVICE_QSPI_FLASH0_ADDR)
 
 struct spi_regs {
   uint32_t ctrl; // only byte 3

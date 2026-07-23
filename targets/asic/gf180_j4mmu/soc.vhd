@@ -20,11 +20,6 @@ entity soc is
         clk_sys : in std_logic;
         gpio_di : in std_logic_vector(31 downto 0);
         gpio_do : out std_logic_vector(31 downto 0);
-        qfl_cs_n : out std_logic;
-        qfl_io_i : in std_logic_vector(3 downto 0);
-        qfl_io_o : out std_logic_vector(3 downto 0);
-        qfl_io_oe : out std_logic_vector(3 downto 0);
-        qfl_sck : out std_logic;
         reset : in std_logic;
         sd_cmd : out sdram_cmd_t;
         sd_dq_i : in std_logic_vector(15 downto 0);
@@ -72,7 +67,7 @@ begin
             irq => aic_irq,
             pi_in => gpio_di
         );
-    cpus : entity work.cpus
+    cpus : configuration work.soc_cpus_config
         generic map (
             insert_inst_delay_boot_mem => FALSE,
             insert_read_delay_boot_mem => FALSE,
@@ -115,7 +110,7 @@ begin
             fl_sck => open,
             rst => reset
         );
-    ddr_ram_mux : entity work.ddr_ram_mux
+    ddr_ram_mux : configuration work.ddr_ram_mux_one_cpu_idcache_fpga
         port map (
             cache01sel_ctrl_temp => cache01sel_ctrl_temp,
             clk => clk_sys,
@@ -167,11 +162,6 @@ begin
             cpu1_periph_dbus_o => cpu1_periph_dbus_o,
             gpio_di => gpio_di,
             gpio_do => gpio_do,
-            qfl_cs_n => qfl_cs_n,
-            qfl_io_i => qfl_io_i,
-            qfl_io_o => qfl_io_o,
-            qfl_io_oe => qfl_io_oe,
-            qfl_sck => qfl_sck,
             reset => reset,
             spi2_clk => spi2_clk,
             spi2_cs => spi2_cs,
