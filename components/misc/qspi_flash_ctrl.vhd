@@ -370,6 +370,14 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use work.cpu2j0_pack.all;
 
+-- BUS-PROTOCOL INVARIANT (deferred / multi-cycle ack): while this slave defers
+-- db_o.ack='0' during an in-flight flash fill, the master MUST hold db_i.a (and
+-- db_i.rd/en) steady until the ack cycle. This is the standard jcore data-bus
+-- convention for a multi-cycle-ack slave (the same assumption components/sdram/
+-- sdram_ctrl.vhd relies on): a transaction address is stable across its whole
+-- ack window. If a master ever presented a different address mid-deferred-ack,
+-- the same-cycle new-request-vs-fill-completion ordering could latch the wrong
+-- d_r/ack_r -- not reachable under the jcore bus, but stated here explicitly.
 entity qspi_flash_ctrl is
   generic (
     LANES        : natural := 4;
