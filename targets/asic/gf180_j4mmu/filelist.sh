@@ -98,6 +98,12 @@ FILES=(
   components/memory/bootram_infer.vhd
   targets/boards/ulx3s/cpus_one_m0_arch.vhd
   targets/boards/ulx3s/aic_irq_gen.vhd
+  # QSPI flash controller (flash variant only, DEV_QSPI_FLASH0 @ 0xA1000000
+  # -- see design.flash.yaml). Analyzed unconditionally: harmless for the
+  # base variant (devices.vhd/soc.vhd there simply never instantiate it).
+  # Needs cpu2j0_pkg + data_bus_pkg (already analyzed above); must precede
+  # devices.vhd/soc.vhd which instantiate it in the flash variant.
+  components/misc/qspi_flash_ctrl.vhd
   # the soc_gen-generated pair (leaf-first: devices <- soc). No pad_ring for
   # this target -- soc.vhd's `soc` entity is the elaboration top.
   targets/asic/gf180_j4mmu/devices.vhd
