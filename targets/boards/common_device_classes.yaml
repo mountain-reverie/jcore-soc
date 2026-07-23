@@ -177,6 +177,38 @@ i2c:
     - { name: ctrl2 }
     - { name: data, type: mem, width: 20 }
 
+qspi_flash:
+  desc: Memory-mapped read-only QSPI NOR flash controller (components/misc/qspi_flash_ctrl.vhd)
+  entity: qspi_flash_ctrl
+  dt-props:
+    compatible: jcore,qspi-flash
+  left-addr-bit: 23            # 16 MiB read window (bits 23..0)
+  regs:
+    - { name: data, type: mem, width: 0x1000000, mode: read }  # 16 MiB in bytes
+  generics:
+    lanes: 4
+    dummy_cycles: 6
+    # Class-level default only; every instance MUST override this to equal
+    # its own base-addr (see design.flash.yaml's comment: db_i.a reaching
+    # this device is the full, un-relocated SoC bus address, so FLASH_BASE
+    # must match base-addr for the in_range decode to ever fire).
+    flash_base: 0
+  # NOTE: entity ports keep their qspi_flash_ctrl.vhd names (fl_cs_n/fl_sck/
+  # fl_io_o/fl_io_oe/fl_io_i); the net names on the right are prefixed
+  # "qfl_" (not "fl_") because targets/cpus.vhd (the shared `cpus`
+  # top-entity used by every board, incl. this ASIC target) already has its
+  # own unrelated single-lane boot-flash ports named fl_cs_n/fl_sck/fl_miso
+  # (components/misc/flash_boot_reader.vhd). Reusing "fl_*" net names here
+  # collided with those (soc_gen: "signal fl_cs_n is driven by multiple
+  # ports: qspi_flash0.fl_cs_n cpus.fl_cs_n" / "driven from multiple
+  # contexts: device,top") -- two drivers on one net. qfl_* avoids it.
+  ports:
+    fl_cs_n: qfl_cs_n
+    fl_sck: qfl_sck
+    fl_io_o: qfl_io_o
+    fl_io_oe: qfl_io_oe
+    fl_io_i: qfl_io_i
+
 eth_tx:
   desc: Minimal 10BASE-T Ethernet transmit
   entity: eth_tx

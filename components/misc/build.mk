@@ -28,3 +28,4 @@ $(VHDLS) += bussizesa.vhd
 $(VHDLS) += cycle_counter.vhd
 $(VHDLS) += flash_boot_reader.vhd
 $(VHDLS) += ice_spi_io.vhd
+$(VHDLS) += qspi_flash_ctrl.vhd
