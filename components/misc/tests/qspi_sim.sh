@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# qspi_sim.sh - Run all four QSPI testbenches and report pass/fail status.
+# qspi_sim.sh - Run all five QSPI testbenches and report pass/fail status.
 #
 # Usage: qspi_sim.sh
 #
@@ -9,6 +9,7 @@
 #   2. qspi_read_engine_tb     - read engine single/quad modes
 #   3. qspi_flash_ctrl_tb      - controller double-buffer + prefetch
 #   4. qspi_flash_ctrl_pads_tb - controller through GF180 pad wrapper
+#   5. qspi_flash_ctrl_burst_tb - Task 1 (XIP) native mem-bus burst interface
 #
 # Exits 0 if all pass, nonzero if any fails.
 
@@ -27,6 +28,7 @@ declare -a TESTS=(
   "qspi_read_engine_tb|engine"
   "qspi_flash_ctrl_tb|ctrl"
   "qspi_flash_ctrl_pads_tb|pads"
+  "qspi_flash_ctrl_burst_tb|burst"
 )
 
 # Common compilation sources (in order)
@@ -43,6 +45,7 @@ declare -A TB_SOURCES=(
   ["qspi_read_engine_tb"]="${TESTS_DIR}/qspi_read_engine_tb.vhd"
   ["qspi_flash_ctrl_tb"]="${TESTS_DIR}/qspi_flash_ctrl_tb.vhd"
   ["qspi_flash_ctrl_pads_tb"]="${TESTS_DIR}/qspi_flash_ctrl_pads_tb.vhd"
+  ["qspi_flash_ctrl_burst_tb"]="${TESTS_DIR}/qspi_flash_ctrl_burst_tb.vhd"
 )
 
 PASSED=0
@@ -67,7 +70,7 @@ for test_spec in "${TESTS[@]}"; do
 
   # Run and capture result
   RUN_OUTPUT=$(ghdl -r --std=93 --workdir="$TB_WORKDIR" "${TB_NAME}" 2>&1)
-  if echo "$RUN_OUTPUT" | grep -q "PASSED"; then
+  if echo "$RUN_OUTPUT" | grep -q "note): PASSED$" && ! echo "$RUN_OUTPUT" | grep -qi "assertion failure\|simulation failed"; then
     echo "PASS: ${TB_NAME}"
     ((PASSED++))
   else
@@ -82,8 +85,8 @@ done
 echo "=========================================="
 echo "QSPI Simulation Summary"
 echo "=========================================="
-echo "Passed: ${PASSED}/4"
-echo "Failed: ${FAILED}/4"
+echo "Passed: ${PASSED}/5"
+echo "Failed: ${FAILED}/5"
 
 if [ ${FAILED} -gt 0 ]; then
   echo -e "\nFailed testbenches:"
