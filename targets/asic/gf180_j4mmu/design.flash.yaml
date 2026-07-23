@@ -1,36 +1,97 @@
-# gf180_j4mmu FLASH variant: adds the qspi_flash_ctrl memory-mapped QSPI NOR
-# flash controller (components/misc/qspi_flash_ctrl.vhd, SP1/PR #96) on top of
-# base.yaml. Opt-in only (select with VARIANT=flash); base.yaml itself stays
-# flash-less so the default gf180_j4mmu build is unchanged.
+# gf180_j4mmu FLASH variant: attaches the qspi_flash_ctrl burst-capable QSPI
+# NOR flash controller (components/misc/qspi_flash_ctrl.vhd, Task 1 of the
+# QSPI XIP sub-project) as a MEM-BUS target on ddr_bus, via
+# components/misc/mem_region_mux.vhd (Task 2), on top of base.yaml. Opt-in
+# only (select with VARIANT=flash); base.yaml itself stays flash-less so the
+# default gf180_j4mmu build is unchanged.
 #
-# Region: soc_gen requires every "device" base-addr to have bits 31-28 = 0xA
-# (the peripheral bus; see tools/socgen/elaborate/addr_validate.go) and to
-# not overlap the hard-coded `dram` reserved region [0x10000000,0x1fffffff].
-# 0x14000000 (the original plan) violated both. Relocated into the 0xA
-# peripheral space: 0xA1000000-0xA1FFFFFF (16 MiB) -- clear of both dram and
-# the existing 0xABCD00xx device cluster (aic0/gpio0/uart0/spi2 + the
-# 0xabcd0600-0xabcd06ff reserved cpumreg range).
+# Supersedes SP2's peripheral-bus attach (qspi_flash device on the 0xA
+# peripheral bus, one word at a time via devices.vhd). That does not give
+# cache-line burst refills / execute-in-place; this Task 2 attach does:
+# ddr_ram_mux's ddr_bus (cached CPU mem-bus, feeds icache/dcache refills) now
+# fans out through mem_region_mux to {sdram_ctrl, qspi_flash_ctrl} by address
+# region, so flash-region refills stream from flash and everything else goes
+# to SDRAM as before.
 #
-# FLASH_BASE generic: qspi_flash_ctrl decodes `db_i.a` directly, and `db_i.a`
-# reaching this device is the FULL, un-relocated soc data-bus address (see
-# targets/data_bus_pkg.vhd's `mask_data_o`: it masks en/rd/wr only, `.a` is
-# copied through unchanged -- devices.vhd never subtracts a device's
-# base-addr before presenting the bus to a device instance). So
-# `in_range := a_u >= FLASH_BASE and a_u < FLASH_BASE + FLASH_SIZE` only
-# matches real bus cycles if FLASH_BASE equals this device's SoC base-addr
-# (0xA1000000), NOT a flash-internal offset of 0 -- with FLASH_BASE =
-# base-addr, "flash address 0" then correctly lands at db_i.a=base-addr, i.e.
-# flash-internal addressing (db_i.a - FLASH_BASE) still starts at 0 as
-# intended.
+# Region: 0xA1000000-0xA1FFFFFF (16 MiB), aligned to the 16 MiB flash window
+# (bits 31-24 = 0xA1) -- carried over from SP2 (see git history for why:
+# 0x14000000 collided with the hard-coded `dram` reserved region and violated
+# soc_gen's old peripheral-bus base-addr validation; SP2's 0xA1000000 choice
+# is unaffected by dropping the peripheral-bus attach and is kept as-is).
+# FLASH_MASK = x"FF000000" isolates exactly those top 8 bits for the region
+# mux's decode ((req.a and FLASH_MASK) = (FLASH_BASE and FLASH_MASK)).
+#
+# FLASH_BASE generic (on qspi_flash_ctrl itself): unchanged from SP2 --
+# db_i.a (now driven by mem_region_mux's flash_req, itself ddr_bus_o passed
+# through untouched when addressed) is still the FULL, un-relocated address,
+# so FLASH_BASE must still equal 0xA1000000 for qspi_flash_ctrl's internal
+# `in_range`/24-bit-offset decode to line up (mem_region_mux's own region
+# decode already gates db_i.en off outside the flash region, so
+# qspi_flash_ctrl's internal in_range check is now redundant-but-harmless
+# belt-and-braces, not load-bearing).
 <<: !include base.yaml
 
-devices:
-  - class: qspi_flash
-    name: qspi_flash0
-    base-addr: 0xA1000000
-    dt-node: true
+top-entities:
+  # sdram_ctrl no longer binds directly to ddr_bus_o/ddr_bus_i/ddr_bus_ack_r
+  # (base.yaml) -- it now sits behind mem_region_mux on private
+  # sdram_req/sdram_bst/sdram_resp/sdram_ack_r nets. clk/cmd/dq_o/dq_oe/dq_i
+  # ports are inherited unchanged from base.yaml (deep-merge: only the
+  # 4 overridden keys below are replaced).
+  sdram_ctrl:
+    ports:
+      req: sdram_req
+      bst: sdram_bst
+      resp: sdram_resp
+      ack_r: sdram_ack_r
+
+  # the flash controller itself: a second mem-bus target, wired to its own
+  # private flash_req/flash_bst/flash_resp/flash_ack_r nets (see
+  # mem_region_mux below). Not a `devices:` entry any more (no ring-bus /
+  # peripheral-bus decode -- direct mem-bus attach).
+  qspi_flash_ctrl:
+    ports:
+      clk: clk_sys
+      rst: reset
+      db_i: flash_req
+      bst: flash_bst
+      db_o: flash_resp
+      ack_r: flash_ack_r
+      fl_cs_n: qfl_cs_n
+      fl_sck: qfl_sck
+      fl_io_o: qfl_io_o
+      fl_io_oe: qfl_io_oe
+      fl_io_i: qfl_io_i
+    generics:
+      lanes: 4
+      dummy_cycles: 6
+      flash_base: 'x"A1000000"'
+
+  # the region mux (components/misc/mem_region_mux.vhd, Task 2): sits
+  # between ddr_ram_mux's ddr_bus (upstream) and {sdram_ctrl,
+  # qspi_flash_ctrl} (downstream), decoding req.a to route cache-line
+  # refills to flash for the flash region and sdram otherwise.
+  mem_region_mux:
+    ports:
+      req: ddr_bus_o
+      bst: ddr_burst
+      resp: ddr_bus_i
+      ack_r: ddr_bus_ack_r
+      sdram_req: sdram_req
+      sdram_bst: sdram_bst
+      sdram_resp: sdram_resp
+      sdram_ack_r: sdram_ack_r
+      flash_req: flash_req
+      flash_bst: flash_bst
+      flash_resp: flash_resp
+      flash_ack_r: flash_ack_r
     generics:
       flash_base: 'x"A1000000"'
+      flash_mask: 'x"FF000000"'
+
+# devices: intentionally NOT overridden here -- omitting the key means the
+# base.yaml devices list (gpio0/aic0/uart0/spi2) is inherited unmodified;
+# SP2's `qspi_flash0` peripheral device is gone (this variant no longer
+# declares it), which is exactly the "remove the SP2 periph device" step.
 
 pins:
   file: ../pins/gf180_j4mmu.flash.pins

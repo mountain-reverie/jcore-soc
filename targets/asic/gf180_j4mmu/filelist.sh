@@ -104,6 +104,11 @@ FILES=(
   # Needs cpu2j0_pkg + data_bus_pkg (already analyzed above); must precede
   # devices.vhd/soc.vhd which instantiate it in the flash variant.
   components/misc/qspi_flash_ctrl.vhd
+  # Region mux between ddr_ram_mux's ddr_bus and {sdram_ctrl,
+  # qspi_flash_ctrl} (flash variant only -- Task 2 of the QSPI XIP
+  # sub-project, see design.flash.yaml). Analyzed unconditionally: harmless
+  # for the base variant (soc.vhd there never instantiates it).
+  components/misc/mem_region_mux.vhd
   # the soc_gen-generated pair (leaf-first: devices <- soc). No pad_ring for
   # this target -- soc.vhd's `soc` entity is the elaboration top.
   targets/asic/gf180_j4mmu/devices.vhd
