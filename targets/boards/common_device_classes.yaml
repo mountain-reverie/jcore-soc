@@ -192,7 +192,7 @@ qspi_flash:
     # its own base-addr (see design.flash.yaml's comment: db_i.a reaching
     # this device is the full, un-relocated SoC bus address, so FLASH_BASE
     # must match base-addr for the in_range decode to ever fire).
-    flash_base: 0
+    flash_base: 'x"00000000"'
   # NOTE: entity ports keep their qspi_flash_ctrl.vhd names (fl_cs_n/fl_sck/
   # fl_io_o/fl_io_oe/fl_io_i); the net names on the right are prefixed
   # "qfl_" (not "fl_") because targets/cpus.vhd (the shared `cpus`

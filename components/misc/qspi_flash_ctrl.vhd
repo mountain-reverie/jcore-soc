@@ -382,7 +382,7 @@ entity qspi_flash_ctrl is
   generic (
     LANES        : natural := 4;
     DUMMY_CYCLES : natural := 6;
-    FLASH_BASE   : natural := 0);  -- region base address, for decode
+    FLASH_BASE   : std_logic_vector(31 downto 0) := (others => '0'));  -- region base address, for decode
   port (
     clk : in std_logic;
     rst : in std_logic;
@@ -513,7 +513,7 @@ begin
           fill_seen_busy <= '1'; -- latch: engine has genuinely gone busy
         end if;
 
-        flash_base_u := to_unsigned(FLASH_BASE, 32);
+        flash_base_u := unsigned(FLASH_BASE);
         a_u          := unsigned(db_i.a);
         in_range     := (a_u >= flash_base_u) and (a_u < flash_base_u + FLASH_SIZE);
 

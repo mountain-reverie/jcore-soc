@@ -31,7 +31,7 @@ end entity;
 architecture tb of qspi_flash_ctrl_pads_tb is
 
   constant CLK_PERIOD : time := 20 ns;
-  constant FLASH_BASE : natural := 0;
+  constant FLASH_BASE : std_logic_vector(31 downto 0) := (others => '0');
 
   signal clk : std_logic := '0';
   signal rst : std_logic := '1';

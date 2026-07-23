@@ -30,7 +30,7 @@ devices:
     base-addr: 0xA1000000
     dt-node: true
     generics:
-      flash_base: 0xA1000000
+      flash_base: 'x"A1000000"'
 
 pins:
   file: ../pins/gf180_j4mmu.flash.pins
