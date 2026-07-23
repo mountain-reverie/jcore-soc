@@ -13,22 +13,41 @@
 # region, so flash-region refills stream from flash and everything else goes
 # to SDRAM as before.
 #
-# Region: 0xA1000000-0xA1FFFFFF (16 MiB), aligned to the 16 MiB flash window
-# (bits 31-24 = 0xA1) -- carried over from SP2 (see git history for why:
-# 0x14000000 collided with the hard-coded `dram` reserved region and violated
-# soc_gen's old peripheral-bus base-addr validation; SP2's 0xA1000000 choice
-# is unaffected by dropping the peripheral-bus attach and is kept as-is).
-# FLASH_MASK = x"FF000000" isolates exactly those top 8 bits for the region
-# mux's decode ((req.a and FLASH_MASK) = (FLASH_BASE and FLASH_MASK)).
+# Region: 0x14000000-0x14FFFFFF (16 MiB) -- Task 3 (jcore-soc QSPI XIP
+# sub-project) CHANGED this from SP2/Task 2's 0xA1000000. Reason: the flash
+# region must be *fetchable* -- reachable by an instruction fetch, not just a
+# data access. targets/cpu_core_pkg.vhd's decode_core_instr_addr()/
+# decode_core_data_addr() hard-code the top address nibble: addr[31:28]=0x0
+# -> DEV_SRAM (boot ROM), addr[31:28]=0x1 -> DEV_DDR (the cached bus this
+# mux sits behind), addr[31:28]=0xA -> DEV_PERIPH/DEV_CPU, anything else ->
+# DEV_NONE (unmapped -- fetch never even reaches ddr_ram_mux/icache/this
+# mux). 0xA1000000 has top nibble 0xA, so it decoded to DEV_PERIPH at the
+# CPU-core level and was UNREACHABLE via ddr_bus/this mux at all (it was a
+# leftover from when flash was an 0xA peripheral-bus device, Task 2 carried
+# it forward without re-checking that constraint once the attach became a
+# ddr_bus top-entity target instead). 0x14000000 has top nibble 0x1, so it
+# decodes to DEV_DDR like SDRAM and is a fetchable address.
 #
-# FLASH_BASE generic (on qspi_flash_ctrl itself): unchanged from SP2 --
-# db_i.a (now driven by mem_region_mux's flash_req, itself ddr_bus_o passed
-# through untouched when addressed) is still the FULL, un-relocated address,
-# so FLASH_BASE must still equal 0xA1000000 for qspi_flash_ctrl's internal
-# `in_range`/24-bit-offset decode to line up (mem_region_mux's own region
-# decode already gates db_i.en off outside the flash region, so
-# qspi_flash_ctrl's internal in_range check is now redundant-but-harmless
-# belt-and-braces, not load-bearing).
+# Non-aliasing under icache PA[27:13]: components/cpu/cache/icache_ram.vhd's
+# tag stores PA[27:13] only (a 28-bit region, PA[31:28] dropped from the tag
+# because it is always 0x1 for anything reaching the icache -- only DEV_DDR
+# addresses are ever cached). SDRAM occupies PA[27:0] = 0x0000000-0x1FFFFFF
+# (dram: [0x10000000, 0x2000000] in base.yaml/design.yaml, i.e. 32 MiB at
+# PA[31:0]=0x10000000). Flash at 0x14000000 has PA[27:0] = 0x4000000-
+# 0x4FFFFFF, entirely disjoint from SDRAM's PA[27:0] range, so the 16 MiB
+# flash window cannot alias the 32 MiB SDRAM window in the icache's 28-bit
+# tag space. FLASH_MASK = x"FF000000" isolates the top 8 address bits for
+# the region mux's decode ((req.a and FLASH_MASK) = (FLASH_BASE and
+# FLASH_MASK)).
+#
+# FLASH_BASE generic (on qspi_flash_ctrl itself): must track the same
+# 0x14000000 -- db_i.a (driven by mem_region_mux's flash_req, itself
+# ddr_bus_o passed through untouched when addressed) is still the FULL,
+# un-relocated address, so FLASH_BASE must equal mem_region_mux's flash_base
+# for qspi_flash_ctrl's internal `in_range`/24-bit-offset decode to line up
+# (mem_region_mux's own region decode already gates db_i.en off outside the
+# flash region, so qspi_flash_ctrl's internal in_range check is
+# redundant-but-harmless belt-and-braces, not load-bearing).
 <<: !include base.yaml
 
 top-entities:
@@ -64,7 +83,7 @@ top-entities:
     generics:
       lanes: 4
       dummy_cycles: 6
-      flash_base: 'x"A1000000"'
+      flash_base: 'x"14000000"'
 
   # the region mux (components/misc/mem_region_mux.vhd, Task 2): sits
   # between ddr_ram_mux's ddr_bus (upstream) and {sdram_ctrl,
@@ -85,7 +104,7 @@ top-entities:
       flash_resp: flash_resp
       flash_ack_r: flash_ack_r
     generics:
-      flash_base: 'x"A1000000"'
+      flash_base: 'x"14000000"'
       flash_mask: 'x"FF000000"'
 
 # devices: intentionally NOT overridden here -- omitting the key means the
