@@ -387,8 +387,13 @@ entity qspi_flash_ctrl is
     clk : in std_logic;
     rst : in std_logic;
 
-    db_i : in  cpu_data_o_t;
-    db_o : out cpu_data_i_t;
+    db_i  : in  cpu_data_o_t;
+    bst   : in  std_logic := '0';               -- burst flag (mirrors sdram_ctrl's req/bst/resp/ack_r
+                                                 -- contract); default '0' keeps SP1's single-word-only
+                                                 -- port maps (no bst/ack_r binding) unchanged
+    db_o  : out cpu_data_i_t;
+    ack_r : out std_logic;                     -- read-ack strobe, asserted alongside db_o.ack for
+                                                -- every READ beat (single or burst), per sdram_ctrl
 
     fl_cs_n  : out std_logic;
     fl_sck   : out std_logic;
@@ -447,8 +452,27 @@ architecture rtl of qspi_flash_ctrl is
 
   signal last_filled : natural range 0 to 1 := 1; -- alternator: first miss -> buf0
 
-  signal ack_r : std_logic := '0';
-  signal d_r   : std_logic_vector(31 downto 0) := (others => '0');
+  -- internal registered ack (drives db_o.ack); the burst-mode read-ack strobe
+  -- (port ack_r above) is a separate register, asserted only for READ beats
+  -- (never for the "write, no effect" ack), per the sdram_ctrl contract.
+  signal db_ack_r : std_logic := '0';
+  signal rd_ack_r : std_logic := '0';
+  signal d_r      : std_logic_vector(31 downto 0) := (others => '0');
+
+  -- burst streaming state: once a burst request (bst='1') resolves (HIT or
+  -- completed fill) to a full 32-byte line, the 8 words are streamed out
+  -- back-to-back (one word/cycle, no wait states -- the line is already a
+  -- register, unlike sdram_ctrl's per-beat DRAM access), asserting
+  -- db_o.ack/ack_r each cycle, wcnt 0->7, matching the sdram_ctrl per-ack
+  -- cadence the requester follows. bst_src records which buffer holds the
+  -- streamed line, so the cnt=6/7 prefetch check (mirroring the HIT-path
+  -- prefetch below) can target the OTHER buffer.
+  signal bst_active : std_logic := '0';
+  signal bst_words  : words_t := (others => (others => '0'));
+  signal bst_cnt    : natural range 0 to 7 := 0;
+  signal bst_tag    : std_logic_vector(23 downto 0) := (others => '0');
+  signal bst_src    : natural range 0 to 1 := 0;
+  signal bst_demand : std_logic := '0'; -- the outstanding demand_pending miss is a burst request
 
   function unpack_words(line : std_logic_vector(255 downto 0)) return words_t is
     variable w : words_t;
@@ -492,6 +516,10 @@ begin
     variable other_has_next : boolean;
     variable want_prefetch  : boolean;
     variable demand_resolved_now : boolean;
+    variable bst_next_aligned   : std_logic_vector(23 downto 0);
+    variable bst_other_has_next : boolean;
+    variable bst_want_prefetch  : boolean;
+    variable bst_victim         : natural range 0 to 1;
   begin
     if rising_edge(clk) then
       if rst = '1' then
@@ -502,11 +530,16 @@ begin
         fill_seen_busy <= '0';
         demand_pending <= '0';
         last_filled    <= 1;
-        ack_r          <= '0';
+        db_ack_r       <= '0';
+        rd_ack_r       <= '0';
         d_r            <= (others => '0');
+        bst_active     <= '0';
+        bst_cnt        <= 0;
+        bst_demand     <= '0';
       else
         eng_start <= '0'; -- default: pulse
-        ack_r     <= '0'; -- default: single-cycle ack
+        db_ack_r  <= '0'; -- default: single-cycle ack
+        rd_ack_r  <= '0'; -- default: no read-ack strobe
         demand_resolved_now := false;
 
         if eng_busy = '1' then
@@ -518,14 +551,55 @@ begin
         in_range     := (a_u >= flash_base_u) and (a_u < flash_base_u + FLASH_SIZE);
 
         ----------------------------------------------------------------
+        -- burst streaming: once a burst request has resolved to a full
+        -- line (HIT or completed fill, below), stream its 8 words
+        -- back-to-back, one word/cycle, asserting db_o.ack/ack_r each
+        -- cycle (wcnt 0->7) -- the sdram_ctrl per-ack cadence. This takes
+        -- priority over accepting a new bus request.
+        ----------------------------------------------------------------
+        if bst_active = '1' then
+          d_r      <= bst_words(bst_cnt);
+          db_ack_r <= '1';
+          rd_ack_r <= '1';
+
+          -- mirror the HIT-path sequential run-ahead prefetch at the same
+          -- word indices (6,7 of 0..7), targeting the buffer NOT holding
+          -- the line being streamed.
+          if bst_cnt >= PREFETCH_THRESHOLD and demand_pending = '0' then
+            bst_next_aligned := std_logic_vector(unsigned(bst_tag) + 32);
+            bst_victim       := 1 - bst_src;
+
+            bst_other_has_next :=
+              (bst_victim = 0 and buf0.valid = '1' and buf0.tag = bst_next_aligned) or
+              (bst_victim = 1 and buf1.valid = '1' and buf1.tag = bst_next_aligned);
+
+            bst_want_prefetch := not bst_other_has_next;
+
+            if bst_want_prefetch and eng_busy = '0' and fill_kind = 0 then
+              eng_start      <= '1';
+              eng_start_addr <= bst_next_aligned;
+              fill_kind      <= 2;
+              fill_target    <= bst_victim;
+              fill_addr      <= bst_next_aligned;
+              fill_seen_busy <= '0';
+            end if;
+          end if;
+
+          if bst_cnt = 7 then
+            bst_active <= '0';
+          else
+            bst_cnt <= bst_cnt + 1;
+          end if;
+
+        ----------------------------------------------------------------
         -- bus side: new request (guarded on the PREVIOUS cycle's ack,
-        -- read here as the old value of ack_r before this cycle's
+        -- read here as the old value of db_ack_r before this cycle's
         -- default/overrides take effect -- same pattern as gpio2.vhd)
         ----------------------------------------------------------------
-        if db_i.en = '1' and ack_r = '0' then
+        elsif db_i.en = '1' and db_ack_r = '0' then
           if db_i.wr = '1' and in_range then
-            -- read-only region: ack, no effect
-            ack_r <= '1';
+            -- read-only region: ack, no effect (not a read beat: no rd_ack_r)
+            db_ack_r <= '1';
           elsif db_i.rd = '1' and in_range then
             addr_flash24 := resize(a_u - flash_base_u, 24);
             aligned      := std_logic_vector(addr_flash24(23 downto 5)) & "00000";
@@ -536,15 +610,31 @@ begin
 
             if hit0 or hit1 then
               ------------------------------------------------------------
-              -- HIT: serve immediately
+              -- HIT: serve immediately (single word, or kick off an
+              -- 8-beat burst stream over the whole line for bst='1')
               ------------------------------------------------------------
               if hit0 then
                 hit_words := buf0.words;
               else
                 hit_words := buf1.words;
               end if;
-              d_r   <= hit_words(widx);
-              ack_r <= '1';
+
+              if bst = '1' then
+                bst_words  <= hit_words;
+                bst_tag    <= aligned;
+                if hit0 then
+                  bst_src <= 0;
+                else
+                  bst_src <= 1;
+                end if;
+                bst_active <= '1';
+                bst_cnt    <= 1;
+                d_r        <= hit_words(0);
+              else
+                d_r <= hit_words(widx);
+              end if;
+              db_ack_r <= '1';
+              rd_ack_r <= '1';
 
               -- If this HIT happens to satisfy an already-pending demand
               -- miss (its line became valid via a background prefetch
@@ -559,8 +649,10 @@ begin
 
               -- sequential run-ahead prefetch (demand has priority: only
               -- when no demand fill is pending, and only into the buffer
-              -- not just hit)
-              if widx >= PREFETCH_THRESHOLD and demand_pending = '0' then
+              -- not just hit). For a burst request the same check is
+              -- repeated during streaming (above) at cnt 6/7; skip it
+              -- here to avoid a duplicate/premature fill kick.
+              if bst = '0' and widx >= PREFETCH_THRESHOLD and demand_pending = '0' then
                 next_aligned := std_logic_vector(unsigned(aligned) + 32);
                 if hit0 then
                   victim := 1;
@@ -592,6 +684,7 @@ begin
                 demand_pending <= '1';
                 req_aligned    <= aligned;
                 req_widx       <= widx;
+                bst_demand     <= bst;
                 victim         := 1 - last_filled;
                 demand_victim  <= victim;
 
@@ -613,7 +706,9 @@ begin
 
         ----------------------------------------------------------------
         -- engine completion: commit the fill to its target buffer, and
-        -- (for a demand fill) produce the deferred bus response
+        -- (for a demand fill) produce the deferred bus response --
+        -- either a single word (bst_demand='0') or kick off the 8-beat
+        -- burst stream (bst_demand='1') over the freshly-filled line.
         ----------------------------------------------------------------
         if fill_kind /= 0 and fill_seen_busy = '1' and eng_busy = '0' then
           if fill_target = 0 then
@@ -627,10 +722,21 @@ begin
           end if;
           last_filled <= fill_target;
 
-          if fill_kind = 1 then -- demand fill: complete the deferred ack
-            ack_r          <= '1';
-            d_r            <= unpack_words(eng_line_o)(req_widx);
+          if fill_kind = 1 then -- demand fill: complete the deferred response
+            if bst_demand = '1' then
+              bst_words  <= unpack_words(eng_line_o);
+              bst_tag    <= fill_addr;
+              bst_src    <= fill_target;
+              bst_active <= '1';
+              bst_cnt    <= 1;
+              d_r        <= unpack_words(eng_line_o)(0);
+            else
+              d_r <= unpack_words(eng_line_o)(req_widx);
+            end if;
+            db_ack_r       <= '1';
+            rd_ack_r       <= '1';
             demand_pending <= '0';
+            bst_demand     <= '0';
           end if;
 
           fill_kind <= 0;
@@ -654,7 +760,8 @@ begin
     end if;
   end process;
 
-  db_o.ack <= ack_r;
+  db_o.ack <= db_ack_r;
   db_o.d   <= d_r;
+  ack_r    <= rd_ack_r;
 
 end architecture;
