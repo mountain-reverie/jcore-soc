@@ -68,7 +68,19 @@ fi
 OL_IMAGE="${OL_IMAGE:-ghcr.io/librelane/librelane:2.4.2}"
 PDK_ROOT="${PDK_ROOT:-$HOME/.ciel}"
 OL_TIMEOUT="${OL_TIMEOUT:-3600}"
-OL_TO="${OL_TO:-}"
+# Default stop point: Magic.WriteLEF (right after detailed routing + LEF
+# abstract emission), BEFORE the Checker.{Setup,Hold,MaxCap,MaxSlew}Violations
+# steps later in the Classic flow. Those 4 checkers have no ERROR_ON_* opt-out
+# (librelane/steps/checker.py TimingViolations subclasses: deferred=True, no
+# error_on_var) -- at gf180's slow (180nm) corner + the CPU's deep
+# combinational paths, they WILL find setup violations even at a relaxed
+# clock, and LibreLane treats that as a fatal deferred error. Since this
+# sub-project only needs ROUTED AREA (timing is explicitly non-gating here),
+# stopping before those checkers is the only way to get a routed layout +
+# LEF/GDS/area out without a real timing-closure effort. Override
+# (OL_TO=<step> or OL_TO=  for full signoff) when a macro DOES need to run to
+# completion (e.g. the sdram_ctrl smoke test, which closes timing cleanly).
+OL_TO="${OL_TO:-Magic.WriteLEF}"
 
 # --- 1. VHDL -> Verilog: ghdl-yosys elaborates+generic-synths the macro's
 # top entity (looked up from metrics/macros.list, same mapping the synth-only
@@ -99,7 +111,7 @@ fi
 NETV="$MDIR/${SYNTH_TOP}.v"
 echo "run.sh: generating $NETV (ghdl -e $ELAB_TOP; synth -top $SYNTH_TOP)" >&2
 source "$ROOT/targets/asic/gf180_j4mmu/metrics/gen_synth_sources.sh"   # exports GHDL_BASE
-yosys -m ghdl -p "$GHDL_BASE -e $ELAB_TOP; synth -top $SYNTH_TOP -flatten; write_verilog -noattr $NETV" \
+yosys -m ghdl -p "$GHDL_BASE -e $ELAB_TOP; synth -top $SYNTH_TOP -flatten; chformal -remove; delete t:\$check t:\$assert t:\$assume t:\$cover t:\$live t:\$fair; clean; write_verilog -noattr $NETV" \
   || { echo "ERROR: ghdl-yosys netlist generation failed for $MACRO" >&2; exit 1; }
 # Sanitize VHDL-record-flattened port names: \name[field]  ->  name_field
 perl -0pe 's/\\([A-Za-z_][A-Za-z0-9_]*)\[([A-Za-z0-9_]+)\]([ \t]|(?=\n))/${1}_${2}$3/g' \
