@@ -25,10 +25,32 @@ include $(TOP_DIR)/soc_config.mk
 include $(TOOLS_DIR)/soc.mk
 
 # Board-specific entities that design.yaml references but that are not part of
-# the global FPGA VHDL set: the single-CPU M0 `cpus` configuration and the AIC
-# IRQ generator/combiner. Reused verbatim from targets/boards/ulx3s (generic,
-# not ECP5-specific) rather than duplicated.
+# the global FPGA VHDL set: the single-CPU M0 `cpus` configuration(s) and the
+# AIC IRQ generator/combiner. AIC IRQ files reused verbatim from
+# targets/boards/ulx3s (generic, not ECP5-specific).
+#
+# Two `cpus` architectures, BASE vs FLASH variant (BM Task 2 -- boot_mem is
+# scoped to the flash variant only -- see design.yaml's comment and
+# filelist.sh's longer note on the selection mechanism):
+#   - one_cpu_m0 (shared targets/boards/ulx3s/cpus_one_m0_arch.vhd):
+#     bootram_infer(inferred)/c_addr_width=>14, 16 KiB -- BASE variant
+#     (also what sim/rtl.sh's self-test bootloader, a real ~7 KB
+#     RAM-resident program, needs). Selected by the base variant's explicit
+#     `configuration soc_cpus_config` (cpus_config.vhd, from design.yaml's
+#     cpu.architecture).
+#   - one_cpu_m0_gf180 (this target's OWN cpus_one_m0_gf180_arch.vhd):
+#     bootram_infer(boot_mem)/c_addr_width=>12, 4 KiB (2 KiB read-only ROM
+#     vector lane + 2 KiB writable stack SRAM lane) -- FLASH variant only
+#     (boot_mem's premise is booting from flash XIP). The flash variant's
+#     generated soc.vhd binds `cpus` via a bare `entity work.cpus` (no
+#     explicit arch/config -- socgen's ambiguous-architecture fallback), so
+#     it relies on GHDL's default-binding rule (last-analyzed architecture
+#     wins) -- hence this file is listed LAST below.
+# Both are analyzed unconditionally in every variant's ghdl -a (harmless:
+# an unused architecture of an already-analyzed entity costs nothing).
+VHDL_FILES += components/memory/boot_mem.vhd
 VHDL_FILES += targets/boards/ulx3s/cpus_one_m0_arch.vhd
+VHDL_FILES += targets/asic/gf180_j4mmu/cpus_one_m0_gf180_arch.vhd
 VHDL_FILES += targets/boards/ulx3s/aic_irq_gen.vhd
 VHDL_FILES += targets/boards/ulx3s/aic_irq_combine.vhd
 # SDRAM controller (used directly by the logical `soc` top; no ASIC IO-cell
