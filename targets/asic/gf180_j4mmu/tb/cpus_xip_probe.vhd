@@ -4,8 +4,8 @@
 -- A REPLACEMENT for targets/boards/ulx3s/cpus_one_m0_arch.vhd's
 -- "one_cpu_m0" architecture of the shared `cpus` entity (targets/cpus.vhd):
 -- byte-identical except for one addition, a monitor process that watches
--- the boot-RAM (bootram_infer(boot_mem), DEV_SRAM) write bus INSIDE this
--- architecture -- `sramdt_o`, the db_i input to the `sram` instance below
+-- the boot-RAM (bootram_infer(boot_mem_gf180), DEV_SRAM) write bus INSIDE
+-- this architecture -- `sramdt_o`, the db_i input to the `sram` instance below
 -- -- for the XIP payload's signature write (see targets/asic/gf180_j4mmu/
 -- xip_payload/payload.S: store 0xF1A5B007, loaded via a PC-relative
 -- literal-pool `mov.l @(disp,PC),Rn` (i.e. a genuine flash-served DATA
@@ -14,11 +14,16 @@
 -- 0x100 sat in the now-read-only constant-ROM vector lane, 0x000-0x7FF --
 -- see BM Task 3) and reports PASS the instant it is seen.
 --
--- BM Task 3: this arch's `sram` binding must match
--- cpus_one_m0_gf180_arch.vhd's -- bootram_infer(boot_mem),
--- c_addr_width=>12 -- NOT the old bootram_infer(inferred)/14 (16 KiB)
--- binding; the two stay in lockstep since this file is the
--- probe/instrumented clone of that architecture.
+-- BM Task 3 / Task 6 PHASE A/B: this arch's `sram` binding must match
+-- cpus_one_m0_gf180_arch.vhd's -- bootram_infer(boot_mem_gf180) (the REAL
+-- vendor gf180mcu_fd_ip_sram__sram512x8m8wm1 stack macros, simulated here
+-- against components/memory/tests/gf180_sram_sim_stub.vhd), c_addr_width=>12
+-- -- NOT the old bootram_infer(inferred)/14 (16 KiB) binding, and NOT
+-- bootram_infer(boot_mem) (Task 6 PHASE A rebound cpus_one_m0_gf180_arch.vhd
+-- away from that tech/inferred stack -- this probe file previously lagged
+-- that rebind, silently keeping the cosim on the inferred-flops stack even
+-- after the rebind landed; fixed here). The two stay in lockstep since this
+-- file is the probe/instrumented clone of that architecture.
 --
 -- WHY A REPLACEMENT ARCHITECTURE, NOT AN EXTERNAL NAME: sramdt_o is local
 -- to `cpus`'s architecture (bootram_infer sits one level of hierarchy
@@ -110,7 +115,7 @@ begin
   cpu1_data_master_en <= '0';
   cpu1_data_master_ack <= '0';
 
-  sram : entity work.bootram_infer(boot_mem)
+  sram : entity work.bootram_infer(boot_mem_gf180)
     generic map (c_addr_width => 12)
     port map (clk => clk, ibus_i => sraminst_o, ibus_o => sraminst_i,
               db_i => sramdt_o, db_o => sramdt_i);
