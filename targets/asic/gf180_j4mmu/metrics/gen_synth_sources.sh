@@ -107,3 +107,20 @@ for _f in "${FILES[@]}"; do
 done
 GHDL_BASE_GF180_CACHE="ghdl --std=93 -fexplicit -fsynopsys --syn-binding --workdir=$WORKDIR $CFG targets/clk_config.vhd ${GF180_CACHE_FILES[*]}"
 export GHDL_BASE_GF180_CACHE
+
+# boot_mem (BM Task 4, run.sh macro=boot_mem): FILES already includes
+# components/memory/bootram_infer.vhd and boot_mem.vhd (the default
+# (boot_mem) architecture, analyzed unconditionally per filelist.sh's
+# comment). Append the gf180 SRAM component package, the new
+# (boot_mem_gf180) architecture (the vendor-macro stack backend), and the
+# fixed-generic elaboration top -- these add a SECOND architecture of
+# bootram_infer without touching the default binding used by every other
+# macro/variant, so it is safe to just append rather than build a whole
+# separate FILES walk like GF180_CACHE_FILES above.
+GF180_BOOTMEM_EXTRA=(
+  lib/memory_tech_lib/tech/gf180/gf180mcu_fd_ip_sram_comp.vhd
+  lib/memory_tech_lib/tech/gf180/boot_mem_stack_gf180.vhd
+  targets/asic/gf180_j4mmu/boot_mem_top_gf180.vhd
+)
+GHDL_BASE_GF180_BOOTMEM="ghdl --std=93 -fexplicit -fsynopsys --syn-binding --workdir=$WORKDIR $CFG targets/clk_config.vhd ${FILES[*]} ${GF180_BOOTMEM_EXTRA[*]}"
+export GHDL_BASE_GF180_BOOTMEM
