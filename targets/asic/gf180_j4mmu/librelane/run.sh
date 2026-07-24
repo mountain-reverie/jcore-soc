@@ -97,6 +97,62 @@ OL_SKIP="${OL_SKIP:-}"
 # metrics flow uses) and emits a flattened, generic-cell netlist into the
 # macro's own librelane/<name>/ dir, where its config.json's
 # VERILOG_FILES: ["dir::<top>.v"] expects to find it.
+#
+# TOP-ONLY OVERRIDE (Task 6 CAPSTONE): macro=top does NOT go through this
+# shared flatten-everything netlist-gen at all. The whole point of Task 6 is
+# a HIERARCHY-PRESERVING netlist -- the 8 child macros (cpu/icache_adapter/
+# dcache_adapter/bootram_infer(boot_mem_gf180)/sdram_ctrl/devices/
+# qspi_flash_ctrl/mem_region_mux) blackboxed BEFORE `synth -flatten`, so
+# LibreLane places them as LEF macro abstracts instead of re-synthesizing
+# their logic (that's what keeps top-level memory bounded -- a flat
+# `-e soc; synth -top soc -flatten` with no blackbox step, which is what the
+# generic per-macro path below would do for macro=top, is exactly the
+# flatten-everything approach this task exists to avoid). It also needs the
+# flash-variant's vendor-SRAM rebind (Task 6 PHASE A: soc.vhd's `cpus`/
+# `ddr_ram_mux` bound to the gf180 architectures/configurations, not the
+# base/fpga ones) and a from-scratch soc_gen regen (never the committed
+# base-variant targets/asic/gf180_j4mmu/soc.vhd -- that stays byte-identical
+# always, see the save/restore discipline documented in sim/xip_sim.sh).
+# Additionally: this repo's HOST ghdl (6.0.0 "Dunoon") was found to crash
+# (`synth-vhdl_decls.adb:302`, an internal GHDL synth-backend assertion) on
+# a stale/contaminated analyze work library; a completely FRESH workdir +
+# gen_synth_sources.sh's synth-clean (soc_port_*-stripped) source set +
+# freshly-regenerated output/gf180_j4mmu/config/config.vhd resolved it --
+# no newer GHDL build or container was actually needed in the end. The
+# resulting netlist (targets/asic/gf180_j4mmu/librelane/top/soc.v, the
+# top-level interconnect glue only, ~760 cells) + blackbox module stubs
+# (soc_macros_bb.v, `(* blackbox *)`-marked empty declarations for the 8
+# macros + the 2 leaf vendor SRAM cell types, so LibreLane's own
+# Yosys.Synthesis hierarchy check resolves the instances without
+# re-deriving their bodies) are PRE-GENERATED and committed alongside
+# top/config.json (which points VERILOG_FILES at them via "dir::") --
+# regenerating them requires the one-off recipe documented in the Task 6
+# report, not this script (the recipe is bespoke to the top design's
+# multi-architecture-configuration binding chain in a way the shared
+# per-macro path below has no need to support for any other macro).
+if [ "$MACRO" = "top" ]; then
+  NETV="$MDIR/soc.v"
+  if [ ! -f "$NETV" ] || [ ! -f "$MDIR/soc_macros_bb.v" ]; then
+    echo "ERROR: $MDIR/soc.v and/or soc_macros_bb.v missing -- macro=top needs the" \
+         "pre-generated hierarchy-preserving netlist committed alongside config.json" \
+         "(see this script's TOP-ONLY OVERRIDE comment / the Task 6 report for the" \
+         "regeneration recipe)." >&2
+    exit 1
+  fi
+  echo "run.sh: macro=top uses the pre-generated $NETV (+ soc_macros_bb.v blackbox stubs)," \
+       "skipping the shared per-macro netlist-gen below." >&2
+  MERGED="$MDIR/config.merged.json"
+  jq -s '.[0] * .[1]' "$HERE/common.json" "$MCFG" > "$MERGED"
+  # Task 6's top run always needs the PDN-checker skip (8 macros with the
+  # same macro-PDN-strap gap as dcache/icache/boot_mem -- see the OL_SKIP
+  # comment further below) even though "top" isn't in that case's MACRO
+  # list; set it here unless the caller already did.
+  if [ -z "$OL_SKIP" ]; then
+    OL_SKIP="OpenROAD.IRDropReport Checker.PowerGridViolations"
+  fi
+  goto_librelane=1
+fi
+if [ -z "${goto_librelane:-}" ]; then
 MACROS_LIST="$ROOT/targets/asic/gf180_j4mmu/metrics/macros.list"
 ELAB_TOP=""
 SYNTH_TOP=""
@@ -164,6 +220,9 @@ perl -0pe 's/\\([A-Za-z_][A-Za-z0-9_]*)\[([A-Za-z0-9_]+)\]([ \t]|(?=\n))/${1}_${
 # config.json (macro-specific DESIGN_NAME/VERILOG_FILES/clock override).
 MERGED="$MDIR/config.merged.json"
 jq -s '.[0] * .[1]' "$HERE/common.json" "$MCFG" > "$MERGED"
+fi
+# (macro=top's TOP-ONLY OVERRIDE branch above already computed MERGED and
+# jumps straight here.)
 
 # --- 3. Run LibreLane under a hard wall-clock cap (same watchdog pattern as
 # components/cpu/synth/openlane/run.sh: `timeout` on the docker CLIENT does
