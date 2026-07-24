@@ -1,0 +1,9 @@
+{
+  "PDK": "gf180mcuC",
+  "STD_CELL_LIBRARY": "gf180mcu_fd_sc_mcu7t5v0",
+  "CLOCK_PORT": "clk",
+  "CLOCK_PERIOD": 20.0,
+  "FP_CORE_UTIL": 40,
+  "PL_TARGET_DENSITY_PCT": 45,
+  "RUN_LINTER": false
+}
