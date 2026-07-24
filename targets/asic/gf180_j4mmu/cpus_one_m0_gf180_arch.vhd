@@ -30,6 +30,37 @@ use work.cpu_core_pack.all;
 -- architecture body verbatim except for the `sram` binding/generic, so
 -- ulx3s/icesugar/other boards keep using cpus_one_m0_arch.vhd's
 -- bootram_infer(inferred)/16 KiB unchanged.
+-- Task 6 PHASE C: cpus_config.vhd's soc_cpus_config configuration (which
+-- threads u_cpu's required decode_type/reset_vector generics down via
+-- `for one_cpu_m0 ... u_cpu: cpu use configuration work.cpu_synth_j4
+-- generic map (MMU_ARCH => true, PRIV_ARCH => true)`) only has a
+-- `for one_cpu_m0` clause -- it does not, and structurally cannot without
+-- editing the shared base file, apply to this architecture's different
+-- name (`one_cpu_m0_gf180`). Every existing flow that successfully
+-- elaborates this architecture (sim/xip_sim.sh) works around that by
+-- substituting a differently-purposed file (tb/cpus_xip_probe.vhd) that
+-- happens to reuse the name "one_cpu_m0" so soc_cpus_config's clause
+-- matches it instead -- this architecture itself was never actually
+-- elaborated standalone before Task 6 PHASE C's top-harden dry run
+-- surfaced the gap ("no actual for generic decode_type/reset_vector" on
+-- decode.vhd's `core : decode_core`, GHDL default component-binding does
+-- NOT auto-select a configuration for a plain component instantiation like
+-- `u_cpu : cpu` two levels down inside cpu_core's single architecture).
+-- Fix: an equivalent self-contained configuration, named for this
+-- architecture, so this file has no dependency on any external soc/cpus
+-- level configuration to elaborate correctly on its own.
+configuration cpu_core_j4mmu_gf180 of cpu_core is
+  for arch
+    for u_cpu : cpu
+      use configuration work.cpu_synth_j4
+        generic map (
+          MMU_ARCH => true,
+          PRIV_ARCH => true
+        );
+    end for;
+  end for;
+end configuration;
+
 architecture one_cpu_m0_gf180 of cpus is
   signal instr_bus_o : instr_bus_o_t;
   signal instr_bus_i : instr_bus_i_t;
@@ -42,7 +73,7 @@ architecture one_cpu_m0_gf180 of cpus is
 begin
   -- label is core0 (not cpu0) to avoid clashing with the synopsys group "cpu0"
   -- declared in the cpus entity, which ghdl does not skip.
-  core0 : cpu_core
+  core0 : configuration work.cpu_core_j4mmu_gf180
     generic map ( COPRO_DECODE => false )
     port map (
       clk => clk, rst => rst,
