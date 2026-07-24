@@ -1,0 +1,8 @@
+{
+  "DESIGN_NAME": "cpu",
+  "VERILOG_FILES": ["dir::cpu.v"],
+  "CLOCK_PORT": "clk",
+  "CLOCK_PERIOD": 20.0,
+  "FP_CORE_UTIL": 30,
+  "PL_TARGET_DENSITY_PCT": 35
+}
