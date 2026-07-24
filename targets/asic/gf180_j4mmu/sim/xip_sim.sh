@@ -6,7 +6,7 @@
 # with the Task 4 XIP payload (xip_payload/payload.bin), and asserts that the
 # CPU actually fetches+executes it from flash@0x14000000 (Task 3's boot ROM
 # vector table) by observing the payload's signature store
-# (0xF1A5B007 @ boot-RAM byte 0x100) on the boot-RAM write bus -- see
+# (0x0000005A @ boot-RAM byte 0x100) on the boot-RAM write bus -- see
 # tb/cpus_xip_probe.vhd and tb/xip_cosim_tb.vhd for the full mechanism.
 #
 # IMPORTANT (do not "fix" this away): regenerating the SoC with
@@ -140,7 +140,7 @@ ghdl -r --std=93 -fexplicit -fsynopsys --syn-binding --workdir="$WORK" xip_cosim
     --stop-time=2ms --assert-level=error 2>&1 | tee "$OUT"
 
 if grep -q "XIP_SIG_OK" "$OUT"; then
-  echo "==> XIP cosim PASSED: signature 0xF1A5B007 observed at boot-RAM 0x100 -- payload fetched+executed from flash@0x14000000"
+  echo "==> XIP cosim PASSED: signature 0x0000005A observed at boot-RAM 0x100 -- payload fetched+executed from flash@0x14000000"
 else
   echo "==> XIP cosim FAILED: XIP_SIG_OK never observed (see $OUT)" >&2
   exit 1

@@ -36,18 +36,46 @@
 # PA[31:0]=0x10000000). Flash at 0x14000000 has PA[27:0] = 0x4000000-
 # 0x4FFFFFF, entirely disjoint from SDRAM's PA[27:0] range, so the 16 MiB
 # flash window cannot alias the 32 MiB SDRAM window in the icache's 28-bit
-# tag space. FLASH_MASK = x"FF000000" isolates the top 8 address bits for
-# the region mux's decode ((req.a and FLASH_MASK) = (FLASH_BASE and
-# FLASH_MASK)).
+# tag space.
+#
+# *** IMPORTANT correction (Task 4 debug finding) ***: mem_region_mux's
+# req.a/ddr_bus_o.a does NOT carry the CPU's full 32-bit address 0x14000000
+# -- it carries the icache's 28-bit PA (PA[27:0]) with the top nibble
+# HARD-WIRED to 0x0. See components/cpu/cache/icache_adapter.vhd:
+# `dbus_o.a <= x"0" & icache_my.a;` (icache_my.a is only 28 bits wide, and
+# the top nibble driven onto the ddr bus is a *constant* x"0", not a copy
+# of the CPU's top nibble). So the flash fetch at CPU address 0x14000000
+# arrives at this mux (and at qspi_flash_ctrl's db_i.a) as 0x04000000, and
+# SDRAM's CPU address 0x10000000 arrives as 0x00000000. Confirmed
+# empirically in cosim: a temporary probe on mem_region_mux's req.a showed
+# req.a=67108864 (0x04000000) with is_flash='0' on the very first
+# (and only) burst -- the mux's old FLASH_BASE=0x14000000 never matched
+# anything that could actually appear on this bus, so every ddr burst
+# (including the flash fetch) fell through to sdram_ctrl by default; this
+# was the entire Task 4 blocker (qfl_cs_n never asserted).
+#
+# FIX: FLASH_BASE/flash_base (on both mem_region_mux and qspi_flash_ctrl)
+# must be expressed in the SAME 28-bit-with-forced-top-nibble form the ddr
+# bus actually carries: x"04000000", not x"14000000". FLASH_MASK stays
+# x"FF000000" -- it still isolates the top 8 bits of the (now-corrected)
+# req.a, and 0x04000000 vs SDRAM's 0x00000000-0x01FFFFFF are still fully
+# disjoint under that mask ((req.a and FLASH_MASK) = (FLASH_BASE and
+# FLASH_MASK)). Nothing upstream of the icache changes: the CPU-side fetch
+# address (boot ROM PC, payload link address) correctly stays 0x14000000
+# -- that address is only ever decoded by decode_core_instr_addr()'s top
+# nibble (0x1 -> DEV_DDR) before it reaches the icache; only the post-
+# icache/ddr-bus-side generics need the 28-bit form.
 #
 # FLASH_BASE generic (on qspi_flash_ctrl itself): must track the same
-# 0x14000000 -- db_i.a (driven by mem_region_mux's flash_req, itself
-# ddr_bus_o passed through untouched when addressed) is still the FULL,
-# un-relocated address, so FLASH_BASE must equal mem_region_mux's flash_base
+# 0x04000000 -- db_i.a (driven by mem_region_mux's flash_req, itself
+# ddr_bus_o passed through untouched when addressed) is the 28-bit
+# bus-side address, so FLASH_BASE must equal mem_region_mux's flash_base
 # for qspi_flash_ctrl's internal `in_range`/24-bit-offset decode to line up
 # (mem_region_mux's own region decode already gates db_i.en off outside the
 # flash region, so qspi_flash_ctrl's internal in_range check is
-# redundant-but-harmless belt-and-braces, not load-bearing).
+# redundant-but-harmless belt-and-braces, not load-bearing -- but the
+# offset subtraction `a_u - flash_base_u` used to compute addr_flash24 IS
+# load-bearing, and needs flash_base_u to match the bus-side address form).
 <<: !include base.yaml
 
 top-entities:
@@ -83,7 +111,7 @@ top-entities:
     generics:
       lanes: 4
       dummy_cycles: 6
-      flash_base: 'x"14000000"'
+      flash_base: 'x"04000000"'
 
   # the region mux (components/misc/mem_region_mux.vhd, Task 2): sits
   # between ddr_ram_mux's ddr_bus (upstream) and {sdram_ctrl,
@@ -104,7 +132,7 @@ top-entities:
       flash_resp: flash_resp
       flash_ack_r: flash_ack_r
     generics:
-      flash_base: 'x"14000000"'
+      flash_base: 'x"04000000"'
       flash_mask: 'x"FF000000"'
 
 # devices: intentionally NOT overridden here -- omitting the key means the

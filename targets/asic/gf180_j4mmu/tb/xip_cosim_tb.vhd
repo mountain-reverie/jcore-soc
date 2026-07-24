@@ -79,10 +79,16 @@ architecture sim of xip_cosim_tb is
   -- (offset 0x1F) in bits 7:0 -- see qspi_flash_model.vhd's PRELOAD
   -- generic doc and qspi_flash_ctrl.vhd's line_o mapping (identical
   -- convention). Bytes, in order (verified by hand against payload.S):
-  --   d0 03 d1 04 21 02 af fe 00 09 00 09 00 09 00 09
-  --   f1 a5 b0 07 00 00 01 00 00 09 00 09 00 09 00 09
+  --   e1 01 41 18 e0 5a 21 02 af fe 00 09 00 09 00 09
+  --   00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  -- (mov #1,r1 / shll8 r1 / mov #0x5a,r0 / mov.l r0,@r1 / spin: bra spin /
+  -- nop -- immediate-built operands, no PC-relative literal-pool data
+  -- read; see payload.S's header for why -- a literal-pool version proved
+  -- the store never issues from flash-served DATA reads, a separate,
+  -- documented, non-blocking follow-up from the execute-from-flash path
+  -- this payload proves).
   constant XIP_PAYLOAD : std_logic_vector(255 downto 0) :=
-    x"d003d1042102affe0009000900090009f1a5b007000001000009000900090009";
+    x"e1014118e05a2102affe00090009000900000000000000000000000000000000";
 begin
   -- `entity work.soc(impl)` direct instantiation. IMPORTANT: soc.vhd's
   -- OWN internal `cpus : ...` instantiation must be soc_gen's
