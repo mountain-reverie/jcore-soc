@@ -4,13 +4,21 @@
 -- A REPLACEMENT for targets/boards/ulx3s/cpus_one_m0_arch.vhd's
 -- "one_cpu_m0" architecture of the shared `cpus` entity (targets/cpus.vhd):
 -- byte-identical except for one addition, a monitor process that watches
--- the boot-RAM (bootram_infer, DEV_SRAM) write bus INSIDE this
+-- the boot-RAM (bootram_infer(boot_mem), DEV_SRAM) write bus INSIDE this
 -- architecture -- `sramdt_o`, the db_i input to the `sram` instance below
 -- -- for the XIP payload's signature write (see targets/asic/gf180_j4mmu/
 -- xip_payload/payload.S: store 0xF1A5B007, loaded via a PC-relative
 -- literal-pool `mov.l @(disp,PC),Rn` (i.e. a genuine flash-served DATA
--- read, not just an instruction fetch), to byte address 0x00000100) and
--- reports PASS the instant it is seen.
+-- read, not just an instruction fetch), to byte address 0x00000900 --
+-- inside boot_mem's writable stack-SRAM lane, 0x800-0xFFF; the old target
+-- 0x100 sat in the now-read-only constant-ROM vector lane, 0x000-0x7FF --
+-- see BM Task 3) and reports PASS the instant it is seen.
+--
+-- BM Task 3: this arch's `sram` binding must match
+-- cpus_one_m0_gf180_arch.vhd's -- bootram_infer(boot_mem),
+-- c_addr_width=>12 -- NOT the old bootram_infer(inferred)/14 (16 KiB)
+-- binding; the two stay in lockstep since this file is the
+-- probe/instrumented clone of that architecture.
 --
 -- WHY A REPLACEMENT ARCHITECTURE, NOT AN EXTERNAL NAME: sramdt_o is local
 -- to `cpus`'s architecture (bootram_infer sits one level of hierarchy
@@ -70,7 +78,9 @@ architecture one_cpu_m0 of cpus is
 
   -- XIP signature-observed flag: exposed for the outer tb watchdog via a
   -- report severity note (grepped by xip_sim.sh) rather than a new port.
-  constant XIP_SIG_ADDR  : std_logic_vector(31 downto 0) := x"00000100";
+  -- BM Task 3: address moved from 0x100 (boot_mem's read-only ROM lane)
+  -- to 0x900 (boot_mem's writable stack-SRAM lane, 0x800-0xFFF).
+  constant XIP_SIG_ADDR  : std_logic_vector(31 downto 0) := x"00000900";
   constant XIP_SIG_VALUE : std_logic_vector(31 downto 0) := x"f1a5b007";
 begin
   core0 : cpu_core
@@ -100,8 +110,8 @@ begin
   cpu1_data_master_en <= '0';
   cpu1_data_master_ack <= '0';
 
-  sram : entity work.bootram_infer(inferred)
-    generic map (c_addr_width => 14)
+  sram : entity work.bootram_infer(boot_mem)
+    generic map (c_addr_width => 12)
     port map (clk => clk, ibus_i => sraminst_o, ibus_o => sraminst_i,
               db_i => sramdt_o, db_o => sramdt_i);
 
@@ -125,7 +135,7 @@ begin
   -- payload's store (see targets/asic/gf180_j4mmu/xip_payload/payload.S:
   -- `mov.l sig_val,r0` / `mov.l sig_addr,r1` (both PC-relative literal-
   -- pool loads served by flash) / `mov.l r0,@r1`, storing r0=0xf1a5b007
-  -- at r1=0x00000100) and report PASS the instant it is seen. This is
+  -- at r1=0x00000900, boot_mem's stack-SRAM lane) and report PASS the instant it is seen. This is
   -- the ONLY store the payload ever issues,
   -- and it can only reach this bus if the CPU actually fetched+executed
   -- the payload from flash@0x14000000 (there is no other code path to it
@@ -136,7 +146,7 @@ begin
     if rising_edge(clk) then
       if sramdt_o.en = '1' and sramdt_o.wr = '1'
          and sramdt_o.a = XIP_SIG_ADDR and sramdt_o.d = XIP_SIG_VALUE then
-        report "XIP_SIG_OK: boot-RAM[0x100] == 0xF1A5B007 -- payload fetched+executed from flash@0x14000000"
+        report "XIP_SIG_OK: boot-RAM[0x900] == 0xF1A5B007 -- payload fetched+executed from flash@0x14000000"
           severity note;
       end if;
     end if;

@@ -1,15 +1,20 @@
 ! Task 4 (QSPI XIP cosim) minimal SH-2 payload.
 !
 ! Linked to run AT 0x14000000 (the flash XIP entry, see Task 3's
-! boot_image_pkg.vhd vector table: word0=PC=0x14000000, word1=SP=0x00003ffc).
-! Reset loads PC/SP from the boot ROM vector table (bootram_infer, DEV_SRAM),
-! then the CPU's first FETCH is at 0x14000000 -> DEV_DDR -> mem_region_mux ->
-! qspi_flash_ctrl (this is the address chain Task 4's cosim proves).
+! boot_image_pkg.vhd vector table: word0=PC=0x14000000, word1=SP=0x00000ffc).
+! Reset loads PC/SP from the boot ROM vector table (bootram_infer,
+! DEV_SRAM/boot_mem), then the CPU's first FETCH is at 0x14000000 ->
+! DEV_DDR -> mem_region_mux -> qspi_flash_ctrl (this is the address chain
+! Task 4's cosim proves).
 !
 ! Effect (TB-OBSERVABLE): store a 32-bit signature (0xF1A5B007) to a fixed
-! boot-RAM address (0x00000100), then spin forever. The signature can only
-! appear at 0x100 if this code was actually FETCHED and EXECUTED from flash
-! at 0x14000000 -- there is no other path to that store.
+! boot-RAM address (0x00000900 -- the writable stack-SRAM lane of
+! boot_mem, 0x800-0xFFF; the old target 0x100 sat in boot_mem's
+! read-only constant-ROM vector lane, 0x000-0x7FF, where a store is now
+! silently IGNORED -- see components/memory/boot_mem.vhd and BM Task 3),
+! then spin forever. The signature can only appear at 0x900 if this code
+! was actually FETCHED and EXECUTED from flash at 0x14000000 -- there is
+! no other path to that store.
 !
 ! r0/r1 are loaded via PC-relative literal-pool reads (`mov.l @(disp,PC),Rn`)
 ! -- genuine flash-served DATA reads (dcache misses through qspi_flash_ctrl),
@@ -45,4 +50,4 @@ spin:
 sig_val:
 	.long	0xf1a5b007
 sig_addr:
-	.long	0x00000100
+	.long	0x00000900

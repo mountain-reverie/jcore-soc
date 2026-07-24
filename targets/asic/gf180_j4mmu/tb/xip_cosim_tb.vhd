@@ -16,15 +16,20 @@ use work.sdram_pkg.all;
 -- Task 4 XIP payload (targets/asic/gf180_j4mmu/xip_payload/payload.bin):
 --
 --   mov.l  sig_val,r0    (r0 <- 0xf1a5b007)
---   mov.l  sig_addr,r1   (r1 <- 0x00000100)
+--   mov.l  sig_addr,r1   (r1 <- 0x00000900)
 --   mov.l  r0,@r1        (store)
 --   bra    spin / nop    (spin forever)
 --
 -- linked to run AT 0x14000000 (Task 3's boot ROM vector table jumps here:
--- word0=PC=0x14000000, word1=SP=0x00003ffc -- see boot_image_pkg.vhd).
+-- word0=PC=0x14000000, word1=SP=0x00000ffc -- see boot_image_pkg.vhd). BM
+-- Task 3: the boot ROM (bootram_infer(boot_mem), c_addr_width=>12) has a
+-- read-only constant-ROM vector lane at 0x000-0x7FF and a writable
+-- 2 KiB stack-SRAM lane at 0x800-0xFFF; the payload's signature target
+-- moved from 0x100 (now read-only) to 0x900 (inside the SRAM lane,
+-- below SP=0xFFC so it does not collide with the stack).
 --
--- PROOF: reset -> CPU loads PC/SP from the boot ROM (bootram_infer,
--- DEV_SRAM) -> first FETCH at 0x14000000 (DEV_DDR) -> ddr_ram_mux ->
+-- PROOF: reset -> CPU loads PC/SP from the boot ROM (bootram_infer
+-- (boot_mem), DEV_SRAM) -> first FETCH at 0x14000000 (DEV_DDR) -> ddr_ram_mux ->
 -- mem_region_mux -> qspi_flash_ctrl's native 8-beat burst (Task 1) ->
 -- qspi_flash_model's QUAD_IO (0xEB) read, streaming the preloaded 32-byte
 -- line back through the icache -> CPU executes the 3 real instructions
@@ -81,7 +86,7 @@ architecture sim of xip_cosim_tb is
   -- generic doc and qspi_flash_ctrl.vhd's line_o mapping (identical
   -- convention). Bytes, in order (verified by hand against payload.S):
   --   d0 03 d1 04 21 02 af fe 00 09 00 09 00 09 00 09
-  --   f1 a5 b0 07 00 00 01 00 00 09 00 09 00 09 00 09
+  --   f1 a5 b0 07 00 00 09 00 00 09 00 09 00 09 00 09
   -- (mov.l sig_val,r0 / mov.l sig_addr,r1 / mov.l r0,@r1 / spin: bra spin /
   -- nop -- both r0/r1 are loaded via PC-relative literal-pool reads, a
   -- genuine flash-served DATA read (dcache miss through qspi_flash_ctrl),
@@ -91,7 +96,7 @@ architecture sim of xip_cosim_tb is
   -- in components/misc/qspi_flash_ctrl.vhd (bst_widx) -- this payload is
   -- the regression proof for that fix.
   constant XIP_PAYLOAD : std_logic_vector(255 downto 0) :=
-    x"d003d1042102affe0009000900090009f1a5b007000001000009000900090009";
+    x"d003d1042102affe0009000900090009f1a5b007000009000009000900090009";
 begin
   -- `entity work.soc(impl)` direct instantiation. IMPORTANT: soc.vhd's
   -- OWN internal `cpus : ...` instantiation must be soc_gen's
