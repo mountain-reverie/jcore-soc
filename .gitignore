@@ -72,3 +72,5 @@ lib/memory_tech_lib/tech/gf180/openram/*.sp
 lib/memory_tech_lib/tech/gf180/openram/*.log
 lib/memory_tech_lib/tech/gf180/openram/out/
 lib/memory_tech_lib/tech/gf180/openram/*.html
+targets/asic/gf180_j4mmu/xip_payload/payload.o
+targets/asic/gf180_j4mmu/xip_payload/payload.elf
