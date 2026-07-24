@@ -19,34 +19,42 @@ use ieee.std_logic_1164.all;
 -- word0=PC/word1=SP/word2=PC/word3=SP layout with actual code starting only
 -- at the PC offset, never at word0/1 themselves.
 --
--- Format: this ROM is serviced by components/memory/bootram_infer.vhd
--- (targets/boards/ulx3s/cpus_one_m0_arch.vhd instantiates it with
--- c_addr_width=14, i.e. a 16 KiB, 4096-word boot RAM at byte addresses
--- 0x0000-0x3FFF -- the same instantiation this gf180_j4mmu target reuses,
--- see targets/asic/gf180_j4mmu/filelist.sh). decode_core_instr_addr's
--- addr[31:28]=0x0 -> DEV_SRAM routes fetches here.
+-- Format: this ROM is serviced by components/memory/bootram_infer.vhd's
+-- BM Task 2 `boot_mem` architecture (targets/asic/gf180_j4mmu's OWN
+-- cpus_one_m0_gf180_arch.vhd instantiates it with c_addr_width=12, i.e. a
+-- 4 KiB boot memory at byte addresses 0x000-0xFFF: 0x000-0x7FF is a
+-- read-only constant-ROM vector lane (this table), 0x800-0xFFF is a
+-- writable stack SRAM lane -- see components/memory/boot_mem.vhd and
+-- targets/asic/gf180_j4mmu/filelist.sh). The shared
+-- targets/boards/ulx3s/cpus_one_m0_arch.vhd (bootram_infer(inferred),
+-- c_addr_width=14, 16 KiB single read/write array) is UNCHANGED and still
+-- used by ulx3s/icesugar/etc -- this target no longer reuses it for `cpus`.
+-- decode_core_instr_addr's addr[31:28]=0x0 -> DEV_SRAM routes fetches here.
 --
 -- Contents (word-addressed, 4 bytes/word):
 --   word 0 (byte addr 0x0): initial PC = 0x14000000, the flash XIP entry
 --     (design.flash.yaml, Task 3: flash_base = 0x14000000, chosen so the
 --     CPU-core address decode routes it to DEV_DDR -> mem_region_mux ->
 --     qspi_flash_ctrl, and it is genuinely fetchable through the icache).
---   word 1 (byte addr 0x4): initial SP = 0x00003ffc, top of this target's
---     16 KiB boot RAM (0x0000-0x3FFF, the *only* memory guaranteed live at
---     reset -- SDRAM/DDR is not yet initialised and flash XIP has no writable
---     backing store). Mirrors targets/boards/ulx3s/rom/start.S's own
---     sp_init/vector-table SP (0x00003ffc, "top of 16 KiB boot RAM"), which
---     is the value validated against this exact bootram_infer(c_addr_width
---     => 14) instantiation. (The *different* 0x00007ffc seen in the
+--   word 1 (byte addr 0x4): initial SP = 0x00000ffc, top of this target's
+--     BM Task 2 boot_mem SRAM lane (0x800-0xFFF, the writable half of the
+--     new 4 KiB boot_mem region -- the *only* memory guaranteed both live
+--     and WRITABLE at reset: boot_mem's 0x000-0x7FF ROM lane is read-only by
+--     construction, and SDRAM/DDR is not yet initialised, flash XIP has no
+--     writable backing store). This replaces the previous 0x00003ffc value
+--     (top of the old 16 KiB bootram_infer(inferred) single read/write
+--     array, c_addr_width=14) now that this target binds
+--     bootram_infer(boot_mem)/c_addr_width=12 instead -- see
+--     cpus_one_m0_gf180_arch.vhd. (The *different* 0x00007ffc seen in the
 --     committed targets/boards/ulx3s/boot_image_pkg.vhd belongs to a
 --     separate, larger real bootloader image built by that target's own
 --     sim/rtl.sh step, not to this minimal vector table -- not applicable
 --     here.)
 --   word 2 (byte addr 0x8): duplicate PC (0x14000000) -- the SH-2 "manual
 --     reset" vector, mirroring start.S's _vectors duplication at 0x08/0x0c.
---   word 3 (byte addr 0xc): duplicate SP (0x00003ffc), same rationale.
+--   word 3 (byte addr 0xc): duplicate SP (0x00000ffc), same rationale.
 --
--- reset -> CPU loads PC=word0=0x14000000, SP=word1=0x00003ffc from this ROM
+-- reset -> CPU loads PC=word0=0x14000000, SP=word1=0x00000ffc from this ROM
 -- -> first instruction FETCH at 0x14000000 -> DEV_DDR -> mem_region_mux ->
 -- qspi_flash_ctrl is the address chain Task 4's cosim must reproduce.
 --
@@ -82,8 +90,8 @@ package boot_image_pkg is
   type boot_image_t is array (0 to 4095) of std_logic_vector(31 downto 0);
   constant BOOT_IMAGE : boot_image_t := (
     0 => x"14000000",
-    1 => x"00003ffc",
+    1 => x"00000ffc",
     2 => x"14000000",
-    3 => x"00003ffc",
+    3 => x"00000ffc",
     others => x"00000000");
 end package boot_image_pkg;

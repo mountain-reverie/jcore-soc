@@ -5,6 +5,37 @@
 # or PLL -- see base.yaml for the logical clk/reset top.
 <<: !include base.yaml
 cpu:
+  # BASE (no-flash) variant: unchanged from master -- shared
+  # targets/boards/ulx3s/cpus_one_m0_arch.vhd's one_cpu_m0,
+  # bootram_infer(inferred)/c_addr_width=>14 (16 KiB single read/write EBR).
+  # This `architecture:` field only feeds cpus_config.vhd (soc_gen's own
+  # explicit VHDL `configuration`), which is a BASE-variant-only generated
+  # artifact (VARIANT=flash's soc_gen run does not rewrite it) -- so it
+  # governs the base build only.
+  #
+  # BM Task 2: the gf180-only `one_cpu_m0_gf180` architecture
+  # (bootram_infer(boot_mem), c_addr_width=>12) is scoped to the FLASH
+  # variant ONLY -- NOT via this field/design.flash.yaml (design.flash.yaml
+  # has no `cpu:` section, and its own soc.vhd's `cpus` instantiation binds
+  # via a bare `entity work.cpus` -- socgen's elaborate step reports the
+  # `cpus` entity's architecture as ambiguous whenever more than one
+  # architecture exists in the whole tree, so it can't emit an explicit
+  # configuration for the flash variant either way -- see filelist.sh's
+  # longer note). Instead, the flash variant's binding is controlled by
+  # GHDL's own default-binding rule (last-analyzed architecture wins):
+  # filelist.sh/Makefile analyze targets/boards/ulx3s/cpus_one_m0_arch.vhd
+  # (this field's target) first, then
+  # targets/asic/gf180_j4mmu/cpus_one_m0_gf180_arch.vhd LAST, so the flash
+  # build's bare `entity work.cpus` resolves to `one_cpu_m0_gf180` while the
+  # base build's explicit `configuration soc_cpus_config` (driven by this
+  # field) resolves to `one_cpu_m0` -- confirmed via `ghdl -e soc` for both
+  # variants. Rationale for flash-only boot_mem: its whole premise is
+  # booting from flash XIP (PC=0x14000000); the base variant has no
+  # qspi_flash_ctrl and still relies on this target's own sim/rtl.sh
+  # self-test bootloader, a real ~7 KB RAM-resident program that only fits
+  # the 16 KiB bootram_infer(inferred) region (confirmed: rtl.sh PASSES
+  # against inferred/16 KiB, TIMEOUTs against boot_mem/4 KiB -- the 2 KiB
+  # read-only ROM lane truncates it).
   architecture: one_cpu_m0
   cores: 1
   model: j4

@@ -96,7 +96,44 @@ FILES=(
   targets/cpumreg.vhd
   targets/asic/gf180_j4mmu/boot_image_pkg.vhd
   components/memory/bootram_infer.vhd
+  # BM Task 1: boot_mem architecture (constant-ROM lane + writable stack
+  # SRAM lane), c_addr_width=>12 -- FLASH VARIANT ONLY (see BM Task 2 note
+  # below). Analyzed unconditionally (harmless for the base variant, which
+  # never selects this architecture -- see cpus_one_m0_gf180_arch.vhd below).
+  components/memory/boot_mem.vhd
+  # BASE variant cpus architecture (one_cpu_m0, bootram_infer(inferred),
+  # c_addr_width=>14, 16 KiB): the shared file also used by
+  # ulx3s/icesugar -- UNCHANGED. sim/rtl.sh's self-test bootloader (a real
+  # ~7 KB RAM-resident program) only fits this 16 KiB region, so the base
+  # (no-flash) variant must keep it.
   targets/boards/ulx3s/cpus_one_m0_arch.vhd
+  # BM Task 2: gf180_j4mmu-only cpus architecture -- FLASH VARIANT ONLY.
+  # Binds bootram_infer(boot_mem)/c_addr_width=>12 (4 KiB: 2 KiB read-only
+  # ROM vector lane + 2 KiB writable stack SRAM lane) instead of
+  # bootram_infer(inferred)/c_addr_width=>14. boot_mem's premise is
+  # booting from flash XIP (PC=0x14000000, see boot_image_pkg.vhd) -- the
+  # base variant has no qspi_flash_ctrl and keeps one_cpu_m0/inferred
+  # above.
+  #
+  # Selection mechanism: cpus_config.vhd (the explicit VHDL `configuration`
+  # soc_gen emits from design.yaml's cpu.architecture) is a BASE-variant-
+  # only artifact -- VARIANT=flash's soc_gen run does not rewrite it, and
+  # (independently) the flash variant's own generated soc.vhd binds `cpus`
+  # via a bare `entity work.cpus` with NO explicit architecture/config at
+  # all, because socgen's elaborate step reports the `cpus` entity's
+  # architecture as ambiguous whenever more than one architecture of it
+  # exists anywhere in the tree (which is unavoidable once this file adds a
+  # second one) and falls back to leaving the binding to GHDL. So the flash
+  # variant's actual binding is decided purely by GHDL's own default-
+  # binding rule: the LAST-analyzed architecture of `cpus` in the analyzed
+  # library wins. This file is listed last (after
+  # targets/boards/ulx3s/cpus_one_m0_arch.vhd above) specifically so that
+  # rule lands on `one_cpu_m0_gf180` for the flash build, while the base
+  # build's explicit `configuration soc_cpus_config` (driven by design.yaml)
+  # independently and unambiguously selects `one_cpu_m0` regardless of
+  # analysis order. Confirmed via `ghdl -e soc` for both variants (base:
+  # bootram_infer(inferred)/14; flash: bootram_infer(boot_mem)/12).
+  targets/asic/gf180_j4mmu/cpus_one_m0_gf180_arch.vhd
   targets/boards/ulx3s/aic_irq_gen.vhd
   # QSPI flash controller (flash variant only -- NOT a peripheral device;
   # a ddr_bus mem-region_mux target, base/decode address 0x04000000
