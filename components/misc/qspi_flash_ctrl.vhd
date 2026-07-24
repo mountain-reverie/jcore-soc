@@ -473,6 +473,23 @@ architecture rtl of qspi_flash_ctrl is
   signal bst_tag    : std_logic_vector(23 downto 0) := (others => '0');
   signal bst_src    : natural range 0 to 1 := 0;
   signal bst_demand : std_logic := '0'; -- the outstanding demand_pending miss is a burst request
+  -- Critical-word-first burst start index (fix: see bst_cnt's read-index
+  -- use below). sdram_ctrl (and real SDRAM burst-wrap semantics) deliver
+  -- the ORIGINALLY REQUESTED word first, then wrap through the rest of
+  -- the line -- this is the beat order the CPU's dcache_mcl expects (its
+  -- cw_last/reqw completion logic tracks the SAME wrapping order). This
+  -- controller previously always started streaming at word 0 regardless
+  -- of the requested word, silently handing the dcache the WRONG word on
+  -- its first (critical, immediately-consumed) beat whenever the
+  -- requested word was not word 0 of the line -- the root cause of the
+  -- QSPI XIP literal-pool-load corruption (see .superpowers/sdd/
+  -- task-4-report.md, "Fix: mem_region_mux response-path" /
+  -- "register-banking" debug sections for the observed symptom: a
+  -- literal-pool load returned bytes from word 0/1 of the line instead of
+  -- the requested word). bst_widx records the requested word index for
+  -- the duration of the burst; the streaming beat index is
+  -- (bst_widx + bst_cnt) mod 8.
+  signal bst_widx   : natural range 0 to 7 := 0;
 
   function unpack_words(line : std_logic_vector(255 downto 0)) return words_t is
     variable w : words_t;
@@ -556,9 +573,15 @@ begin
         -- back-to-back, one word/cycle, asserting db_o.ack/ack_r each
         -- cycle (wcnt 0->7) -- the sdram_ctrl per-ack cadence. This takes
         -- priority over accepting a new bus request.
+        --
+        -- Critical-word-first: beat N of the burst delivers word
+        -- (bst_widx + N) mod 8, NOT word N directly -- see bst_widx's
+        -- declaration comment. Beat 0 (bst_cnt=0, i.e. word bst_widx) was
+        -- already delivered the cycle bst_active was asserted (see the
+        -- two burst-kickoff sites below); this covers beats 1..7.
         ----------------------------------------------------------------
         if bst_active = '1' then
-          d_r      <= bst_words(bst_cnt);
+          d_r      <= bst_words((bst_widx + bst_cnt) mod 8);
           db_ack_r <= '1';
           rd_ack_r <= '1';
 
@@ -629,7 +652,8 @@ begin
                 end if;
                 bst_active <= '1';
                 bst_cnt    <= 1;
-                d_r        <= hit_words(0);
+                bst_widx   <= widx;
+                d_r        <= hit_words(widx);
               else
                 d_r <= hit_words(widx);
               end if;
@@ -729,7 +753,8 @@ begin
               bst_src    <= fill_target;
               bst_active <= '1';
               bst_cnt    <= 1;
-              d_r        <= unpack_words(eng_line_o)(0);
+              bst_widx   <= req_widx;
+              d_r        <= unpack_words(eng_line_o)(req_widx);
             else
               d_r <= unpack_words(eng_line_o)(req_widx);
             end if;

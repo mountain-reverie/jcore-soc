@@ -7,7 +7,9 @@
 -- the boot-RAM (bootram_infer, DEV_SRAM) write bus INSIDE this
 -- architecture -- `sramdt_o`, the db_i input to the `sram` instance below
 -- -- for the XIP payload's signature write (see targets/asic/gf180_j4mmu/
--- xip_payload/payload.S: store 0x0000005A (via immediate-built operands, no PC-relative literal-pool data read -- see payload.S) to byte address 0x00000100) and
+-- xip_payload/payload.S: store 0xF1A5B007, loaded via a PC-relative
+-- literal-pool `mov.l @(disp,PC),Rn` (i.e. a genuine flash-served DATA
+-- read, not just an instruction fetch), to byte address 0x00000100) and
 -- reports PASS the instant it is seen.
 --
 -- WHY A REPLACEMENT ARCHITECTURE, NOT AN EXTERNAL NAME: sramdt_o is local
@@ -69,7 +71,7 @@ architecture one_cpu_m0 of cpus is
   -- XIP signature-observed flag: exposed for the outer tb watchdog via a
   -- report severity note (grepped by xip_sim.sh) rather than a new port.
   constant XIP_SIG_ADDR  : std_logic_vector(31 downto 0) := x"00000100";
-  constant XIP_SIG_VALUE : std_logic_vector(31 downto 0) := x"0000005a";
+  constant XIP_SIG_VALUE : std_logic_vector(31 downto 0) := x"f1a5b007";
 begin
   core0 : cpu_core
     generic map ( COPRO_DECODE => false )
@@ -121,8 +123,10 @@ begin
   -----------------------------------------------------------------------
   -- Task 4 XIP signature monitor: watch the boot-RAM write bus for the
   -- payload's store (see targets/asic/gf180_j4mmu/xip_payload/payload.S:
-  -- `mov.l r0,@r1` with r0=0x0000005a (built via `mov #0x5a,r0`), r1=0x00000100 (built via `mov #1,r1` / `shll8 r1`)) and report PASS the
-  -- instant it is seen. This is the ONLY store the payload ever issues,
+  -- `mov.l sig_val,r0` / `mov.l sig_addr,r1` (both PC-relative literal-
+  -- pool loads served by flash) / `mov.l r0,@r1`, storing r0=0xf1a5b007
+  -- at r1=0x00000100) and report PASS the instant it is seen. This is
+  -- the ONLY store the payload ever issues,
   -- and it can only reach this bus if the CPU actually fetched+executed
   -- the payload from flash@0x14000000 (there is no other code path to it
   -- -- see boot_image_pkg.vhd's vector table, Task 3).
@@ -132,7 +136,7 @@ begin
     if rising_edge(clk) then
       if sramdt_o.en = '1' and sramdt_o.wr = '1'
          and sramdt_o.a = XIP_SIG_ADDR and sramdt_o.d = XIP_SIG_VALUE then
-        report "XIP_SIG_OK: boot-RAM[0x100] == 0x0000005A -- payload fetched+executed from flash@0x14000000"
+        report "XIP_SIG_OK: boot-RAM[0x100] == 0xF1A5B007 -- payload fetched+executed from flash@0x14000000"
           severity note;
       end if;
     end if;
