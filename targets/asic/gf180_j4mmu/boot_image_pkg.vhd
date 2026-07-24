@@ -52,12 +52,31 @@ use ieee.std_logic_1164.all;
 --
 -- NOTE: targets/asic/gf180_j4mmu/sim/rtl.sh (this target's own banner/
 -- SPI-loopback self-test) OVERWRITES this file with a real ulx3s-style
--- bootloader image (via tools/genbootpkg) as one of its build steps -- it
--- treats boot_image_pkg.vhd as a build product for that specific test, NOT
--- as the source of truth. This hand-authored version IS the source of truth
--- for plain `ghdl -e soc` elaboration (README.md) and for the flash-XIP
--- boot chain Task 4 builds on; if you run sim/rtl.sh, restore this file
--- (e.g. `git checkout`) afterward.
+-- bootloader image (via tools/genbootpkg) as one of its build steps, and
+-- (as of the QSPI-XIP pre-merge hardening pass) restores this committed
+-- version afterward via a save/restore trap, the same convention
+-- sim/xip_sim.sh uses for the generated devices.vhd/soc.vhd/.../board.dts
+-- -- see rtl.sh's own header.
+--
+-- *** BASE (NO-FLASH) VARIANT WARNING -- READ BEFORE ANY BASE SYNTH/TAPEOUT ***
+-- The committed contents above are the FLASH-VARIANT reset vector table
+-- (PC=0x14000000). That address is only fetchable in the FLASH variant,
+-- where design.flash.yaml's flash_base=0x14000000 routes it through
+-- DEV_DDR -> mem_region_mux -> qspi_flash_ctrl. In the BASE (no-flash)
+-- gf180_j4mmu variant there is no qspi_flash_ctrl at all: the same address
+-- would route through DEV_DDR -> mem_region_mux -> sdram_ctrl, i.e. an
+-- uninitialised/garbage SDRAM fetch -- the CPU would MISBOOT.
+-- targets/asic/gf180_j4mmu/prep_sources.sh (shared by both sim/rtl.sh and
+-- metrics/synth_gf180.sh) explicitly does NOT regenerate this file ("the
+-- boot-ROM image build stays in rtl.sh -- it's sim-only, not needed for
+-- synth"), so metrics/synth_gf180.sh's BASE-variant synth-only area
+-- metrics currently consume this FLASH vector table verbatim via
+-- filelist.sh. That is harmless for synth-only area/stat numbers (no
+-- simulation/boot actually happens there), but ANY real base (no-flash)
+-- tapeout/signoff flow MUST regenerate a base-appropriate boot image first
+-- (e.g. via tools/genbootpkg, exactly as sim/rtl.sh does for its own sim)
+-- rather than consuming this committed file as-is. Do not let a future
+-- base tapeout script skip this step.
 package boot_image_pkg is
   constant BOOT_DEPTH : integer := 4096;
   type boot_image_t is array (0 to 4095) of std_logic_vector(31 downto 0);

@@ -28,11 +28,23 @@ BD=targets/asic/gf180_j4mmu
 # (final-review C1 fix -- see that script's header).
 "$BD/prep_sources.sh"
 
-# 2. real boot image. The committed boot_image_pkg.vhd is an all-zero
-# placeholder (CPU boots nothing) -- build a real one exactly as
-# targets/boards/ulx3s/sim.sh does: the ulx3s boot ROM (board-agnostic
-# HS-2J0 SH2 ROM bootloader/banner + SPI loopback self-test; single-core, so
-# no CONFIG_CPU1_DIAG needed here) via genbootpkg.
+# 2. real boot image. The committed boot_image_pkg.vhd is currently the
+# Task-3 QSPI-XIP flash vector table (see that file's own header) -- not
+# usable for this base (no-flash) self-test, which needs a real banner/SPI-
+# loopback bootloader. Build one exactly as targets/boards/ulx3s/sim.sh
+# does: the ulx3s boot ROM (board-agnostic HS-2J0 SH2 ROM bootloader/banner
+# + SPI loopback self-test; single-core, so no CONFIG_CPU1_DIAG needed
+# here) via genbootpkg. This OVERWRITES the committed boot_image_pkg.vhd as
+# a build product for this sim only; it is saved before and restored (via
+# the same trap/convention sim/xip_sim.sh uses for its own generated-file
+# overwrites) after, so a clean run leaves the tracked file untouched.
+BIP_SAVE="$(mktemp -d)"
+cp "$BD/boot_image_pkg.vhd" "$BIP_SAVE/"
+restore_boot_image_pkg() {
+  cp "$BIP_SAVE/boot_image_pkg.vhd" "$BD/"
+  rm -rf "$BIP_SAVE"
+}
+trap restore_boot_image_pkg EXIT
 make -C targets/boards/ulx3s/rom clean
 make -C targets/boards/ulx3s/rom all CONFIG_CPU1_DIAG=0
 perl tools/genbootpkg \

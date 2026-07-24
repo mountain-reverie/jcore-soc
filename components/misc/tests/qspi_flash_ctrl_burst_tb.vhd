@@ -23,6 +23,16 @@
 --       flash transaction) via a CS falling-edge count check.
 --   (c) SINGLE-word path (bst='0') still works after burst traffic --
 --       proves the single-word path is unaffected.
+--   (d)/(e) CRITICAL-WORD-FIRST regression guard: burst a line at a
+--       NON-zero requested word offset within the 32-byte line (widx=5,
+--       then widx=1) and assert the 8 beats arrive
+--       word[(widx+beat) mod 8] -- i.e. the requested word FIRST, then
+--       wrapping through the rest of the line -- matching sdram_ctrl's
+--       critical-word-first delivery order that dcache_mcl assumes. This
+--       is the exact regression guarded against: qspi_flash_ctrl used to
+--       always start burst delivery at word 0 regardless of the requested
+--       word index (see components/misc/qspi_flash_ctrl.vhd's bst_widx
+--       fix, commit 97c52b1 / .superpowers/sdd/task-4-report.md).
 -------------------------------------------------------------------------------
 
 library ieee;
@@ -177,6 +187,7 @@ begin
     variable exp   : std_logic_vector(31 downto 0);
     variable addr  : std_logic_vector(31 downto 0);
     variable la    : unsigned(31 downto 0);
+    variable wa    : unsigned(31 downto 0);
     variable cnt_before : natural;
   begin
     wait for CLK_PERIOD * 4;
@@ -253,6 +264,41 @@ begin
     exp := expected_word(addr(23 downto 0));
     assert got = exp report "pattern (c) single-word (2nd) mismatch" severity failure;
     report "pattern (c) single-word path intact PASSED";
+
+    ---------------------------------------------------------------------
+    -- (d) CRITICAL-WORD-FIRST: burst requested at word index 5 (address =
+    -- line_base + 5*4) within a fresh line. Beat i must deliver word
+    -- (5 + i) mod 8, NOT word i directly.
+    ---------------------------------------------------------------------
+    addr := x"00007014"; -- fresh line (base 0x7000), word index 5 (0x14 = 5*4)
+    bus_burst_read(clk, db_i, bst, db_o, ack_r, addr, got8);
+    la := unsigned(addr(31 downto 0)) and x"FFFFFFE0"; -- line base
+    for i in 0 to 7 loop
+      wa  := la + to_unsigned(((5 + i) mod 8) * 4, 32);
+      exp := expected_word(std_logic_vector(wa(23 downto 0)));
+      assert got8(i) = exp
+        report "pattern (d) critical-word-first (widx=5): mismatch at beat " & integer'image(i) &
+               " got=" & integer'image(to_integer(unsigned(got8(i)))) &
+               " exp=" & integer'image(to_integer(unsigned(exp))) severity failure;
+    end loop;
+    report "pattern (d) critical-word-first burst (widx=5) PASSED";
+
+    ---------------------------------------------------------------------
+    -- (e) CRITICAL-WORD-FIRST: second, cheaper non-zero offset (widx=1)
+    -- on another fresh line, for extra confidence beyond a single offset.
+    ---------------------------------------------------------------------
+    addr := x"00008004"; -- fresh line (base 0x8000), word index 1 (0x04 = 1*4)
+    bus_burst_read(clk, db_i, bst, db_o, ack_r, addr, got8);
+    la := unsigned(addr(31 downto 0)) and x"FFFFFFE0"; -- line base
+    for i in 0 to 7 loop
+      wa  := la + to_unsigned(((1 + i) mod 8) * 4, 32);
+      exp := expected_word(std_logic_vector(wa(23 downto 0)));
+      assert got8(i) = exp
+        report "pattern (e) critical-word-first (widx=1): mismatch at beat " & integer'image(i) &
+               " got=" & integer'image(to_integer(unsigned(got8(i)))) &
+               " exp=" & integer'image(to_integer(unsigned(exp))) severity failure;
+    end loop;
+    report "pattern (e) critical-word-first burst (widx=1) PASSED";
 
     report "PASSED";
     test_done <= true;

@@ -98,8 +98,14 @@ FILES=(
   components/memory/bootram_infer.vhd
   targets/boards/ulx3s/cpus_one_m0_arch.vhd
   targets/boards/ulx3s/aic_irq_gen.vhd
-  # QSPI flash controller (flash variant only, DEV_QSPI_FLASH0 @ 0xA1000000
-  # -- see design.flash.yaml). Analyzed unconditionally: harmless for the
+  # QSPI flash controller (flash variant only -- NOT a peripheral device;
+  # a ddr_bus mem-region_mux target, base/decode address 0x04000000
+  # (the ddr_bus/mem_region_mux-side address post-icache, see
+  # components/cpu/cache/icache_adapter.vhd's top-nibble-forced-to-0x0
+  # a-bus mapping) / CPU-side address 0x14000000 (design.flash.yaml's
+  # flash_base, the pre-icache address the CPU actually fetches from --
+  # see boot_image_pkg.vhd and xip_payload/payload.S). Analyzed
+  # unconditionally: harmless for the
   # base variant (devices.vhd/soc.vhd there simply never instantiate it).
   # Needs cpu2j0_pkg + data_bus_pkg (already analyzed above); must precede
   # devices.vhd/soc.vhd which instantiate it in the flash variant.

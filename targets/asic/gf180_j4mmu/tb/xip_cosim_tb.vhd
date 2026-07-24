@@ -30,7 +30,8 @@ use work.sdram_pkg.all;
 -- line back through the icache -> CPU executes the 3 real instructions
 -- above -> the store lands on the boot-RAM write bus, observed directly
 -- (no external names -- see tb/cpus_xip_probe.vhd's header for why) by
--- the `one_cpu_m0_xip` architecture's xip_monitor process, which reports
+-- the `one_cpu_m0` architecture's (tb/cpus_xip_probe.vhd) xip_monitor
+-- process, which reports
 -- "XIP_SIG_OK: ..." the instant it happens. The assertion PASSES iff that
 -- report is seen before the watchdog timeout; xip_sim.sh additionally
 -- checks (`grep`) for the exact XIP_SIG_OK string in the GHDL output, so
