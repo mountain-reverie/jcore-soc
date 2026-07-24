@@ -1,0 +1,8 @@
+{
+  "DESIGN_NAME": "qspi_flash_ctrl",
+  "VERILOG_FILES": ["dir::qspi_flash_ctrl.v"],
+  "CLOCK_PORT": "clk",
+  "CLOCK_PERIOD": 40.0,
+  "FP_CORE_UTIL": 35,
+  "PL_TARGET_DENSITY_PCT": 40
+}
