@@ -1,0 +1,169 @@
+{
+  "DESIGN_NAME": "soc",
+  "_comment_toplevel": "Task 6 CAPSTONE: gf180_j4mmu FLASH-variant `soc` (targets/asic/gf180_j4mmu/soc.vhd), rebound to genuinely instantiate the vendor-SRAM-backed macros (Task 6 PHASE A: cpus_one_m0_gf180_arch.vhd -> bootram_infer(boot_mem_gf180); ddr_ram_mux_one_cpu_idcache_gf180.vhd -> icache_adapter_gf180/dcache_adapter_gf180), integrating all 8 hardened child macros (Tasks 3-5) as LEF-only blackbox instances via a hierarchy-preserving ghdl-yosys netlist-gen (see run.sh's top-only netlist-gen override). CORE-ONLY level (no pad ring yet -- B-scope pad ring is additive/stretch per the brief's own fallback ladder; this config gives the routed CORE area, KianV-comparable to their ~13.1mm^2 core).",
+  "VERILOG_FILES": [
+    "dir::soc.v",
+    "dir::soc_macros_bb.v"
+  ],
+  "CLOCK_PORT": "clk_sys",
+  "CLOCK_PERIOD": 40.0,
+  "SYNTH_ELABORATE_ONLY": false,
+  "_comment_netlistgen": "soc.v is NOT raw RTL -- it is a pre-synthesized, hierarchy-preserving generic-gate netlist (ghdl -e soc; hierarchy -top soc; blackbox <8 macro modules>; synth -top soc -flatten; write_verilog), produced by a TOP-ONLY override of the shared ghdl-yosys netlist-gen (see run.sh). The 8 macro modules (cpu/icache_adapter/dcache_adapter/bootram_infer(boot_mem_gf180)/sdram_ctrl/devices/qspi_flash_ctrl/mem_region_mux) were explicitly `blackbox`-marked BEFORE `synth -flatten`, so their internal logic/vendor-SRAM cells never got re-synthesized or flattened into the top -- only the top-level interconnect glue (aic_irq_gen, cpus' delay lanes, ddr_ram_mux's bus_mux_typec, etc, ~760 cells total) is real logic here. soc_macros_bb.v supplies `(* blackbox *)`-marked empty module declarations (matching port lists) for the 8 macros (+ the 2 leaf vendor SRAM cell types, unused at this level) so LibreLane's own Yosys.Synthesis step's hierarchy check resolves the instances without re-deriving their bodies from RTL -- LibreLane instead binds them via MACROS' lef entries below (LEF-only, no .lib -- see LEF-only-vs-.lib note in the Task 6 report; OL_TO=Magic.WriteLEF stops before any timing signoff that would need .lib).",
+  "MACROS": {
+    "cpu": {
+      "gds": [
+        "dir::../j4_core/runs/smoke/final/gds/cpu.gds"
+      ],
+      "lef": [
+        "dir::../j4_core/runs/smoke/final/lef/cpu.lef"
+      ],
+      "instances": {
+        "cpus.core0.u_cpu": {
+          "location": [
+            200.0,
+            2970.0
+          ],
+          "orientation": "N"
+        }
+      }
+    },
+    "icache_adapter": {
+      "gds": [
+        "dir::../icache/runs/smoke/final/gds/icache_adapter.gds"
+      ],
+      "lef": [
+        "dir::../icache/runs/smoke/final/lef/icache_adapter.lef"
+      ],
+      "instances": {
+        "ddr_ram_mux.u_icache": {
+          "location": [
+            200.0,
+            200.0
+          ],
+          "orientation": "N"
+        }
+      }
+    },
+    "dcache_adapter": {
+      "gds": [
+        "dir::../dcache/runs/smoke/final/gds/dcache_adapter.gds"
+      ],
+      "lef": [
+        "dir::../dcache/runs/smoke/final/lef/dcache_adapter.lef"
+      ],
+      "instances": {
+        "ddr_ram_mux.u_dcache": {
+          "location": [
+            2370.0,
+            200.0
+          ],
+          "orientation": "N"
+        }
+      }
+    },
+    "boot_mem_top_gf180": {
+      "gds": [
+        "dir::../boot_mem/runs/smoke/final/gds/boot_mem_top_gf180.gds"
+      ],
+      "lef": [
+        "dir::../boot_mem/runs/smoke/final/lef/boot_mem_top_gf180.lef"
+      ],
+      "instances": {
+        "cpus.sram": {
+          "location": [
+            1496.0,
+            2970.0
+          ],
+          "orientation": "N"
+        }
+      }
+    },
+    "sdram_ctrl": {
+      "gds": [
+        "dir::../smoke/runs/smoke/final/gds/sdram_ctrl.gds"
+      ],
+      "lef": [
+        "dir::../smoke/runs/smoke/final/lef/sdram_ctrl.lef"
+      ],
+      "instances": {
+        "sdram_ctrl": {
+          "location": [
+            700.0,
+            4284.0
+          ],
+          "orientation": "N"
+        }
+      }
+    },
+    "devices": {
+      "gds": [
+        "dir::../soc_cluster.devices/runs/smoke/final/gds/devices.gds"
+      ],
+      "lef": [
+        "dir::../soc_cluster.devices/runs/smoke/final/lef/devices.lef"
+      ],
+      "instances": {
+        "devices": {
+          "location": [
+            2729.0,
+            2970.0
+          ],
+          "orientation": "N"
+        }
+      }
+    },
+    "qspi_flash_ctrl": {
+      "gds": [
+        "dir::../qspi_flash/runs/smoke/final/gds/qspi_flash_ctrl.gds"
+      ],
+      "lef": [
+        "dir::../qspi_flash/runs/smoke/final/lef/qspi_flash_ctrl.lef"
+      ],
+      "instances": {
+        "qspi_flash_ctrl": {
+          "location": [
+            3562.0,
+            2970.0
+          ],
+          "orientation": "N"
+        }
+      }
+    },
+    "mem_region_mux": {
+      "gds": [
+        "dir::../mem_region_mux/runs/smoke/final/gds/mem_region_mux.gds"
+      ],
+      "lef": [
+        "dir::../mem_region_mux/runs/smoke/final/lef/mem_region_mux.lef"
+      ],
+      "instances": {
+        "mem_region_mux": {
+          "location": [
+            200.0,
+            4284.0
+          ],
+          "orientation": "N"
+        }
+      }
+    }
+  },
+  "_comment_floorplan": "Grid layout, 200um gaps/margins between all 8 macros (row1: icache|dcache; row2: cpu|boot_mem|devices|qspi_flash_ctrl; row3: mem_region_mux|sdram_ctrl). Macro footprint sum = 13.596mm^2 (1.222+5.063+5.063+1.127+0.054+0.413+0.564+0.090). DIE_AREA sized so macro-area/die-area ~= 62.6% -- close to the brief's ~65% KianV-comparable target (KianV: 20.1mm^2 die at ~65% util -> ~13.1mm^2 core; our core macros alone already sum to 13.596mm^2, so this DIE_AREA IS effectively the core-only comparison point).",
+  "FP_SIZING": "absolute",
+  "DIE_AREA": [
+    0,
+    0,
+    4540,
+    4784
+  ],
+  "CORE_AREA": [
+    20,
+    20,
+    4520,
+    4764
+  ],
+  "FP_PDN_VPITCH": 180,
+  "FP_PDN_HPITCH": 180,
+  "PL_TARGET_DENSITY_PCT": 60,
+  "RUN_LINTER": false,
+  "RUN_MCSTA": false
+}
