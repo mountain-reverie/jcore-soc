@@ -114,6 +114,8 @@ case "$MACRO" in
     ELAB_TOP="dcache_adapter_gf180"; SYNTH_TOP="dcache_adapter"; SRC_VARIANT="gf180_cache" ;;
   icache)
     ELAB_TOP="icache_adapter_gf180"; SYNTH_TOP="icache_adapter"; SRC_VARIANT="gf180_cache" ;;
+  boot_mem)
+    ELAB_TOP="boot_mem_top_gf180"; SYNTH_TOP="boot_mem_top_gf180"; SRC_VARIANT="gf180_bootmem" ;;
 esac
 if [ -z "$ELAB_TOP" ]; then
   while read -r m elab_top synth_top _rest; do
@@ -137,15 +139,17 @@ fi
 
 NETV="$MDIR/${SYNTH_TOP}.v"
 echo "run.sh: generating $NETV (ghdl -e $ELAB_TOP; synth -top $SYNTH_TOP; src-variant=$SRC_VARIANT)" >&2
-source "$ROOT/targets/asic/gf180_j4mmu/metrics/gen_synth_sources.sh"   # exports GHDL_BASE, GHDL_BASE_GF180_CACHE
+source "$ROOT/targets/asic/gf180_j4mmu/metrics/gen_synth_sources.sh"   # exports GHDL_BASE, GHDL_BASE_GF180_CACHE, GHDL_BASE_GF180_BOOTMEM
 if [ "$SRC_VARIANT" = "gf180_cache" ]; then
   GHDL_CMD="$GHDL_BASE_GF180_CACHE"
+elif [ "$SRC_VARIANT" = "gf180_bootmem" ]; then
+  GHDL_CMD="$GHDL_BASE_GF180_BOOTMEM"
 else
   GHDL_CMD="$GHDL_BASE"
 fi
 yosys -m ghdl -p "$GHDL_CMD -e $ELAB_TOP; synth -top $SYNTH_TOP -flatten; chformal -remove; delete t:\$check t:\$assert t:\$assume t:\$cover t:\$live t:\$fair; clean; write_verilog -noattr $NETV" \
   || { echo "ERROR: ghdl-yosys netlist generation failed for $MACRO" >&2; exit 1; }
-if [ "$SRC_VARIANT" = "gf180_cache" ]; then
+if [ "$SRC_VARIANT" = "gf180_cache" ] || [ "$SRC_VARIANT" = "gf180_bootmem" ]; then
   if ! grep -q "gf180mcu_fd_ip_sram__sram512x8m8wm1" "$NETV"; then
     echo "ERROR: $MACRO netlist does not instantiate the vendor sram512x8 macro" \
          "(data RAM regressed to inferred flops?) -- see $NETV" >&2
@@ -169,7 +173,7 @@ TO_ARGS=()
 # dcache/icache carry vendor SRAM macros whose power pins the default PDN
 # generation doesn't fully strap (see OL_SKIP comment above) -- skip the
 # IR-drop signoff step for them unless the caller already set OL_SKIP.
-if [ -z "$OL_SKIP" ] && { [ "$MACRO" = "dcache" ] || [ "$MACRO" = "icache" ]; }; then
+if [ -z "$OL_SKIP" ] && { [ "$MACRO" = "dcache" ] || [ "$MACRO" = "icache" ] || [ "$MACRO" = "boot_mem" ]; }; then
   # Checker.PowerGridViolations is also skipped: it's a *deferred* checker
   # (collects issues, only raised at the very end of the run regardless of
   # --to) that fires on the same macro-PDN-strap gap as IRDropReport above
