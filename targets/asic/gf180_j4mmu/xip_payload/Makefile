@@ -1,6 +1,6 @@
 # targets/asic/gf180_j4mmu/xip_payload/Makefile -- Task 4 (QSPI XIP cosim)
 # minimal SH-2 payload build. See payload.S for the program itself (store
-# the signature 0xF1A5B007 to boot-RAM byte address 0x00000100, then spin)
+# the signature 0xF1A5B007 to boot-RAM byte address 0x00000900, then spin)
 # and payload.ld for its link script (linked to run AT 0x14000000, the
 # flash XIP entry Task 3's boot ROM vector table jumps to).
 #

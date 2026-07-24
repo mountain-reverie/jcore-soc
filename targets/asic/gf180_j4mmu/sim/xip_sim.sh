@@ -6,7 +6,7 @@
 # with the Task 4 XIP payload (xip_payload/payload.bin), and asserts that the
 # CPU actually fetches+executes it from flash@0x14000000 (Task 3's boot ROM
 # vector table) by observing the payload's signature store
-# (0xF1A5B007 @ boot-RAM byte 0x100) on the boot-RAM write bus -- see
+# (0xF1A5B007 @ boot-RAM byte 0x900 (boot_mem stack-SRAM lane)) on the boot-RAM write bus -- see
 # tb/cpus_xip_probe.vhd and tb/xip_cosim_tb.vhd for the full mechanism.
 #
 # IMPORTANT (do not "fix" this away): regenerating the SoC with
@@ -17,7 +17,7 @@
 # gf180_j4mmu build is unaffected -- see sim/rtl.sh's own regen). This script
 # saves them before regenerating and restores them (via a trap, so it
 # happens on any exit path including failure) when done. It also NEVER
-# touches boot_image_pkg.vhd (Task 3's PC=0x14000000/SP=0x3ffc vector table)
+# touches boot_image_pkg.vhd (Task 3's PC=0x14000000/SP=0x00000ffc vector table)
 # -- unlike rtl.sh, which overwrites it with a synthetic bootloader image,
 # this script does not call genbootpkg at all.
 #
@@ -142,7 +142,7 @@ ghdl -r --std=93 -fexplicit -fsynopsys --syn-binding --workdir="$WORK" xip_cosim
     --stop-time=2ms --assert-level=error 2>&1 | tee "$OUT"
 
 if grep -q "XIP_SIG_OK" "$OUT"; then
-  echo "==> XIP cosim PASSED: signature 0xF1A5B007 observed at boot-RAM 0x100 -- payload fetched+executed from flash@0x14000000"
+  echo "==> XIP cosim PASSED: signature 0xF1A5B007 observed at boot-RAM 0x900 -- payload fetched+executed from flash@0x14000000"
 else
   echo "==> XIP cosim FAILED: XIP_SIG_OK never observed (see $OUT)" >&2
   exit 1
