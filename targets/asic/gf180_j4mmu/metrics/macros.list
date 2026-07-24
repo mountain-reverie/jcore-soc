@@ -94,6 +94,12 @@ top           soc         soc         inflated
 # standard per-macro path (line 146+, using GHDL_BASE).
 qspi_flash        qspi_flash_ctrl  qspi_flash_ctrl  -
 #
+# mem_region_mux: the flash-variant ddr_bus mem-region mux (components/misc/
+# mem_region_mux.vhd) that routes between sdram_ctrl and qspi_flash_ctrl by
+# address (FLASH_BASE/FLASH_MASK generics, defaulted). Tiny combinational
+# logic, not memory-inflated.
+mem_region_mux    mem_region_mux   mem_region_mux   -
+#
 # MEMORY-AS-FLOPS CAVEAT: GHDL's own elaboration (ghdl-yosys `-e`, which runs
 # before yosys sees the design) expands this design's inferred cache/regfile
 # RAM (lib/memory_tech_lib/tech/inferred/ram_{1,2}rw_infer.vhd -- indexed

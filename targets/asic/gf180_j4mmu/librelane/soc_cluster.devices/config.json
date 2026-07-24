@@ -1,0 +1,8 @@
+{
+  "DESIGN_NAME": "devices",
+  "VERILOG_FILES": ["dir::devices.v"],
+  "CLOCK_PORT": "clk_sys",
+  "CLOCK_PERIOD": 40.0,
+  "FP_CORE_UTIL": 35,
+  "PL_TARGET_DENSITY_PCT": 40
+}

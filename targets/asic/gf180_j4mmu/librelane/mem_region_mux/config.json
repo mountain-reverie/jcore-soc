@@ -1,0 +1,13 @@
+{
+  "DESIGN_NAME": "mem_region_mux",
+  "VERILOG_FILES": ["dir::mem_region_mux.v"],
+  "_comment": "mem_region_mux is purely combinational (no clk port) -- CLOCK_PORT is nulled out so LibreLane doesn't try to constrain a nonexistent clock net.",
+  "CLOCK_PORT": null,
+  "CLOCK_PERIOD": 40.0,
+  "FP_CORE_UTIL": 20,
+  "PL_TARGET_DENSITY_PCT": 25,
+  "_comment_die": "mem_region_mux's cell area is tiny but its IO-pin count is huge (3x cpu_data_o_t/cpu_data_i_t record buses, ~318 pins) -- a utilization-driven floorplan undersizes the die perimeter for that many pins (IOPlacement PPL-0024: needs >=1068.48um perimeter). Force an explicit die big enough for the pin count, not just the cell area.",
+  "FP_SIZING": "absolute",
+  "DIE_AREA": [0, 0, 300, 300],
+  "CORE_AREA": [10, 10, 290, 290]
+}
