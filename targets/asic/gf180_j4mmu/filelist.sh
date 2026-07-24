@@ -77,6 +77,16 @@ FILES=(
   targets/ddr_ram_mux/ddr_ram_mux.vhd
   targets/ddr_ram_mux/one_cpu_idcache.vhd
   targets/ddr_ram_mux/one_cpu_idcache_fpga.vhd
+  # NOTE: targets/asic/gf180_j4mmu/ddr_ram_mux_one_cpu_idcache_gf180.vhd
+  # (Task 6 PHASE A's gf180-vendor-SRAM ddr_ram_mux configuration) is
+  # deliberately NOT listed here -- it depends on
+  # lib/memory_tech_lib/tech/gf180/cache_gf180_config.vhd's
+  # icache_adapter_gf180/dcache_adapter_gf180 configurations, which are only
+  # analyzed by sim/xip_sim.sh's own gf180-cache splice (mirroring
+  # metrics/gen_synth_sources.sh's GHDL_BASE_GF180_CACHE), not by this
+  # shared filelist (used unmodified by the base variant and every
+  # standalone per-macro metrics/LibreLane flow). sim/xip_sim.sh inserts
+  # both files into its own analyze order.
   targets/cpu_core_pkg.vhd
   targets/cpu_core.vhd
   targets/cpus.vhd

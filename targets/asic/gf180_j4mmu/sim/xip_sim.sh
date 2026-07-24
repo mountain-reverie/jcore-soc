@@ -88,6 +88,26 @@ if ! command grep -q 'cpus : configuration work\.soc_cpus_config' "$BD/soc.vhd";
   exit 1
 fi
 
+# 2c. Task 6 PHASE A: normalize soc.vhd's ddr_ram_mux instantiation to the
+# gf180 vendor-SRAM configuration (targets/asic/gf180_j4mmu/
+# ddr_ram_mux_one_cpu_idcache_gf180.vhd), same rationale/mechanism as 2b
+# above -- socgen's cpumap.go only knows the "_fpga" configuration names
+# (tools/socgen/elaborate/cpumap.go), so it always emits either the
+# unambiguous ddr_ram_mux_one_cpu_idcache_fpga form or (observed for this
+# VARIANT=flash regen) the bare `entity work.ddr_ram_mux` fallback; neither
+# names our gf180 configuration, so force it here. Handles both observed
+# forms.
+sed -i \
+  -e 's/ddr_ram_mux : entity work\.ddr_ram_mux/ddr_ram_mux : configuration work.ddr_ram_mux_one_cpu_idcache_gf180/' \
+  -e 's/ddr_ram_mux : configuration work\.ddr_ram_mux_one_cpu_idcache_fpga/ddr_ram_mux : configuration work.ddr_ram_mux_one_cpu_idcache_gf180/' \
+  "$BD/soc.vhd"
+if ! command grep -q 'ddr_ram_mux : configuration work\.ddr_ram_mux_one_cpu_idcache_gf180' "$BD/soc.vhd"; then
+  echo "ERROR: could not normalize $BD/soc.vhd's ddr_ram_mux instance to" \
+       "'configuration work.ddr_ram_mux_one_cpu_idcache_gf180' (soc_gen's ddr_ram_mux" \
+       "instantiation text changed shape? update this sed to match)." >&2
+  exit 1
+fi
+
 # 3. analyze: shared filelist (all of Tasks 1-3's RTL, in devices/soc's
 # generated flash-variant form) + the sim-only SDRAM model (still a live
 # mem-bus target behind mem_region_mux even in the flash variant) + the
@@ -105,6 +125,61 @@ echo "=== xip_cosim_tb (gf180_j4mmu FLASH variant, XIP payload) ==="
 GHDL="ghdl -a --std=93 -fexplicit -fsynopsys --workdir=$WORK"
 $GHDL output/gf180_j4mmu/config/config.vhd targets/clk_config.vhd
 source "$BD/filelist.sh"
+# Task 6 PHASE A/B: splice in the gf180 vendor-SRAM cache RAM chain (mirrors
+# metrics/gen_synth_sources.sh's GHDL_BASE_GF180_CACHE construction exactly
+# -- drop the tech/inferred ram_{1,2}rw_infer.vhd entries, insert the
+# tech/gf180 macro chain + cache_gf180_config.vhd in place of
+# cache_config_fpga.vhd), PLUS (new for this cosim, unlike the synth-only
+# GHDL_BASE_GF180_CACHE) the SIM-ONLY behavioral stub
+# (components/memory/tests/gf180_sram_sim_stub.vhd) so GHDL has a real
+# architecture to bind the vendor macro component instances to (it declares
+# entities gf180mcu_fd_ip_sram__sram{256,512}x8m8wm1 with architecture
+# `sim`, matching gf180mcu_fd_ip_sram_comp.vhd's component declarations by
+# name -- GHDL's default component-instantiation binding then resolves to
+# it automatically). The stub is NEVER added to filelist.sh itself, so it
+# never reaches the LibreLane/synth flow (which leaves the vendor macros
+# genuinely unbound -> yosys sees them as black boxes, matched against the
+# real macro LEF/lib at P&R time instead).
+GF180_MEM_EXTRA=(
+  lib/memory_tech_lib/ram_18x2048_1rw.vhd
+  lib/memory_tech_lib/ram_32x1x512_2rw.vhd
+  lib/memory_tech_lib/ram_2x8x256_1rw.vhd
+  lib/memory_tech_lib/ram_2x8x2048_2rw.vhd
+  lib/memory_tech_lib/tech/sim/ram_18x2048_1rw_sim.vhd
+  lib/memory_tech_lib/tech/sim/ram_32x1x512_2rw_sim.vhd
+  lib/memory_tech_lib/tech/gf180/gf180mcu_fd_ip_sram_comp.vhd
+  components/memory/tests/gf180_sram_sim_stub.vhd
+  lib/memory_tech_lib/tech/gf180/ram_2x8x256_1rw_gf180.vhd
+  lib/memory_tech_lib/tech/gf180/ram_2x8x2048_2rw_gf180.vhd
+  lib/memory_tech_lib/ram_1rw_mems.vhd
+  lib/memory_tech_lib/ram_2rw_mems.vhd
+  lib/memory_tech_lib/tech/gf180/mem_gf180_config.vhd
+)
+# cache_gf180_config.vhd (the icache_adapter_gf180/dcache_adapter_gf180
+# configurations) needs icache_ram/dcache_ram/icache_adapter/dcache_adapter
+# already analyzed -- those come AFTER the ram_2rw_infer.vhd splice point
+# above, so this one is spliced in separately, right after
+# cache_config_fpga.vhd (kept -- one_cpu_idcache_fpga.vhd still references
+# its icache_adapter_fpga/dcache_adapter_fpga configurations structurally,
+# even though the flash variant's soc.vhd is normalized to bind the gf180
+# configuration instead; both configurations coexisting is harmless, same
+# principle as the rest of this splice).
+GF180_FILES=()
+for f in "${FILES[@]}"; do
+  case "$f" in
+    lib/memory_tech_lib/tech/inferred/ram_1rw_infer.vhd) ;;
+    lib/memory_tech_lib/tech/inferred/ram_2rw_infer.vhd)
+      GF180_FILES+=("${GF180_MEM_EXTRA[@]}") ;;
+    components/cpu/cache/cache_config_fpga.vhd)
+      GF180_FILES+=("$f" lib/memory_tech_lib/tech/gf180/cache_gf180_config.vhd) ;;
+    targets/ddr_ram_mux/one_cpu_idcache_fpga.vhd)
+      GF180_FILES+=("$f" targets/asic/gf180_j4mmu/ddr_ram_mux_one_cpu_idcache_gf180.vhd) ;;
+    targets/asic/gf180_j4mmu/cpus_one_m0_gf180_arch.vhd)
+      GF180_FILES+=(lib/memory_tech_lib/tech/gf180/boot_mem_stack_gf180.vhd "$f") ;;
+    *) GF180_FILES+=("$f") ;;
+  esac
+done
+FILES=("${GF180_FILES[@]}")
 # tb/cpus_xip_probe.vhd must be analyzed BEFORE cpus_config.vhd (whose
 # `soc_cpus_config` configuration's `for one_cpu_m0` clause needs the
 # "one_cpu_m0" architecture to already exist) and, obviously, before
