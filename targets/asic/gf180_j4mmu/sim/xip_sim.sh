@@ -11,14 +11,15 @@
 #
 # IMPORTANT (do not "fix" this away): regenerating the SoC with
 # VARIANT=flash overwrites the COMMITTED devices.vhd/soc.vhd/cpus_config.vhd
-# /pad_ring.vhd/build.mk with flash-variant content (as designed -- Task 2).
-# Those files must stay flash-LESS in git (the base gf180_j4mmu build is
-# unaffected -- see sim/rtl.sh's own regen). This script saves them before
-# regenerating and restores them (via a trap, so it happens on any exit
-# path including failure) when done. It also NEVER touches boot_image_pkg
-# .vhd (Task 3's PC=0x14000000/SP=0x3ffc vector table) -- unlike rtl.sh,
-# which overwrites it with a synthetic bootloader image, this script does
-# not call genbootpkg at all.
+# /pad_ring.vhd/build.mk/board.dts with flash-variant content (as designed --
+# Task 2; board.dts's "compatible" string flips jcore,j2 -> jcore,j4 under
+# VARIANT=flash regen). Those files must stay flash-LESS in git (the base
+# gf180_j4mmu build is unaffected -- see sim/rtl.sh's own regen). This script
+# saves them before regenerating and restores them (via a trap, so it
+# happens on any exit path including failure) when done. It also NEVER
+# touches boot_image_pkg.vhd (Task 3's PC=0x14000000/SP=0x3ffc vector table)
+# -- unlike rtl.sh, which overwrites it with a synthetic bootloader image,
+# this script does not call genbootpkg at all.
 #
 # Usage:
 #   sim/xip_sim.sh
@@ -41,10 +42,11 @@ fi
 # which we must not touch at all) and restore them unconditionally on exit.
 SAVE="$(mktemp -d)"
 cp "$BD/devices.vhd" "$BD/soc.vhd" "$BD/cpus_config.vhd" "$BD/pad_ring.vhd" \
-   "$BD/build.mk" "$BD/boot_image_pkg.vhd" "$SAVE/"
+   "$BD/build.mk" "$BD/boot_image_pkg.vhd" "$BD/board.dts" "$SAVE/"
 restore_generated() {
   cp "$SAVE/devices.vhd" "$SAVE/soc.vhd" "$SAVE/cpus_config.vhd" \
-     "$SAVE/pad_ring.vhd" "$SAVE/build.mk" "$SAVE/boot_image_pkg.vhd" "$BD/"
+     "$SAVE/pad_ring.vhd" "$SAVE/build.mk" "$SAVE/boot_image_pkg.vhd" \
+     "$SAVE/board.dts" "$BD/"
   rm -rf "$SAVE"
 }
 trap restore_generated EXIT
