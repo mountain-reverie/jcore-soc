@@ -1,0 +1,196 @@
+{
+  "DESIGN_NAME": "dcache_adapter",
+  "VERILOG_FILES": [
+    "dir::dcache_adapter.v"
+  ],
+  "CLOCK_PORT": "clk125",
+  "CLOCK_PERIOD": 40.0,
+  "FP_CORE_UTIL": 15,
+  "PL_TARGET_DENSITY_PCT": 30,
+  "_comment_macros": "dcache_adapter_gf180 binds its tag RAM (ram_2x8x256_1rw, 2x macros) and data RAM (ram_2x8x2048_2rw, 8x macros) to the tech/gf180 vendor gf180mcu_fd_ip_sram hard IP (see lib/memory_tech_lib/tech/gf180/ram_2x8x{256_1rw,2x2048_2rw}_gf180.vhd). MACROS below gives LibreLane the PDK LEF/lib/GDS views for both cell types so they place/route as black boxes instead of being re-synthesized. FP_CORE_UTIL/PL_TARGET_DENSITY_PCT are lowered vs j4_core/smoke to leave floorplan room for the ~10 large fixed SRAM macros (2x sram256x8 + 8x sram512x8) alongside the adapter's control logic.",
+  "MACROS": {
+    "gf180mcu_fd_ip_sram__sram256x8m8wm1": {
+      "gds": [
+        "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/gds/gf180mcu_fd_ip_sram__sram256x8m8wm1.gds"
+      ],
+      "lef": [
+        "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lef/gf180mcu_fd_ip_sram__sram256x8m8wm1.lef"
+      ],
+      "lib": {
+        "*": [
+          "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram256x8m8wm1__tt_025C_5v00.lib"
+        ]
+      },
+      "instances": {
+        "u_dcache_ram.tag0.rows:1.genram_2x8x256.mem.subword_gen:1.sram_i": {
+          "location": [
+            50.0,
+            2089.52
+          ],
+          "orientation": "N"
+        },
+        "u_dcache_ram.tag0.rows:1.genram_2x8x256.mem.subword_gen:2.sram_i": {
+          "location": [
+            501.86,
+            2089.52
+          ],
+          "orientation": "N"
+        },
+        "u_dcache_ram.tag1.rows:1.genram_2x8x256.mem.subword_gen:1.sram_i": {
+          "location": [
+            953.72,
+            2089.52
+          ],
+          "orientation": "N"
+        },
+        "u_dcache_ram.tag1.rows:1.genram_2x8x256.mem.subword_gen:2.sram_i": {
+          "location": [
+            1405.58,
+            2089.52
+          ],
+          "orientation": "N"
+        }
+      }
+    },
+    "gf180mcu_fd_ip_sram__sram512x8m8wm1": {
+      "gds": [
+        "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/gds/gf180mcu_fd_ip_sram__sram512x8m8wm1.gds"
+      ],
+      "lef": [
+        "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lef/gf180mcu_fd_ip_sram__sram512x8m8wm1.lef"
+      ],
+      "lib": {
+        "*": [
+          "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram512x8m8wm1__tt_025C_5v00.lib"
+        ]
+      },
+      "instances": {
+        "u_dcache_ram.ram:1.sc.ram_s.rows:1.genram_2x8x2048.mem.row_gen:1.col_gen:1.sram_i": {
+          "location": [
+            50.0,
+            50.0
+          ],
+          "orientation": "N"
+        },
+        "u_dcache_ram.ram:1.sc.ram_s.rows:1.genram_2x8x2048.mem.row_gen:1.col_gen:2.sram_i": {
+          "location": [
+            501.86,
+            50.0
+          ],
+          "orientation": "N"
+        },
+        "u_dcache_ram.ram:1.sc.ram_s.rows:1.genram_2x8x2048.mem.row_gen:2.col_gen:1.sram_i": {
+          "location": [
+            953.72,
+            50.0
+          ],
+          "orientation": "N"
+        },
+        "u_dcache_ram.ram:1.sc.ram_s.rows:1.genram_2x8x2048.mem.row_gen:2.col_gen:2.sram_i": {
+          "location": [
+            1405.58,
+            50.0
+          ],
+          "orientation": "N"
+        },
+        "u_dcache_ram.ram:1.sc.ram_s.rows:1.genram_2x8x2048.mem.row_gen:3.col_gen:1.sram_i": {
+          "location": [
+            50.0,
+            554.88
+          ],
+          "orientation": "N"
+        },
+        "u_dcache_ram.ram:1.sc.ram_s.rows:1.genram_2x8x2048.mem.row_gen:3.col_gen:2.sram_i": {
+          "location": [
+            501.86,
+            554.88
+          ],
+          "orientation": "N"
+        },
+        "u_dcache_ram.ram:1.sc.ram_s.rows:1.genram_2x8x2048.mem.row_gen:4.col_gen:1.sram_i": {
+          "location": [
+            953.72,
+            554.88
+          ],
+          "orientation": "N"
+        },
+        "u_dcache_ram.ram:1.sc.ram_s.rows:1.genram_2x8x2048.mem.row_gen:4.col_gen:2.sram_i": {
+          "location": [
+            1405.58,
+            554.88
+          ],
+          "orientation": "N"
+        },
+        "u_dcache_ram.ram:2.sc.ram_s.rows:1.genram_2x8x2048.mem.row_gen:1.col_gen:1.sram_i": {
+          "location": [
+            50.0,
+            1059.76
+          ],
+          "orientation": "N"
+        },
+        "u_dcache_ram.ram:2.sc.ram_s.rows:1.genram_2x8x2048.mem.row_gen:1.col_gen:2.sram_i": {
+          "location": [
+            501.86,
+            1059.76
+          ],
+          "orientation": "N"
+        },
+        "u_dcache_ram.ram:2.sc.ram_s.rows:1.genram_2x8x2048.mem.row_gen:2.col_gen:1.sram_i": {
+          "location": [
+            953.72,
+            1059.76
+          ],
+          "orientation": "N"
+        },
+        "u_dcache_ram.ram:2.sc.ram_s.rows:1.genram_2x8x2048.mem.row_gen:2.col_gen:2.sram_i": {
+          "location": [
+            1405.58,
+            1059.76
+          ],
+          "orientation": "N"
+        },
+        "u_dcache_ram.ram:2.sc.ram_s.rows:1.genram_2x8x2048.mem.row_gen:3.col_gen:1.sram_i": {
+          "location": [
+            50.0,
+            1564.64
+          ],
+          "orientation": "N"
+        },
+        "u_dcache_ram.ram:2.sc.ram_s.rows:1.genram_2x8x2048.mem.row_gen:3.col_gen:2.sram_i": {
+          "location": [
+            501.86,
+            1564.64
+          ],
+          "orientation": "N"
+        },
+        "u_dcache_ram.ram:2.sc.ram_s.rows:1.genram_2x8x2048.mem.row_gen:4.col_gen:1.sram_i": {
+          "location": [
+            953.72,
+            1564.64
+          ],
+          "orientation": "N"
+        },
+        "u_dcache_ram.ram:2.sc.ram_s.rows:1.genram_2x8x2048.mem.row_gen:4.col_gen:2.sram_i": {
+          "location": [
+            1405.58,
+            1564.64
+          ],
+          "orientation": "N"
+        }
+      }
+    }
+  },
+  "FP_SIZING": "absolute",
+  "DIE_AREA": [
+    0,
+    0,
+    1970,
+    2570
+  ],
+  "CORE_AREA": [
+    10,
+    10,
+    1960,
+    2560
+  ]
+}
