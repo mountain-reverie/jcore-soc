@@ -58,6 +58,17 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 entity qspi_flash_model is
+  generic (
+    -- Optional preload window (Task 4, QSPI XIP cosim): when PRELOAD_EN='1',
+    -- byte(addr) for addr in [0,32) comes from PRELOAD (256 bits = 32 bytes,
+    -- byte 0 in bits 255:248 ... byte 31 in bits 7:0 -- the SAME MSB-first
+    -- byte-lane mapping qspi_flash_ctrl.vhd uses for its 32-byte line_o, so
+    -- a payload image built for that mapping drops in unchanged). addr>=32
+    -- (and the DEFAULT PRELOAD_EN='0') always falls back to the synthetic
+    -- byte(addr)=addr(7:0) xor addr(15:8) pattern documented above, so every
+    -- existing caller (qspi_sim.sh) is byte-for-byte unaffected.
+    PRELOAD_EN : std_logic := '0';
+    PRELOAD    : std_logic_vector(255 downto 0) := (others => '0'));
   port (
     cs_n  : in  std_logic;
     sck   : in  std_logic;
@@ -68,6 +79,19 @@ entity qspi_flash_model is
 end entity;
 
 architecture behavioral of qspi_flash_model is
+
+  -- byte(addr): PRELOAD window (Task 4 XIP cosim) when enabled and in
+  -- range, else the standard synthetic pattern.
+  function flash_byte(addr : unsigned(23 downto 0)) return std_logic_vector is
+    variable n : integer;
+  begin
+    n := to_integer(addr(23 downto 0));
+    if PRELOAD_EN = '1' and n < 32 then
+      return PRELOAD(255 - 8*n downto 248 - 8*n);
+    else
+      return std_logic_vector(addr(7 downto 0) xor addr(15 downto 8));
+    end if;
+  end function;
 
   constant CMD_FAST_READ      : std_logic_vector(7 downto 0) := x"0B";
   constant CMD_QUAD_IO_READ   : std_logic_vector(7 downto 0) := x"EB";
@@ -185,14 +209,12 @@ begin
           if mode = MODE_SINGLE and bit_cnt = SINGLE_DUMMY_CYCLES then
             bit_cnt := 0;
             phase := PH_DATA;
-            data_byte := std_logic_vector(
-              addr(7 downto 0) xor addr(15 downto 8));
+            data_byte := flash_byte(addr);
             data_bitpos := 7;
           elsif mode = MODE_QUAD and bit_cnt = QUAD_DUMMY_CYCLES then
             bit_cnt := 0;
             phase := PH_DATA;
-            data_byte := std_logic_vector(
-              addr(7 downto 0) xor addr(15 downto 8));
+            data_byte := flash_byte(addr);
             data_bitpos := 1; -- nibble index: 1 = MSB nibble, 0 = LSB nibble
           elsif mode = MODE_NONE then
             -- unknown command: never produce data
@@ -220,8 +242,7 @@ begin
           if mode = MODE_SINGLE then
             if data_bitpos = 0 then
               addr := addr + 1;
-              data_byte := std_logic_vector(
-                addr(7 downto 0) xor addr(15 downto 8));
+              data_byte := flash_byte(addr);
               data_bitpos := 7;
             else
               data_bitpos := data_bitpos - 1;
@@ -229,8 +250,7 @@ begin
           elsif mode = MODE_QUAD then
             if data_bitpos = 0 then
               addr := addr + 1;
-              data_byte := std_logic_vector(
-                addr(7 downto 0) xor addr(15 downto 8));
+              data_byte := flash_byte(addr);
               data_bitpos := 1;
             else
               data_bitpos := data_bitpos - 1;
