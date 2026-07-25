@@ -41,6 +41,29 @@ class TestConvert(unittest.TestCase):
         names = [e["name"] for e in size]
         self.assertEqual(names, sorted(names))
 
+    def test_gf180_die_series_and_kianv_limit_line_charted(self):
+        # tools/asic/emit_die_metrics.py's canonical doc shape (Task 8): die
+        # area series for the padded top + the pinned KianV reference
+        # constant must convert into chartable customSmallerIsBetter
+        # entries, same as any other board's metrics.
+        m = [
+            {"name": "gf180-die-area-mm2", "unit": "mm2", "value": 21.7194, "dir": "smaller"},
+            {"name": "gf180-core-area-mm2", "unit": "mm2", "value": 21.3249, "dir": "smaller"},
+            {"name": "kianv-die-20.1mm2", "unit": "mm2", "value": 20.1, "dir": "smaller"},
+        ]
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "metrics-die.json")
+            with open(p, "w") as f:
+                json.dump({"target": "gf180mcu-mcu7t5v0", "board": "gf180_j4mmu",
+                           "commit": "c", "metrics": m}, f)
+            size, speed = to_gha_bench.convert([p])
+        size_names = {e["name"]: e for e in size}
+        self.assertIn("gf180mcu-mcu7t5v0 · gf180-die-area-mm2", size_names)
+        self.assertIn("gf180mcu-mcu7t5v0 · gf180-core-area-mm2", size_names)
+        self.assertIn("gf180mcu-mcu7t5v0 · kianv-die-20.1mm2", size_names)
+        self.assertEqual(size_names["gf180mcu-mcu7t5v0 · kianv-die-20.1mm2"]["value"], 20.1)
+        self.assertEqual(len(speed), 0)
+
     def test_multiple_boards_distinct_series(self):
         with tempfile.TemporaryDirectory() as d:
             paths = [
