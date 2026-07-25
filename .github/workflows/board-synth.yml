@@ -10,6 +10,12 @@ on:
     branches: [ main, master ]
   pull_request:
   workflow_dispatch:
+  # Nightly GF180 padded-die P&R (gf180-die-area job below): multi-hour
+  # LibreLane place & route for 8 macros + the integrated top is far too
+  # heavy to run on every push/PR, so it's schedule/dispatch-only -- see
+  # that job's `if:` and its header comment.
+  schedule:
+    - cron: '17 3 * * *'
 
 jobs:
   metrics-tests:
@@ -239,8 +245,98 @@ jobs:
           name: metrics-gf180
           path: metrics-gf180/metrics-gf180.json
 
+  gf180-die-area:
+    # Nightly/dispatch-only GF180 padded-die place & route: hardens the 8
+    # macros + the integrated `top` through LibreLane (multi-hour) and
+    # publishes routed die/core/placed-silicon area vs. the KianV 20.1mm2
+    # reference line, into the SAME benchmark/deploy-pages pipeline as
+    # gf180-synth-metrics above. This is orders of magnitude heavier than
+    # the synth-only job (real place & route, not just yosys stat), so it
+    # must NEVER run on pull_request or an ordinary push -- schedule/
+    # workflow_dispatch only.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # github-hosted for now (works for the per-macro legs; the `top` leg's
+    # docker image (~5.3GB) + PDK (~3.5GB) is tight against the ~14GB free
+    # disk github-hosted runners provide alongside the OS/tooling already
+    # on disk -- expect to need the "Free disk space" step below, and to
+    # possibly need to switch to a self-hosted runner with more headroom
+    # after the first real dispatch run). One-line swap to a bigger runner:
+    #   runs-on: [self-hosted, gf180-pnr]
+    runs-on: ubuntu-latest
+    # NOT inside a `container:` (unlike gf180-synth-metrics above): this job
+    # docker-runs LibreLane itself (librelane/run.sh's `docker run`), and
+    # Docker-in-Docker doesn't work from inside another container on
+    # github-hosted runners -- it needs the runner's own host docker.
+    env:
+      PDK_PIN: f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7
+      OL_IMAGE: ghcr.io/librelane/librelane:2.4.2
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Free disk space / reclaim docker layers
+        continue-on-error: true
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
+          docker system prune -af || true
+          df -h
+
+      - name: Cache GF180 PDK (ciel)
+        uses: actions/cache@v4
+        with:
+          path: ~/.ciel
+          key: gf180mcu-pdk-${{ env.PDK_PIN }}
+
+      - name: Toolchain deps (pip, ciel)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends python3-pip
+          python3 -m pip install --quiet --break-system-packages ciel pytest
+
+      - name: Fetch GF180 PDK (pinned)
+        run: ciel enable --pdk-family gf180mcu "$PDK_PIN"
+
+      - name: Pull LibreLane image
+        continue-on-error: true
+        run: docker pull "$OL_IMAGE"
+
+      - name: Regenerate SoC + shared v2p'd sources
+        run: targets/asic/gf180_j4mmu/prep_sources.sh
+
+      - name: GF180 padded-die place & route (8 macros + top)
+        # Guarded so a partial P&R (or the `top` leg's known GDS-merge
+        # finishing-step failure -- see gf180_die.sh's header comment)
+        # still leaves whatever metrics.json WAS produced on disk for the
+        # next step to publish, instead of failing the whole job.
+        continue-on-error: true
+        run: targets/asic/gf180_j4mmu/metrics/gf180_die.sh
+
+      - name: Emit canonical metrics-die.json
+        if: always()
+        run: |
+          mkdir -p metrics-die
+          if [ ! -f metrics-die/metrics-die.json ]; then
+            echo "WARN: gf180_die.sh produced no metrics-die.json (nothing" \
+                 "completed) -- emitting the kianv-limit-line-only doc so the" \
+                 "dashboard series stays alive" >&2
+            python3 tools/asic/emit_die_metrics.py \
+              --commit "${{ github.sha }}" --out metrics-die/metrics-die.json
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          # name MUST match the `metrics-*` glob the benchmark job's
+          # download-artifact step consumes.
+          name: metrics-die
+          path: metrics-die/metrics-die.json
+
   benchmark:
-    needs: [bitstream, bitstream-icesugar, gf180-synth-metrics]
+    needs: [bitstream, bitstream-icesugar, gf180-synth-metrics, gf180-die-area]
     # Chart whatever metrics were produced. Synth legs that miss their gate
     # (j4-rom timing, iCESugar UP5K fit) are non-fatal and still upload metrics
     # via `if: always()`, so run regardless of any leg's pass/fail; the
@@ -334,14 +430,18 @@ jobs:
           cp tools/fpga/dashboard/index.html tools/fpga/dashboard/app.js site/
           mkdir -p site/fixtures && cp tools/fpga/dashboard/fixtures/data.js site/fixtures/
       - name: Upload Pages artifact
-        if: github.event_name == 'push'
+        # push: the normal sim/bitstream/synth-metrics pipeline. schedule/
+        # workflow_dispatch: the nightly/manual gf180-die-area run also
+        # needs to actually deploy so its die-area series reaches the live
+        # dashboard (it never runs on push -- see that job's `if:`).
+        if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
   deploy-pages:
     needs: benchmark
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     continue-on-error: true
     permissions:
