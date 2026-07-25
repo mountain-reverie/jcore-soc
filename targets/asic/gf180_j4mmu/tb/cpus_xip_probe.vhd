@@ -4,26 +4,26 @@
 -- A REPLACEMENT for targets/boards/ulx3s/cpus_one_m0_arch.vhd's
 -- "one_cpu_m0" architecture of the shared `cpus` entity (targets/cpus.vhd):
 -- byte-identical except for one addition, a monitor process that watches
--- the boot-RAM (bootram_infer(boot_mem_gf180), DEV_SRAM) write bus INSIDE
--- this architecture -- `sramdt_o`, the db_i input to the `sram` instance below
--- -- for the XIP payload's signature write (see targets/asic/gf180_j4mmu/
--- xip_payload/payload.S: store 0xF1A5B007, loaded via a PC-relative
--- literal-pool `mov.l @(disp,PC),Rn` (i.e. a genuine flash-served DATA
--- read, not just an instruction fetch), to byte address 0x00000900 --
--- inside boot_mem's writable stack-SRAM lane, 0x800-0xFFF; the old target
--- 0x100 sat in the now-read-only constant-ROM vector lane, 0x000-0x7FF --
--- see BM Task 3) and reports PASS the instant it is seen.
+-- the CPU's own DEV_DDR data-bus port -- `data_bus_o(DEV_DDR)`, the raw
+-- CPU-side request BEFORE the dcache/ddr_ram_mux/mem_region_mux hierarchy
+-- (which internally truncates the top address nibble to 0x0 -- see
+-- design.flash.yaml's "IMPORTANT correction" note -- so this is the only
+-- point in the hierarchy that still carries the CPU's full, untruncated
+-- 32-bit SDRAM address) -- for the XIP payload's signature write (see
+-- targets/asic/gf180_j4mmu/xip_payload/payload.S: `mov.l r0,@-r15`, a push
+-- of 0xF1A5B007 onto the SDRAM stack at byte address 0x10000FFC, SP-4)
+-- and reports PASS the instant it is seen.
 --
--- BM Task 3 / Task 6 PHASE A/B: this arch's `sram` binding must match
--- cpus_one_m0_gf180_arch.vhd's -- bootram_infer(boot_mem_gf180) (the REAL
--- vendor gf180mcu_fd_ip_sram__sram512x8m8wm1 stack macros, simulated here
--- against components/memory/tests/gf180_sram_sim_stub.vhd), c_addr_width=>12
--- -- NOT the old bootram_infer(inferred)/14 (16 KiB) binding, and NOT
--- bootram_infer(boot_mem) (Task 6 PHASE A rebound cpus_one_m0_gf180_arch.vhd
--- away from that tech/inferred stack -- this probe file previously lagged
--- that rebind, silently keeping the cosim on the inferred-flops stack even
--- after the rebind landed; fixed here). The two stay in lockstep since this
--- file is the probe/instrumented clone of that architecture.
+-- SCRATCHPAD REMOVAL: this used to watch the boot-RAM (DEV_SRAM) write
+-- bus for a store into boot_mem's writable stack-SRAM lane. That lane is
+-- GONE (components/memory/boot_mem.vhd is now pure ROM) -- the reset
+-- vector's SP now points into SDRAM instead (boot_image_pkg.vhd), and
+-- this monitor moved to the DEV_DDR bus accordingly. `sram` below is
+-- still instantiated (bootram_infer(boot_mem_gf180), now ROM-only, no
+-- vendor SRAM macros -- see lib/memory_tech_lib/tech/gf180/
+-- boot_mem_stack_gf180.vhd) purely to keep the boot-vector-fetch path
+-- identical to cpus_one_m0_gf180_arch.vhd; it is no longer part of the
+-- pass/fail proof.
 --
 -- WHY A REPLACEMENT ARCHITECTURE, NOT AN EXTERNAL NAME: sramdt_o is local
 -- to `cpus`'s architecture (bootram_infer sits one level of hierarchy
@@ -83,9 +83,11 @@ architecture one_cpu_m0 of cpus is
 
   -- XIP signature-observed flag: exposed for the outer tb watchdog via a
   -- report severity note (grepped by xip_sim.sh) rather than a new port.
-  -- BM Task 3: address moved from 0x100 (boot_mem's read-only ROM lane)
-  -- to 0x900 (boot_mem's writable stack-SRAM lane, 0x800-0xFFF).
-  constant XIP_SIG_ADDR  : std_logic_vector(31 downto 0) := x"00000900";
+  -- SCRATCHPAD REMOVAL: address moved from boot_mem's (now-gone) writable
+  -- stack-SRAM lane to SDRAM byte address 0x10000FFC (SP-4, the push
+  -- target: SP=0x10001000 from boot_image_pkg.vhd, DEV_DDR/SDRAM base
+  -- 0x10000000).
+  constant XIP_SIG_ADDR  : std_logic_vector(31 downto 0) := x"10000ffc";
   constant XIP_SIG_VALUE : std_logic_vector(31 downto 0) := x"f1a5b007";
 begin
   core0 : cpu_core
@@ -136,22 +138,26 @@ begin
   data_bus_i(DEV_CPU) <= loopback_bus(data_bus_o(DEV_CPU));
 
   -----------------------------------------------------------------------
-  -- Task 4 XIP signature monitor: watch the boot-RAM write bus for the
-  -- payload's store (see targets/asic/gf180_j4mmu/xip_payload/payload.S:
-  -- `mov.l sig_val,r0` / `mov.l sig_addr,r1` (both PC-relative literal-
-  -- pool loads served by flash) / `mov.l r0,@r1`, storing r0=0xf1a5b007
-  -- at r1=0x00000900, boot_mem's stack-SRAM lane) and report PASS the instant it is seen. This is
-  -- the ONLY store the payload ever issues,
-  -- and it can only reach this bus if the CPU actually fetched+executed
-  -- the payload from flash@0x14000000 (there is no other code path to it
-  -- -- see boot_image_pkg.vhd's vector table, Task 3).
+  -- XIP signature monitor (scratchpad-removal proof): watch the CPU's own
+  -- DEV_DDR data-bus request for the payload's push (see
+  -- targets/asic/gf180_j4mmu/xip_payload/payload.S: `mov.l sig_val,r0`
+  -- (PC-relative literal-pool load served by flash) / `mov.l r0,@-r15`,
+  -- pushing r0=0xf1a5b007 at r15-4=0x10000ffc -- r15/SP is already an
+  -- SDRAM address straight from the reset vector, boot_image_pkg.vhd) and
+  -- report PASS the instant it is seen. This is the ONLY store the
+  -- payload ever issues, and it can only reach this bus if (a) the CPU
+  -- actually fetched+executed the payload from flash@0x14000000 (there is
+  -- no other code path to it -- see boot_image_pkg.vhd's vector table),
+  -- AND (b) the SDRAM stack (self-initialised in hardware by
+  -- sdram_ctrl -- no on-chip scratchpad backs it) actually works.
   -----------------------------------------------------------------------
   xip_monitor : process(clk)
   begin
     if rising_edge(clk) then
-      if sramdt_o.en = '1' and sramdt_o.wr = '1'
-         and sramdt_o.a = XIP_SIG_ADDR and sramdt_o.d = XIP_SIG_VALUE then
-        report "XIP_SIG_OK: boot-RAM[0x900] == 0xF1A5B007 -- payload fetched+executed from flash@0x14000000"
+      if data_bus_o(DEV_DDR).en = '1' and data_bus_o(DEV_DDR).wr = '1'
+         and data_bus_o(DEV_DDR).a = XIP_SIG_ADDR
+         and data_bus_o(DEV_DDR).d = XIP_SIG_VALUE then
+        report "XIP_SIG_OK: SDRAM[0x10000ffc] == 0xF1A5B007 -- payload fetched+executed from flash@0x14000000, SDRAM stack push verified"
           severity note;
       end if;
     end if;

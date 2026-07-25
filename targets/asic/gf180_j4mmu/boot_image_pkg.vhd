@@ -85,13 +85,27 @@ use ieee.std_logic_1164.all;
 -- (e.g. via tools/genbootpkg, exactly as sim/rtl.sh does for its own sim)
 -- rather than consuming this committed file as-is. Do not let a future
 -- base tapeout script skip this step.
+-- SCRATCHPAD REMOVAL (boot-memory refinement): SP (word1/word3) now points
+-- into SDRAM instead of boot_mem's old writable stack lane (which no
+-- longer exists -- boot_mem is pure ROM, see components/memory/
+-- boot_mem.vhd). SDRAM base = 0x10000000 (DEV_DDR); sdram_ctrl
+-- self-initialises in hardware (its FSM runs the full init sequence from
+-- reset and only serves accesses once idle), so the very first SDRAM
+-- access -- the payload's push onto this SP -- simply STALLS until
+-- hardware init completes; no software init/wait sequence is required.
+-- Chosen SP = 0x10001000 (top-of-stack, stack grows down): comfortably
+-- inside the cosim's sdram_model window (MEM_WORDS=8192 16-bit words per
+-- bank in targets/asic/gf180_j4mmu/tb/xip_cosim_tb.vhd -- addresses fold
+-- via `mod MEM_WORDS` per bank/row/col so any offset from the SDRAM base
+-- round-trips) and well clear of byte address 0 (avoids aliasing a
+-- null-pointer store).
 package boot_image_pkg is
   constant BOOT_DEPTH : integer := 4096;
   type boot_image_t is array (0 to 4095) of std_logic_vector(31 downto 0);
   constant BOOT_IMAGE : boot_image_t := (
     0 => x"14000000",
-    1 => x"00000ffc",
+    1 => x"10001000",
     2 => x"14000000",
-    3 => x"00000ffc",
+    3 => x"10001000",
     others => x"00000000");
 end package boot_image_pkg;

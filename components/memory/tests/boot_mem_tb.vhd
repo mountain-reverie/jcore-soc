@@ -1,17 +1,17 @@
 -- Unit testbench for bootram_infer(boot_mem): the silicon-correct boot
--- memory split (Task 1 of the GF180 boot-memory redesign) --
---   0x000-0x7FF : read-only constant ROM (SH-2 reset vector, from
---                 boot_image_pkg.BOOT_IMAGE), synthesizes to gates.
---   0x800-0xFFF : 2 KB writable stack SRAM.
+-- memory (boot-memory refinement -- scratchpad removal) --
+--   0x000-0xFFF : read-only constant ROM (SH-2 reset vector, from
+--                 boot_image_pkg.BOOT_IMAGE), synthesizes to gates. There
+--                 is no writable stack lane any more -- SDRAM self-inits
+--                 in hardware, so the reset SP points into SDRAM instead
+--                 (see targets/asic/gf180_j4mmu/boot_image_pkg.vhd).
 --
 -- Exercises (severity failure on any mismatch):
 --   (a) db read of word0 (a=0x0) = BOOT_IMAGE(0) = PC = 0x14000000, and
---       word1 (a=0x4) = BOOT_IMAGE(1) = SP = 0x00003ffc.
---   (b) a db WRITE to the ROM window (a=0x0) is ignored -- a later read
---       still returns BOOT_IMAGE(0).
---   (c) a db write-then-read to the SRAM window (a=0x800 and a=0xFFC)
---       round-trips, including per-byte-lane (we mask) writes.
---   (d) an ibus read of a=0x0 returns the same ROM word (high half, per
+--       word1 (a=0x4) = BOOT_IMAGE(1) = SP (now an SDRAM address).
+--   (b) a db WRITE anywhere (a=0x0, a=0xFFC) is ignored -- a later read
+--       still returns the ROM constant.
+--   (c) an ibus read of a=0x0 returns the same ROM word (high half, per
 --       the (inferred) architecture's half-select convention: a(1)='0' ->
 --       high half of the word).
 library ieee;
@@ -83,22 +83,14 @@ begin
     db_read(16#000#, BOOT_IMAGE(0), "rom word0 = PC");
     db_read(16#004#, BOOT_IMAGE(1), "rom word1 = SP");
 
-    -- (b) writes to the ROM window are ignored.
+    -- (b) writes anywhere in the window are ignored (no write port).
     db_write(16#000#, x"deadbeef");
-    db_read(16#000#, BOOT_IMAGE(0), "rom write ignored");
-
-    -- (c) SRAM window round-trips, full word and byte-lane writes.
-    db_write(16#800#, x"cafef00d");
-    db_read(16#800#, x"cafef00d", "sram word 0x800 round-trip");
+    db_read(16#000#, BOOT_IMAGE(0), "rom write ignored (word0)");
 
     db_write(16#ffc#, x"12345678");
-    db_read(16#ffc#, x"12345678", "sram word 0xffc round-trip");
+    db_read(16#ffc#, x"00000000", "rom write ignored (word 0xffc, past BOOT_DEPTH)");
 
-    -- byte-lane write: only lane 1 (bits 15:8) updated.
-    db_write(16#800#, x"cafeaa0d", "0010");
-    db_read(16#800#, x"cafeaa0d", "sram byte-lane write (lane 1)");
-
-    -- (d) ibus read of the ROM word (high half, a(1)='0' per (inferred)).
+    -- (c) ibus read of the ROM word (high half, a(1)='0' per (inferred)).
     ibus_read(16#000#, BOOT_IMAGE(0)(31 downto 16), '0', "ibus rom high half");
     ibus_read(16#000#, BOOT_IMAGE(0)(15 downto 0),  '1', "ibus rom low half");
 

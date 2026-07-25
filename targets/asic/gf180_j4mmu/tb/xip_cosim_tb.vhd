@@ -80,23 +80,24 @@ architecture sim of xip_cosim_tb is
   signal qfl_io_model_o : std_logic_vector(3 downto 0); -- flash model's driven lines
 
   -- Task 4 XIP payload (targets/asic/gf180_j4mmu/xip_payload/payload.bin),
-  -- packed 256 bits = 32 bytes = one qspi_flash_ctrl burst line, byte 0
-  -- (flash offset 0x00, CPU addr 0x14000000) in bits 255:248 .. byte 31
-  -- (offset 0x1F) in bits 7:0 -- see qspi_flash_model.vhd's PRELOAD
-  -- generic doc and qspi_flash_ctrl.vhd's line_o mapping (identical
-  -- convention). Bytes, in order (verified by hand against payload.S):
-  --   d0 03 d1 04 21 02 af fe 00 09 00 09 00 09 00 09
-  --   f1 a5 b0 07 00 00 09 00 00 09 00 09 00 09 00 09
-  -- (mov.l sig_val,r0 / mov.l sig_addr,r1 / mov.l r0,@r1 / spin: bra spin /
-  -- nop -- both r0/r1 are loaded via PC-relative literal-pool reads, a
-  -- genuine flash-served DATA read (dcache miss through qspi_flash_ctrl),
-  -- not just an instruction fetch (icache). See payload.S's header for
-  -- the debug history: this exact payload originally hung (the store
-  -- never issued) due to a qspi_flash_ctrl burst-ordering bug -- fixed
-  -- in components/misc/qspi_flash_ctrl.vhd (bst_widx) -- this payload is
-  -- the regression proof for that fix.
+  -- SCRATCHPAD REMOVAL variant, packed 256 bits = 32 bytes = one
+  -- qspi_flash_ctrl burst line, byte 0 (flash offset 0x00, CPU addr
+  -- 0x14000000) in bits 255:248 .. byte 31 (offset 0x1F) in bits 7:0 --
+  -- see qspi_flash_model.vhd's PRELOAD generic doc and
+  -- qspi_flash_ctrl.vhd's line_o mapping (identical convention). Bytes,
+  -- in order (from `xxd -p payload.bin`, verified against payload.S):
+  --   d0 03 2f 06 af fe 00 09 00 09 00 09 00 09 00 09
+  --   f1 a5 b0 07 00 09 00 09 00 09 00 09 00 09 00 09
+  -- (mov.l sig_val,r0 / mov.l r0,@-r15 (push onto the SDRAM stack, r15
+  -- already = SP = 0x10001000 from the reset vector) / spin: bra spin /
+  -- nop -- r0 is loaded via a PC-relative literal-pool read, a genuine
+  -- flash-served DATA read (dcache miss through qspi_flash_ctrl), not
+  -- just an instruction fetch (icache). See payload.S's header for the
+  -- debug history: an earlier form of this payload originally hung (the
+  -- store never issued) due to a qspi_flash_ctrl burst-ordering bug --
+  -- fixed in components/misc/qspi_flash_ctrl.vhd (bst_widx).
   constant XIP_PAYLOAD : std_logic_vector(255 downto 0) :=
-    x"d003d1042102affe0009000900090009f1a5b007000009000009000900090009";
+    x"d0032f06affe00090009000900090009f1a5b007000900090009000900090009";
 begin
   -- `entity work.soc(impl)` direct instantiation. IMPORTANT: soc.vhd's
   -- OWN internal `cpus : ...` instantiation must be soc_gen's
