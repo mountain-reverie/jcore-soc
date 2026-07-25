@@ -81,6 +81,29 @@ begin
           margin1 => margin1);
     end generate;
 
+    genram_2x8x512: if mem_layout.t = RAM_2x8x512 generate
+      mem: ram_2x8x512_2rw
+        port map (
+          rst0 => rst0,
+          clk0 => clk0,
+          en0 => enables0(row),
+          wr0 => wr0,
+          we0 => expanded_we0,
+          a0 => a0(8 downto 0),
+          dw0 => dw0,
+          dr0 => dr0_array(row),
+          rst1 => rst1,
+          clk1 => clk1,
+          en1 => enables1(row),
+          wr1 => wr1,
+          we1 => expanded_we1,
+          a1 => a1(8 downto 0),
+          dw1 => dw1,
+          dr1 => dr1_array(row),
+          margin0 => margin0,
+          margin1 => margin1);
+    end generate;
+
     genram_2x8x2048: if mem_layout.t = RAM_2x8x2048 generate
       mem: ram_2x8x2048_2rw
         port map (
