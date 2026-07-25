@@ -2,3 +2,4 @@ simple_test
 memory_tb
 multirow_tb
 ram_2x8x64_1rw_tap
+ram_2x8x512_2rw_tap

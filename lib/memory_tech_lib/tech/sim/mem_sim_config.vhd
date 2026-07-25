@@ -45,6 +45,11 @@ configuration ram_2rw_sim of ram_2rw is
           use entity work.ram_2x8x2048_2rw(sim);
         end for;
       end for;
+      for genram_2x8x512
+        for all : ram_2x8x512_2rw
+          use entity work.ram_2x8x512_2rw(sim);
+        end for;
+      end for;
     end for;
   end for;
 end configuration;

@@ -32,7 +32,7 @@ entity ram_2rw is
   -- This 2 read/write port RAM can be implemented with different underlying
   -- macros, and multiple copies of the macros can be instantiated to support
   -- different sizes of RAM.
-  type mem_type_t is (INVALID, RAM_32x1x512, RAM_2x8x2048);
+  type mem_type_t is (INVALID, RAM_32x1x512, RAM_2x8x2048, RAM_2x8x512);
   type mem_layout_t is record
     t : mem_type_t;
     -- a 2-d grid of fixed-size memories is used to implement larger memories.
@@ -54,6 +54,11 @@ entity ram_2rw is
     if SUBWORD_WIDTH = 8 and SUBWORD_NUM = 2 and ADDR_WIDTH >= 11 then
       r.t := RAM_2x8x2048;
       r.bank_addr_width := 11;
+      r.rows := 2**(ADDR_WIDTH - r.bank_addr_width);
+      r.cols := 1;
+    elsif SUBWORD_WIDTH = 8 and SUBWORD_NUM = 2 and ADDR_WIDTH >= 9 and ADDR_WIDTH < 11 then
+      r.t := RAM_2x8x512;
+      r.bank_addr_width := 9;
       r.rows := 2**(ADDR_WIDTH - r.bank_addr_width);
       r.cols := 1;
     elsif SUBWORD_WIDTH = 1 and SUBWORD_NUM = 32 and ADDR_WIDTH >= 9 then
