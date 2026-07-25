@@ -205,13 +205,19 @@ else
 fi
 yosys -m ghdl -p "$GHDL_CMD -e $ELAB_TOP; synth -top $SYNTH_TOP -flatten; chformal -remove; delete t:\$check t:\$assert t:\$assume t:\$cover t:\$live t:\$fair; clean; write_verilog -noattr $NETV" \
   || { echo "ERROR: ghdl-yosys netlist generation failed for $MACRO" >&2; exit 1; }
-if [ "$SRC_VARIANT" = "gf180_cache" ] || [ "$SRC_VARIANT" = "gf180_bootmem" ]; then
+if [ "$SRC_VARIANT" = "gf180_cache" ]; then
   if ! grep -q "gf180mcu_fd_ip_sram__sram512x8m8wm1" "$NETV"; then
     echo "ERROR: $MACRO netlist does not instantiate the vendor sram512x8 macro" \
          "(data RAM regressed to inferred flops?) -- see $NETV" >&2
     exit 1
   fi
 fi
+# SCRATCHPAD REMOVAL: gf180_bootmem used to carry the same vendor-macro
+# sanity check (boot_mem's writable stack lane was backed by 4x
+# sram512x8m8wm1 macros). That lane is gone -- boot_mem is now PURE
+# READ-ONLY ROM (components/memory/boot_mem.vhd /
+# lib/memory_tech_lib/tech/gf180/boot_mem_stack_gf180.vhd), so its netlist
+# is EXPECTED to contain no vendor SRAM macro at all; do not gate on one.
 # Sanitize VHDL-record-flattened port names: \name[field]  ->  name_field
 perl -0pe 's/\\([A-Za-z_][A-Za-z0-9_]*)\[([A-Za-z0-9_]+)\]([ \t]|(?=\n))/${1}_${2}$3/g' \
   "$NETV" > "$NETV.tmp" && mv "$NETV.tmp" "$NETV"
