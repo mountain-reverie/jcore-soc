@@ -126,8 +126,8 @@ OL_SKIP="${OL_SKIP:-}"
 # Yosys.Synthesis hierarchy check resolves the instances without
 # re-deriving their bodies) are PRE-GENERATED and committed alongside
 # top/config.json (which points VERILOG_FILES at them via "dir::") --
-# regenerating them requires the one-off recipe documented in the Task 6
-# report, not this script (the recipe is bespoke to the top design's
+# regenerating them (only if the SoC RTL changes) uses the clean-analyze recipe in
+# top/README.md (bespoke to the top design's
 # multi-architecture-configuration binding chain in a way the shared
 # per-macro path below has no need to support for any other macro).
 if [ "$MACRO" = "top" ]; then
@@ -135,7 +135,7 @@ if [ "$MACRO" = "top" ]; then
   if [ ! -f "$NETV" ] || [ ! -f "$MDIR/soc_macros_bb.v" ]; then
     echo "ERROR: $MDIR/soc.v and/or soc_macros_bb.v missing -- macro=top needs the" \
          "pre-generated hierarchy-preserving netlist committed alongside config.json" \
-         "(see this script's TOP-ONLY OVERRIDE comment / the Task 6 report for the" \
+         "(see top/README.md for the" \
          "regeneration recipe)." >&2
     exit 1
   fi

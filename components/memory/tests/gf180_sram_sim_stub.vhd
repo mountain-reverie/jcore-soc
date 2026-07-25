@@ -23,7 +23,7 @@
 -- read latency) -- write-first is NOT modeled (Q is simply held/undefined
 -- during write cycles' own edge, updated to the read value on subsequent
 -- read cycles), which matches the "no guarantee on read-during-write" note
--- in bootram_2Nx8_gf180.vhd.
+-- in the gf180 SRAM macro wrappers.
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
