@@ -51,6 +51,21 @@ component ram_2x8x256_1rw is
     margin : in std_logic_vector(1 downto 0));
 end component;
 
+-- RAM with 1 read/write port, sync reads and writes, 16 bits wide with 2 8-bit
+-- byte write select inputs, and 64 entries deep.
+component ram_2x8x64_1rw is
+  port (
+    rst : in  std_logic;
+    clk : in  std_logic;
+    en  : in  std_logic;
+    wr  : in  std_logic;
+    we  : in  std_logic_vector( 1 downto 0);
+    a   : in  std_logic_vector( 5 downto 0);
+    dw  : in  std_logic_vector(15 downto 0);
+    dr  : out std_logic_vector(15 downto 0);
+    margin : in std_logic_vector(1 downto 0));
+end component;
+
 -- RAM with 2 read/write port, sync reads and writes.
 component ram_2rw is
   generic (

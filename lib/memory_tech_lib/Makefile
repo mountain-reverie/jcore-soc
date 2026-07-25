@@ -11,6 +11,7 @@ VHDS += $(wildcard tests/*.vhd)
 VHDL_TESTS := memory_tb
 VHDL_TESTS += simple_test
 VHDL_TESTS += multirow_tb
+VHDL_TESTS += ram_2x8x64_1rw_tap
 
 VHDL_TOPS :=
 VHDL_TOPS += $(VHDL_TESTS)

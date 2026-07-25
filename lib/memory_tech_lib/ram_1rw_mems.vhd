@@ -51,6 +51,20 @@ begin
           margin => margin);
     end generate;
 
+    genram_2x8x64: if mem_layout.t = RAM_2x8x64 generate
+      mem: ram_2x8x64_1rw
+        port map (
+          rst => rst,
+          clk => clk,
+          en => enables(row),
+          wr => wr,
+          we => we,
+          a => a(5 downto 0),
+          dw => dw,
+          dr => dr_array(row),
+          margin => margin);
+    end generate;
+
     genram_2x8x256: if mem_layout.t = RAM_2x8x256 generate
       mem: ram_2x8x256_1rw
         port map (
