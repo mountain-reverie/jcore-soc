@@ -1,14 +1,18 @@
--- Elaboration-only top for BM Task 4 (GF180 area harden of boot_mem): a
+-- Elaboration-only top for the GF180 area harden of boot_mem: a
 -- fixed-generic wrapper around bootram_infer(boot_mem_gf180) (see
 -- lib/memory_tech_lib/tech/gf180/boot_mem_stack_gf180.vhd), used ONLY by
 -- targets/asic/gf180_j4mmu/librelane/boot_mem/ (run.sh macro=boot_mem)'s
 -- ghdl-yosys netlist generation. `ghdl -e` needs a top with no unbound
 -- generics; bootram_infer's c_addr_width defaults to 14 (the base/inferred
--- 16 KiB variant), so this wrapper pins it to 12 (boot_mem's 4 KiB split:
--- 2 KiB constant-ROM vector lane + 2 KiB writable stack SRAM lane) and
--- explicitly binds the (boot_mem_gf180) architecture -- the vendor-SRAM
--- stack backend, not the default (inferred)/(boot_mem) tech/inferred paths
--- used by functional sim / FPGA / the base ASIC build.
+-- 16 KiB variant), so this wrapper pins it to 12 (boot_mem's 4 KiB window)
+-- and explicitly binds the (boot_mem_gf180) architecture.
+--
+-- SCRATCHPAD REMOVAL: (boot_mem_gf180) is now PURE READ-ONLY ROM (no
+-- vendor SRAM macro at all -- the writable stack lane it used to back
+-- with 4x gf180mcu_fd_ip_sram__sram512x8m8wm1 macros is gone; SDRAM
+-- backs the boot-time stack instead, see boot_image_pkg.vhd). The
+-- LibreLane config for this macro (librelane/boot_mem/config.json) must
+-- NOT declare any MACROS/fixed DIE_AREA any more -- see that file.
 library ieee;
 use ieee.std_logic_1164.all;
 use work.cpu2j0_pack.all;
