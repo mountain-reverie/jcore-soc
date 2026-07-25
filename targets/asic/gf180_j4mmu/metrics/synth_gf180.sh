@@ -143,6 +143,28 @@ while read -r macro elab_top synth_top rest; do
     continue
   fi
 
+  # boot_mem: the elaboration top (boot_mem_top_gf180) lives only in the
+  # tech/gf180 boot source chain, NOT in GHDL_BASE -- so it needs
+  # GHDL_BASE_GF180_BOOTMEM (exported by gen_synth_sources.sh: GHDL_BASE plus
+  # boot_mem_stack_gf180.vhd / boot_mem_top_gf180.vhd / the vendor SRAM comp).
+  # Since the boot scratchpad SRAM was removed, boot_mem is now a pure
+  # read-only logic ROM -- no vendor macro, "Number of memories: 0" -- so it
+  # needs no GF180_SRAM_LIB and no sram-cell guard (unlike the cache_*_gf180
+  # rows above). Plain synth + stat against the std-cell liberty.
+  if [ "$macro" = "boot_mem" ]; then
+    yosys -m ghdl -p "$GHDL_BASE_GF180_BOOTMEM -e $elab_top; synth -top $synth_top -flatten; \
+        dfflibmap -liberty $GF180_LIB; abc -liberty $GF180_LIB; \
+        stat -liberty $GF180_LIB" 2>&1 | tee "$OUT/$macro.yosys.log" \
+      | awk '
+          /Number of cells/ { buf = ""; capture = 1 }
+          capture { buf = buf $0 "\n" }
+          /of which used for sequential elements/ { last = buf; capture = 0 }
+          /Chip area for module/ { last = buf; capture = 0 }
+          END { printf "%s", last }
+        ' > "$OUT/$macro.stat.txt"
+    continue
+  fi
+
   yosys -m ghdl -p "$GHDL_BASE -e $elab_top; synth -top $synth_top -flatten; \
     dfflibmap -liberty $GF180_LIB; abc -liberty $GF180_LIB; \
     stat -liberty $GF180_LIB" 2>&1 | tee "$OUT/$macro.yosys.log" \
