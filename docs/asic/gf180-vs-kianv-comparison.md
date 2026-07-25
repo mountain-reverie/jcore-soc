@@ -9,31 +9,41 @@ external-SDRAM architecture. (wafer.space/news/kianv-riscv-soc)
 
 ## Headline
 
-At GF180, the jcore **J4 + MMU** flash SoC lands **at parity with KianV — now
-marginally ahead.** With the boot scratchpad SRAM removed and the integrated top
-re-routed, its routed core is **19.14 mm²** with **12.75 mm² of placed silicon**
-(macros + logic) at **66.6 % utilization**, versus KianV's 20.1 mm² die (~13 mm²
-placed silicon at ~65 %) — jcore's placed silicon is now **~2 % under** KianV's
-(it was ~5 % over before the scratchpad removal). The two remain genuine peers —
-both MMU/Linux-class, both cache-SRAM-dominated, both using an external SDRAM
-controller + SPI-flash boot. The area is **driven by the two 8 KB caches**, not
-core efficiency.
+At GF180, the jcore **J4 + MMU** flash SoC lands **at parity with KianV**. The
+robust, routing-independent basis is **placed silicon** (cells + SRAM macros):
+**12.75 mm²** with the boot scratchpad removed, versus KianV's ~13 mm² (both at
+~65 % utilization) — i.e. jcore is now **~2 % under** KianV (it was ~5 % over
+before the scratchpad removal). The two are genuine peers — both MMU/Linux-class,
+both cache-SRAM-dominated, both external SDRAM + SPI-flash boot. The area is
+**driven by the two 8 KB caches**, not core efficiency.
 
-## Routed integrated top (this work)
+## Integrated top (this work)
 
 Hierarchical black-box P&R: each sub-block hardened standalone to a LEF abstract, then
-the top placed+routed with all 8 as black boxes + flattened interconnect (kept peak
-memory ~0.9 GB — the flat-flatten alternative OOM'd).
+the top integrated with all 8 as black boxes + flattened interconnect (peak memory
+~0.9 GB — the flat-flatten alternative OOM'd).
 
 | Metric (LibreLane `design__*`) | Value |
 |---|---|
-| Die area (core-only, no pad ring) | **19.52 mm²** |
-| Core area | 19.14 mm² |
-| Placed instance silicon (8 macros + glue) | **12.75 mm²** |
-| Core utilization | **66.6 %** |
+| **Placed instance silicon (8 macros + glue)** | **12.75 mm²** |
+| Core utilization | 66.6 % |
+| Core area (placement) | 19.14 mm² |
+| Die area (placement, core-only, no pad ring) | 19.52 mm² |
 
-(Post-scratchpad-removal, measured; previously 21.72 / 21.32 / 13.91 mm² / 65.3 %
-with the old 1.13 mm² boot_mem scratchpad SRAM.)
+**Routing status (honesty):** placed silicon is the solid, routing-independent
+number. The two integrated runs bracket the *routable* die:
+- with the old 1.13 mm² boot_mem (13.91 mm² silicon), the top routed **fully
+  through detailed routing + RCX** at **21.72 mm² die / 65.3 % util** (it only
+  failed at the cosmetic final GDS merge, which needs the child-macro GDS);
+- with the ROM-only boot_mem (12.75 mm² silicon), a tighter 2-row **19.52 mm² /
+  66.6 %** floorplan reached placement but **hit global-routing congestion
+  (GRT-0118)** — it is not a fully-routed die.
+
+So the **routable** core-only die with the smaller boot_mem is **~20 mm²**
+(≈ 12.75 mm² silicon / ~0.64 routable util, between the 19.52 congested placement
+and the 21.72 fully-routed prior run) — a ~1.5–2 mm² improvement from the
+scratchpad removal, but the exact routed die at a congestion-clean util is a
+follow-up. The **placed-silicon** comparison to KianV does not depend on this.
 
 ## Per-block routed areas (GF180, standalone)
 
@@ -68,20 +78,21 @@ placements in both the routed DEF and the netlist. Routed die area
 **1.13 mm² → 0.02 mm²**, a measured **~1.11 mm² saving** on this block
 standalone.
 
-The top-level integrated P&R has been **re-run** with the smaller boot_mem
-(new floorplan: the old 3-row macro grid collapsed to 2 rows since row1
-[icache|dcache] already fixed the die width independent of boot_mem's size,
-and boot_mem's shrink no longer needed a dedicated row). Measured result:
-placed silicon **13.91 → 12.75 mm²** (a **1.16 mm² saving**, matching the
-1.13 → 0.02 mm² boot_mem delta), die **21.72 → 19.52 mm²**, core **21.32 →
-19.14 mm²**, utilization **65.3 % → 66.6 %**.
+The top-level integrated P&R was **re-run** with the smaller boot_mem (new
+floorplan: the old 3-row macro grid collapsed to 2 rows since row1
+[icache|dcache] already fixes the die width independent of boot_mem's size).
+Measured: **placed silicon 13.91 → 12.75 mm²** (a 1.16 mm² saving, matching the
+1.13 → 0.02 mm² boot_mem delta). The tighter 19.52 mm² / 66.6 % floorplan reached
+placement but hit global-routing congestion (see "Routing status" above), so the
+routable die is ~20 mm² rather than a clean 19.52 — placed silicon is the honest
+figure; the exact routed die at a congestion-clean util is a follow-up.
 
 ## Comparison
 
 | | jcore J4+MMU flash | KianV |
 |---|---|---|
 | Placed silicon (cells + SRAM) | **12.75 mm²** (measured, post-scratchpad-removal) | ~13 mm² |
-| Core @ ~67 % util | **19.14 mm²** | 20.1 mm² (die) |
+| Core / die basis | ~20 mm² routable core-only (placement 19.52 mm², routing-congested) | 20.1 mm² padded die |
 | ISA / class | SH-2-compatible J4, SH-4-class MMU | RV32IMA + SV32 |
 | Linux-capable | yes (MMU in RTL) | yes (uLinux/XV6) |
 | On-chip cache SRAM | 2×8 KB (vendor macros) | yes ("cache SRAM around the core") |
@@ -104,6 +115,10 @@ post-scratchpad-removal) is the honest, like-for-like number.
   their LEF footprints (5.06 mm² each) carry macro-internal whitespace; the top's
   65.3 % util sits on top of that. A tighter cache hardening would reduce the die. The
   placed-silicon parity holds regardless.
+- **Routing:** the scratchpad-free 19.52 mm² floorplan hit global-routing
+  congestion (GRT-0118) at 66.6 % util — routable die is ~20 mm² (the prior
+  13.91 mm²-silicon top routed fully at 21.72 mm²/65 %). Placed silicon (12.75
+  mm²) is routing-independent and is the number the KianV comparison rests on.
 - **Timing** is best-effort/non-gating (ideal 40 ns clock); this is an **area** proxy,
   not a signed-off tapeout (no DRC/LVS/RCX signoff at the top; the final GDS merge is
   a documented finishing step needing the child macros' GDS).
