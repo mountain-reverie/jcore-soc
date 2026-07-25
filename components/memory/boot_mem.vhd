@@ -5,26 +5,29 @@ use work.cpu2j0_pack.all;
 use work.boot_image_pkg.all;
 
 -- Silicon-correct boot memory: an SRAM macro powers up with undefined
--- contents and cannot hold a reset vector, so the boot region is split by
--- address bit a(11):
---   0x000-0x7FF (is_rom='1'): read-only constant ROM holding the SH-2 reset
---     vector (BOOT_IMAGE low words). A registered read with NO write port,
---     so this synthesizes to gates (a logic ROM), not a RAM macro. Writes
---     to this window are silently ignored.
---   0x800-0xFFF (is_rom='0'): a small writable array (2 KB with
---     c_addr_width=12) for the boot-time stack, byte-lane writable exactly
---     like (inferred)'s data port.
--- Both ports mirror (inferred)'s 0-wait falling-edge contract: registered
--- read data is valid the cycle db_o.ack/ibus_o.ack (combinational = en) is
--- sampled at the following rising edge.
+-- contents and cannot hold a reset vector, so this is a PURE READ-ONLY
+-- constant ROM holding the SH-2 reset vector (BOOT_IMAGE words). A
+-- registered read with NO write port, so this synthesizes to gates (a
+-- logic ROM), not a RAM macro. Writes anywhere in this window are
+-- silently ignored.
+--
+-- SCRATCHPAD REMOVAL (boot-memory refinement): this architecture used to
+-- split the address space in half via a(c_addr_width-1) -- a low
+-- read-only ROM lane plus a high 2 KB writable stack-SRAM lane, used for
+-- the SH-2 boot-time stack before SDRAM was initialised. That stack lane
+-- is GONE: components/sdram/sdram_ctrl.vhd self-initialises in hardware
+-- (its FSM runs the full SDRAM init automatically from reset, serving
+-- accesses only once idle -- the first SDRAM access simply stalls until
+-- init completes), so the reset vector's SP now points directly into
+-- SDRAM (see targets/asic/gf180_j4mmu/boot_image_pkg.vhd) and no on-chip
+-- writable scratchpad is needed at all. The whole boot_mem window is now
+-- read-only ROM.
 architecture boot_mem of bootram_infer is
-  constant ROM_WORDS  : integer := 2 ** (c_addr_width - 3); -- low half, word-addressed
-  constant SRAM_WORDS : integer := 2 ** (c_addr_width - 3); -- high half, word-addressed
+  constant ROM_WORDS : integer := 2 ** (c_addr_width - 2); -- word-addressed, full window
   subtype word_t is std_logic_vector(31 downto 0);
-  type rom_t  is array (0 to ROM_WORDS - 1)  of word_t;
-  type sram_t is array (0 to SRAM_WORDS - 1) of word_t;
+  type rom_t is array (0 to ROM_WORDS - 1) of word_t;
 
-  -- read-only constant ROM lane: filled from the boot image, zero past it.
+  -- read-only constant ROM: filled from the boot image, zero past it.
   function init_rom return rom_t is
     variable m : rom_t := (others => (others => '0'));
   begin
@@ -38,55 +41,35 @@ architecture boot_mem of bootram_infer is
 
   constant rom : rom_t := init_rom;
 
-  signal sram : sram_t := (others => (others => '0'));
-
-  signal d_word    : word_t := (others => '0');
-  signal i_word    : word_t := (others => '0');
-  signal i_half    : std_logic := '0';
+  signal d_word : word_t := (others => '0');
+  signal i_word : word_t := (others => '0');
+  signal i_half : std_logic := '0';
 begin
   -- synthesis translate_off
   assert BOOT_DEPTH <= ROM_WORDS
-    report "boot_image_pkg BOOT_DEPTH exceeds boot_mem ROM lane depth; image truncated"
+    report "boot_image_pkg BOOT_DEPTH exceeds boot_mem ROM depth; image truncated"
     severity warning;
   -- synthesis translate_on
 
-  -- Data port (read/write) and instruction port (read-only), both on
+  -- Data port (read-only) and instruction port (read-only), both on
   -- falling edge so registered output is valid the same cycle ack=en is
   -- asserted, matching (inferred)'s / memory_fpga's 0-wait contract.
   process(clk)
-    variable di : integer;
+    variable di, ii : integer;
   begin
     if falling_edge(clk) then
-      -- data port: a(c_addr_width-1) selects ROM (high='0', i.e. low half
-      -- of the address space) vs SRAM (high half); index within each lane
-      -- uses the remaining word bits.
-      di := to_integer(unsigned(db_i.a(c_addr_width - 2 downto 2)));
-      if db_i.a(c_addr_width - 1) = '0' then
-        -- ROM window: writes ignored; read the constant lane.
-        d_word <= rom(di);
-      else
-        -- SRAM window: byte-lane writes, READ_FIRST (matches (inferred)).
-        if db_i.en = '1' and db_i.wr = '1' then
-          if db_i.we(0) = '1' then sram(di)(7 downto 0)   <= db_i.d(7 downto 0);   end if;
-          if db_i.we(1) = '1' then sram(di)(15 downto 8)  <= db_i.d(15 downto 8);  end if;
-          if db_i.we(2) = '1' then sram(di)(23 downto 16) <= db_i.d(23 downto 16); end if;
-          if db_i.we(3) = '1' then sram(di)(31 downto 24) <= db_i.d(31 downto 24); end if;
-        end if;
-        d_word <= sram(di);
-      end if;
+      di := to_integer(unsigned(db_i.a(c_addr_width - 1 downto 2)));
+      d_word <= rom(di);
 
-      -- instruction port: read-only, same half-select convention.
-      if ibus_i.a(c_addr_width - 1) = '0' then
-        i_word <= rom(to_integer(unsigned(ibus_i.a(c_addr_width - 2 downto 2))));
-      else
-        i_word <= sram(to_integer(unsigned(ibus_i.a(c_addr_width - 2 downto 2))));
-      end if;
+      ii := to_integer(unsigned(ibus_i.a(c_addr_width - 1 downto 2)));
+      i_word <= rom(ii);
       i_half <= ibus_i.a(1);
     end if;
   end process;
 
   -- Timing contract identical to (inferred): ack is combinational = en,
-  -- while d_word/i_word are registered from the falling edge.
+  -- while d_word/i_word are registered from the falling edge. Writes are
+  -- silently ignored (no write port at all).
   db_o.d   <= d_word;
   db_o.ack <= db_i.en;
 
