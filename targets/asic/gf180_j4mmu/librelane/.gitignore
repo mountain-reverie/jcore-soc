@@ -3,3 +3,7 @@
 *.log
 */*.v
 */config.merged.json
+# EXCEPTION: the top's pre-generated hierarchy netlist + blackbox stubs ARE
+# committed inputs (run.sh macro=top consumes them; regen recipe in top/README.md)
+!top/soc.v
+!top/soc_macros_bb.v

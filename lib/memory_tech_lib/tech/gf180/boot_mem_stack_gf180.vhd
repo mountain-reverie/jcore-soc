@@ -11,7 +11,7 @@
 --     byte lane) instead of (boot_mem)'s inferred array-of-flops. This is
 --     the REAL silicon area for the stack lane.
 --
--- WHY NO DEPTH TILING (unlike bootram_2Nx8_gf180.vhd, the old unified
+-- WHY NO DEPTH TILING (unlike the old unified 16KB bootram (removed)
 -- 16 KiB bootram's gf180 backend): boot_mem's two lanes are each exactly
 -- 2 KB = 512 words -- the vendor sram512x8m8wm1 macro's native depth. One
 -- macro instance per byte lane covers the whole stack with no row/tile mux
@@ -27,7 +27,7 @@
 -- wins whenever it targets the SRAM lane (db_i.en='1' and a(11)='1'); the
 -- instruction port is only served from the macro when the data port is
 -- idle or targeting the ROM lane instead. This mirrors
--- bootram_2Nx8_gf180.vhd's ENABLING PRECONDITION: jcore's CPU boot sequence
+-- the removed old-bootram ENABLING PRECONDITION: jcore's CPU boot sequence
 -- never needs to fetch instructions FROM the writable stack window (code
 -- lives in the ROM lane / external flash), so this is a synth/metrics-only
 -- simplification with no functional-path impact (functional sim / FPGA
@@ -38,7 +38,7 @@
 -- synchronous read (1-cycle latency). Clocking every macro from `not clk`
 -- (its rising edge coincides with the system clock's falling edge) gives
 -- byte-identical timing to (boot_mem) with zero extra pipeline stages --
--- same technique as bootram_2Nx8_gf180.vhd / ram_2x8x2048_2rw_gf180.vhd.
+-- same tiling technique as ram_2x8x2048_2rw_gf180.vhd.
 --
 -- SYNTH/METRICS-ONLY: this architecture instantiates a black-box vendor
 -- macro (see gf180mcu_fd_ip_sram_comp.vhd) that GHDL cannot elaborate to a
