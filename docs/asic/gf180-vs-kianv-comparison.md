@@ -10,12 +10,14 @@ external-SDRAM architecture. (wafer.space/news/kianv-riscv-soc)
 ## Headline
 
 At GF180, the jcore **J4 + MMU** flash SoC lands **at parity with KianV**. The
-robust, routing-independent basis is **placed silicon** (cells + SRAM macros):
-**12.75 mm²** with the boot scratchpad removed, versus KianV's ~13 mm² (both at
-~65 % utilization) — i.e. jcore is now **~2 % under** KianV (it was ~5 % over
-before the scratchpad removal). The two are genuine peers — both MMU/Linux-class,
-both cache-SRAM-dominated, both external SDRAM + SPI-flash boot. The area is
-**driven by the two 8 KB caches**, not core efficiency.
+robust, fair basis is **placed silicon** (cells + SRAM macros): **12.80 mm²**
+with the boot scratchpad removed, versus KianV's ~13 mm² (both at ~61–65 %
+utilization) — i.e. jcore is now **~2 % under** KianV (it was ~5 % over before
+the scratchpad removal). This is now backed by a **fully-routed** integrated
+top (detailed routing + RCX clean, no GRT-0118 congestion) at **21.20 mm² die
+/ 61.5 % util** — not a placement estimate. The two are genuine peers — both
+MMU/Linux-class, both cache-SRAM-dominated, both external SDRAM + SPI-flash
+boot. The area is **driven by the two 8 KB caches**, not core efficiency.
 
 ## Integrated top (this work)
 
@@ -23,27 +25,27 @@ Hierarchical black-box P&R: each sub-block hardened standalone to a LEF abstract
 the top integrated with all 8 as black boxes + flattened interconnect (peak memory
 ~0.9 GB — the flat-flatten alternative OOM'd).
 
-| Metric (LibreLane `design__*`) | Value |
+| Metric (LibreLane `design__*`, from `48-openroad-rcx/or_metrics_out.json`) | Value |
 |---|---|
-| **Placed instance silicon (8 macros + glue)** | **12.75 mm²** |
-| Core utilization | 66.6 % |
-| Core area (placement) | 19.14 mm² |
-| Die area (placement, core-only, no pad ring) | 19.52 mm² |
+| **Placed instance silicon (8 macros + glue)** | **12.80 mm²** |
+| Core utilization | 61.5 % |
+| Core area (fully-routed) | 20.81 mm² |
+| Die area (fully-routed, core-only, no pad ring) | 21.20 mm² |
 
-**Routing status (honesty):** placed silicon is the solid, routing-independent
-number. The two integrated runs bracket the *routable* die:
-- with the old 1.13 mm² boot_mem (13.91 mm² silicon), the top routed **fully
-  through detailed routing + RCX** at **21.72 mm² die / 65.3 % util** (it only
-  failed at the cosmetic final GDS merge, which needs the child-macro GDS);
-- with the ROM-only boot_mem (12.75 mm² silicon), a tighter 2-row **19.52 mm² /
-  66.6 %** floorplan reached placement but **hit global-routing congestion
-  (GRT-0118)** — it is not a fully-routed die.
+**Routing status (honesty):** this is now a **measured, fully-routed** die —
+detailed routing + RCX completed cleanly with no GRT-0118 congestion — not a
+placement estimate. Two floorplans were tried with the ROM-only (0.02 mm²)
+boot_mem:
+- a tight 2-row **19.52 mm² / 66.6 %** floorplan reached placement/CTS but
+  **hit global-routing congestion (GRT-0118)** — it does not route;
+- widening the die to **21.20 mm² / 61.5 %** (doubling the row1→row2 channel
+  and the row2 inter-macro gaps) **routes clean through detailed routing +
+  RCX** — it only stops at the cosmetic final GDS merge (`Magic.StreamOut`),
+  which needs the child-macros' GDS, same as every other run here.
 
-So the **routable** core-only die with the smaller boot_mem is **~20 mm²**
-(≈ 12.75 mm² silicon / ~0.64 routable util, between the 19.52 congested placement
-and the 21.72 fully-routed prior run) — a ~1.5–2 mm² improvement from the
-scratchpad removal, but the exact routed die at a congestion-clean util is a
-follow-up. The **placed-silicon** comparison to KianV does not depend on this.
+So the cache-dominated design needs roughly **~61 % util to route**; a tighter
+~65–67 % floorplan congests. The **placed-silicon** comparison to KianV does
+not depend on routing headroom either way.
 
 ## Per-block routed areas (GF180, standalone)
 
@@ -81,18 +83,24 @@ standalone.
 The top-level integrated P&R was **re-run** with the smaller boot_mem (new
 floorplan: the old 3-row macro grid collapsed to 2 rows since row1
 [icache|dcache] already fixes the die width independent of boot_mem's size).
-Measured: **placed silicon 13.91 → 12.75 mm²** (a 1.16 mm² saving, matching the
-1.13 → 0.02 mm² boot_mem delta). The tighter 19.52 mm² / 66.6 % floorplan reached
-placement but hit global-routing congestion (see "Routing status" above), so the
-routable die is ~20 mm² rather than a clean 19.52 — placed silicon is the honest
-figure; the exact routed die at a congestion-clean util is a follow-up.
+Measured: **placed silicon 13.91 → 12.80 mm²** (a 1.11 mm² saving, matching the
+1.13 → 0.02 mm² boot_mem delta almost exactly). The **routed die**, however,
+only moved **21.72 → 21.20 mm²** (a 0.52 mm² saving) — smaller than the silicon
+saving. The reason: the tight 19.52 mm² / 66.6 % floorplan that the silicon
+saving alone would suggest **congests** (GRT-0118); routing this cache-heavy
+design cleanly needs ~61 % util, so most of the row-height reclaimed by
+dropping the scratchpad had to be given back as routing channel headroom
+(wider row1↔row2 gap, wider row2 inter-macro gaps) rather than shrinking the
+die 1:1 with the silicon. **Placed silicon is the honest, routing-independent
+saving (−1.11 mm²); the routed die saving is smaller (−0.52 mm²) because
+routing overhead eats into it.**
 
 ## Comparison
 
 | | jcore J4+MMU flash | KianV |
 |---|---|---|
-| Placed silicon (cells + SRAM) | **12.75 mm²** (measured, post-scratchpad-removal) | ~13 mm² |
-| Core / die basis | ~20 mm² routable core-only (placement 19.52 mm², routing-congested) | 20.1 mm² padded die |
+| Placed silicon (cells + SRAM) | **12.80 mm²** (measured, post-scratchpad-removal) | ~13 mm² |
+| Core / die basis | 21.20 mm² core-only, **fully-routed** (RCX-clean, 61.5 % util, no pad ring) | 20.1 mm² padded die |
 | ISA / class | SH-2-compatible J4, SH-4-class MMU | RV32IMA + SV32 |
 | Linux-capable | yes (MMU in RTL) | yes (uLinux/XV6) |
 | On-chip cache SRAM | 2×8 KB (vendor macros) | yes ("cache SRAM around the core") |
@@ -103,8 +111,13 @@ figure; the exact routed die at a congestion-clean util is a follow-up.
 parity — now dead-even, ~2 % under KianV on placed silicon.** Both are SRAM-dominated;
 the lever for either is cache size. This corrects an earlier naive impression of large
 headroom that came from summing per-block die boxes (double-counting whitespace)
-against KianV's full die — the integrated 12.75 mm² placed-silicon figure (measured,
-post-scratchpad-removal) is the honest, like-for-like number.
+against KianV's full die — the integrated **12.80 mm² placed-silicon** figure
+(measured, post-scratchpad-removal) is the honest, like-for-like number. The
+**21.20 mm² fully-routed core-only die** is a real, measured result (detailed
+routing + RCX clean), but it is core-only/no-pad-ring against KianV's padded
+20.1 mm², so it is not the clean apples-to-apples basis — placed silicon is.
+The caveats below (core-only, timing best-effort, GDS-merge finishing step,
+routing-congestion sensitivity of this cache-dominated design) still apply.
 
 ## Basis / caveats (honesty)
 
@@ -115,10 +128,13 @@ post-scratchpad-removal) is the honest, like-for-like number.
   their LEF footprints (5.06 mm² each) carry macro-internal whitespace; the top's
   65.3 % util sits on top of that. A tighter cache hardening would reduce the die. The
   placed-silicon parity holds regardless.
-- **Routing:** the scratchpad-free 19.52 mm² floorplan hit global-routing
-  congestion (GRT-0118) at 66.6 % util — routable die is ~20 mm² (the prior
-  13.91 mm²-silicon top routed fully at 21.72 mm²/65 %). Placed silicon (12.75
-  mm²) is routing-independent and is the number the KianV comparison rests on.
+- **Routing:** the scratchpad-free design routes cleanly (detailed routing +
+  RCX, no GRT-0118) at a widened **21.20 mm² / 61.5 %** floorplan, but a
+  tighter **19.52 mm² / 66.6 %** floorplan of the same netlist **congests**
+  (GRT-0118) and does not route. This cache-heavy design needs meaningfully
+  more routing headroom than a first-cut ~65–67 % util floorplan gives it.
+  Placed silicon (12.80 mm²) doesn't depend on this either way and is the
+  number the KianV comparison rests on.
 - **Timing** is best-effort/non-gating (ideal 40 ns clock); this is an **area** proxy,
   not a signed-off tapeout (no DRC/LVS/RCX signoff at the top; the final GDS merge is
   a documented finishing step needing the child macros' GDS).

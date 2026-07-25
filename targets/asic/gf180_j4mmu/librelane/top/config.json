@@ -21,7 +21,7 @@
         "cpus.core0.u_cpu": {
           "location": [
             200.0,
-            2970.0
+            3170.0
           ],
           "orientation": "N"
         }
@@ -71,8 +71,8 @@
       "instances": {
         "cpus.sram": {
           "location": [
-            1496.0,
-            2970.0
+            1516.635,
+            3170.0
           ],
           "orientation": "N"
         }
@@ -88,8 +88,8 @@
       "instances": {
         "sdram_ctrl": {
           "location": [
-            4112.05,
-            2970.0
+            4212.05,
+            3170.0
           ],
           "orientation": "N"
         }
@@ -105,8 +105,8 @@
       "instances": {
         "devices": {
           "location": [
-            1836.635,
-            2970.0
+            1876.635,
+            3170.0
           ],
           "orientation": "N"
         }
@@ -122,8 +122,8 @@
       "instances": {
         "qspi_flash_ctrl": {
           "location": [
-            2670.29,
-            2970.0
+            2730.29,
+            3170.0
           ],
           "orientation": "N"
         }
@@ -139,8 +139,8 @@
       "instances": {
         "mem_region_mux": {
           "location": [
-            3612.05,
-            2970.0
+            3692.05,
+            3170.0
           ],
           "orientation": "N"
         }
@@ -148,18 +148,19 @@
     }
   },
   "_comment_floorplan": "SCRATCHPAD-REMOVAL REPACK: boot_mem shrank from 1.127mm^2 (1033x1091um-ish) to 140x140um (0.0196mm^2) once its writable SRAM lane was removed (pure ROM now). Since row1 (icache|dcache, 1970x2570 each) already fixes the die width at 4540um regardless of boot_mem's size, and boot_mem was the only thing anchoring the old row3, the old 3-row grid (row1: icache|dcache; row2: cpu|boot_mem|devices|qspi_flash_ctrl; row3: mem_region_mux|sdram_ctrl) is repacked to 2 rows: row1 unchanged (icache|dcache), row2 = cpu|boot_mem|devices|qspi_flash_ctrl|mem_region_mux|sdram_ctrl (all six remaining macros in one row, 200um gaps), height set by the tallest item in each row (row1: icache/dcache 2570um; row2: cpu 1114.555um). This drops DIE_AREA height from 4784 to ~4300um (row3 eliminated) while width stays 4540 (still row1-bound; row2's packed width is 4536.225, within margin). Macro footprint sum = 12.489mm^2 (1.222 cpu + 5.063 icache + 5.063 dcache + 0.0196 boot_mem + 0.413 devices + 0.564 qspi_flash_ctrl + 0.090 mem_region_mux + 0.054 sdram_ctrl). New DIE_AREA (4540 x 4300 = 19.522mm^2) gives util = 12.489/19.522 = 64.0%, matching the brief's ~65% KianV-comparable target (KianV: 20.1mm^2 die at ~65% util -> ~13.1mm^2 core).",
+  "_comment_routeclean_retry": "ROUTE-CLEAN RETRY (feat/gf180-librelane-die, bounded attempt): the 4540x4300 (66.6% util) 2-row repack reached placement/CTS but FAILED global routing with GRT-0118 congestion-too-high. Widened die height to 4540x4670 (21.20mm^2, ~58.9% util) for routing headroom: row1(icache|dcache) unchanged at y=200; row1->row2 gap doubled from 200 to 400um (row2 now at y=3170 instead of 2970); row2 inter-macro gaps widened from 200 to 220um (cpu/boot_mem/devices/qspi_flash_ctrl/mem_region_mux/sdram_ctrl re-spaced accordingly); margin above row2's top (cpu height 1114.555) to the die/core top grew from ~215um to ~365um. Same 8 macros, same netlist -- placement-only re-floorplan to relieve GRT-0118.",
   "FP_SIZING": "absolute",
   "DIE_AREA": [
     0,
     0,
     4540,
-    4300
+    4670
   ],
   "CORE_AREA": [
     20,
     20,
     4520,
-    4280
+    4650
   ],
   "FP_PDN_VPITCH": 180,
   "FP_PDN_HPITCH": 180,
