@@ -9,12 +9,15 @@ external-SDRAM architecture. (wafer.space/news/kianv-riscv-soc)
 
 ## Headline
 
-At GF180, the jcore **J4 + MMU** flash SoC lands **at parity with KianV — no
-meaningful headroom.** Its routed integrated core is **21.3 mm²** with **13.9 mm² of
-placed silicon** (macros + logic) at **65 % utilization**, versus KianV's 20.1 mm²
-die (~13 mm² placed silicon at ~65 %). The two are genuine peers — both MMU/Linux-
-class, both cache-SRAM-dominated, both using an external SDRAM controller + SPI-flash
-boot. The area is **driven by the two 8 KB caches**, not core efficiency.
+At GF180, the jcore **J4 + MMU** flash SoC lands **at parity with KianV — now
+marginally ahead.** With the boot scratchpad SRAM removed and the integrated top
+re-routed, its routed core is **19.14 mm²** with **12.75 mm² of placed silicon**
+(macros + logic) at **66.6 % utilization**, versus KianV's 20.1 mm² die (~13 mm²
+placed silicon at ~65 %) — jcore's placed silicon is now **~2 % under** KianV's
+(it was ~5 % over before the scratchpad removal). The two remain genuine peers —
+both MMU/Linux-class, both cache-SRAM-dominated, both using an external SDRAM
+controller + SPI-flash boot. The area is **driven by the two 8 KB caches**, not
+core efficiency.
 
 ## Routed integrated top (this work)
 
@@ -24,10 +27,13 @@ memory ~0.9 GB — the flat-flatten alternative OOM'd).
 
 | Metric (LibreLane `design__*`) | Value |
 |---|---|
-| Die area (core-only, no pad ring) | **21.72 mm²** |
-| Core area | 21.32 mm² |
-| Placed instance silicon (8 macros + glue) | **13.91 mm²** |
-| Core utilization | **65.3 %** |
+| Die area (core-only, no pad ring) | **19.52 mm²** |
+| Core area | 19.14 mm² |
+| Placed instance silicon (8 macros + glue) | **12.75 mm²** |
+| Core utilization | **66.6 %** |
+
+(Post-scratchpad-removal, measured; previously 21.72 / 21.32 / 13.91 mm² / 65.3 %
+with the old 1.13 mm² boot_mem scratchpad SRAM.)
 
 ## Per-block routed areas (GF180, standalone)
 
@@ -62,21 +68,20 @@ placements in both the routed DEF and the netlist. Routed die area
 **1.13 mm² → 0.02 mm²**, a measured **~1.11 mm² saving** on this block
 standalone.
 
-The top-level integrated P&R (13.91 mm² placed-silicon / 21.72 mm² die
-figures below) has **not** been re-run with the smaller boot_mem yet — that
-is a separate, larger job (flagged as follow-up, not required for this
-refinement). Naively propagating the standalone saving gives an **estimated**
-new placed-silicon total of **13.91 − 1.11 ≈ 12.80 mm²** (≈ 13.07 mm² if
-using the coordinator's original ~0.84 mm² planning estimate instead of the
-measured 1.11 mm² — the measured number is used here as the honest figure,
-and both remain estimates pending an actual top re-run).
+The top-level integrated P&R has been **re-run** with the smaller boot_mem
+(new floorplan: the old 3-row macro grid collapsed to 2 rows since row1
+[icache|dcache] already fixed the die width independent of boot_mem's size,
+and boot_mem's shrink no longer needed a dedicated row). Measured result:
+placed silicon **13.91 → 12.75 mm²** (a **1.16 mm² saving**, matching the
+1.13 → 0.02 mm² boot_mem delta), die **21.72 → 19.52 mm²**, core **21.32 →
+19.14 mm²**, utilization **65.3 % → 66.6 %**.
 
 ## Comparison
 
 | | jcore J4+MMU flash | KianV |
 |---|---|---|
-| Placed silicon (cells + SRAM) | **13.9 mm²** (≈12.8 mm² est. post-scratchpad-removal, top not re-run) | ~13 mm² |
-| Core @ ~65 % util | **21.3 mm²** (top not re-run since boot_mem shrink) | 20.1 mm² (die) |
+| Placed silicon (cells + SRAM) | **12.75 mm²** (measured, post-scratchpad-removal) | ~13 mm² |
+| Core @ ~67 % util | **19.14 mm²** | 20.1 mm² (die) |
 | ISA / class | SH-2-compatible J4, SH-4-class MMU | RV32IMA + SV32 |
 | Linux-capable | yes (MMU in RTL) | yes (uLinux/XV6) |
 | On-chip cache SRAM | 2×8 KB (vendor macros) | yes ("cache SRAM around the core") |
@@ -84,10 +89,11 @@ and both remain estimates pending an actual top re-run).
 | Flash boot | QSPI XIP (PR #98) | SPI-flash XIP |
 
 **Verdict:** the J4+MMU flash SoC **fits the same ~20 mm² GF180 die class as KianV, at
-parity (≈5 % larger core), not with headroom.** Both are SRAM-dominated; the lever for
-either is cache size. This corrects an earlier naive impression of large headroom that
-came from summing per-block die boxes (double-counting whitespace) against KianV's full
-die — the integrated 13.9 mm² placed-silicon figure is the honest, like-for-like number.
+parity — now dead-even, ~2 % under KianV on placed silicon.** Both are SRAM-dominated;
+the lever for either is cache size. This corrects an earlier naive impression of large
+headroom that came from summing per-block die boxes (double-counting whitespace)
+against KianV's full die — the integrated 12.75 mm² placed-silicon figure (measured,
+post-scratchpad-removal) is the honest, like-for-like number.
 
 ## Basis / caveats (honesty)
 
