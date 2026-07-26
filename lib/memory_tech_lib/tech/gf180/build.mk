@@ -4,10 +4,14 @@
 # build list (e.g. the gf180_j4mmu ASIC target's synth source generation),
 # never by build.mk/build_fpga.mk.
 #
-# Covers the cache tag macro (ram_2x8x256_1rw) and the cache data macro
-# (ram_2x8x2048_2rw); other memory_pack macros (ram_18x2048_1rw,
-# ram_32x1x512_2rw, rom_32x2048_1r) do not yet have a tech/gf180 backend.
+# Covers the 8 KB cache tag macro (ram_2x8x256_1rw) and data macro
+# (ram_2x8x2048_2rw), plus the Task 6 2 KB cache tag macro (ram_3x8x64_1rw)
+# and data macro (ram_2x8x512_2rw); other memory_pack macros
+# (ram_18x2048_1rw, ram_32x1x512_2rw, rom_32x2048_1r) do not yet have a
+# tech/gf180 backend.
 
 $(VHDLS) += tech/gf180/gf180mcu_fd_ip_sram_comp.vhd
 $(VHDLS) += tech/gf180/ram_2x8x256_1rw_gf180.vhd
 $(VHDLS) += tech/gf180/ram_2x8x2048_2rw_gf180.vhd
+$(VHDLS) += tech/gf180/ram_3x8x64_1rw_gf180.vhd
+$(VHDLS) += tech/gf180/ram_2x8x512_2rw_gf180.vhd

@@ -1,9 +1,14 @@
 -- SIM-ONLY behavioral stubs of the GF180MCU vendor hard-IP SRAM macros
 -- `gf180mcu_fd_ip_sram__sram512x8m8wm1` (used by bootram_equiv_tb.vhd, and
 -- now also by the gf180_j4mmu FLASH-variant cosim's vendor-SRAM cache DATA
--- RAM + boot stack lanes) and `gf180mcu_fd_ip_sram__sram256x8m8wm1` (the
--- cache TAG RAM lane, added for Task 6's PHASE B re-validation -- see
--- targets/asic/gf180_j4mmu/sim/xip_sim.sh). No in-tree behavioral
+-- RAM + boot stack lanes, AND the Task 6 2 KB cache DATA RAM --
+-- ram_2x8x512_2rw_gf180.vhd reuses this same 512-deep macro natively),
+-- `gf180mcu_fd_ip_sram__sram256x8m8wm1` (the 8 KB cache TAG RAM lane, added
+-- for Task 6's PHASE B re-validation -- see
+-- targets/asic/gf180_j4mmu/sim/xip_sim.sh), and
+-- `gf180mcu_fd_ip_sram__sram64x8m8wm1` (the 2 KB cache TAG RAM lane --
+-- ram_3x8x64_1rw_gf180.vhd -- added for Task 6/7's 2 KB GF180-vendor-SRAM
+-- boot gate). No in-tree behavioral
 -- VHDL/Verilog model of these vendor cells exists elsewhere (the tech/gf180
 -- wrappers for the cache RAM -- ram_2x8x256_1rw_gf180.vhd /
 -- ram_2x8x2048_2rw_gf180.vhd -- and the boot stack --
@@ -86,6 +91,48 @@ end entity;
 
 architecture sim of \gf180mcu_fd_ip_sram__sram256x8m8wm1\ is
   type mem_t is array (0 to 255) of std_logic_vector(7 downto 0);
+  signal mem : mem_t := (others => (others => '0'));
+  signal q_r : std_logic_vector(7 downto 0) := (others => '0');
+begin
+  process(CLK)
+    variable idx : integer;
+  begin
+    if rising_edge(CLK) then
+      if CEN = '0' then
+        idx := to_integer(unsigned(A));
+        if GWEN = '0' then
+          mem(idx) <= D;
+        else
+          q_r <= mem(idx);
+        end if;
+      end if;
+    end if;
+  end process;
+
+  Q <= q_r;
+end architecture;
+
+-- 64-deep x 8-bit sibling stub (same behavioral pattern/semantics as the
+-- 512x8/256x8 stubs above, just A(5:0) and a 64-entry array), for the Task 6
+-- 2 KB cache TAG RAM lane (ram_3x8x64_1rw_gf180.vhd binds
+-- gf180mcu_fd_ip_sram__sram64x8m8wm1).
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity \gf180mcu_fd_ip_sram__sram64x8m8wm1\ is
+  port (
+    CLK  : in  std_logic;
+    CEN  : in  std_logic;
+    GWEN : in  std_logic;
+    WEN  : in  std_logic_vector(7 downto 0);
+    A    : in  std_logic_vector(5 downto 0);
+    D    : in  std_logic_vector(7 downto 0);
+    Q    : out std_logic_vector(7 downto 0));
+end entity;
+
+architecture sim of \gf180mcu_fd_ip_sram__sram64x8m8wm1\ is
+  type mem_t is array (0 to 63) of std_logic_vector(7 downto 0);
   signal mem : mem_t := (others => (others => '0'));
   signal q_r : std_logic_vector(7 downto 0) := (others => '0');
 begin

@@ -54,4 +54,23 @@ package gf180_sram_comp_pkg is
       Q    : out std_logic_vector(7 downto 0));
   end component;
 
+  -- 64-deep x 8-bit sibling macro (same port semantics/polarities as the
+  -- 256x8/512x8 variants above, just A(5:0)). Used by the Task 6 (2 KB
+  -- cache) cache TAG RAM wrapper (ram_3x8x64_1rw_gf180.vhd), which tiles 3
+  -- of these (one per 8-bit tag byte-lane) to cover 64-deep x 24-bit --
+  -- native 1:1 fit, confirmed shipped by the PDK
+  -- ($PDK_ROOT/gf180mcuC/libs.ref/gf180mcu_fd_ip_sram/verilog/
+  -- gf180mcu_fd_ip_sram__sram64x8m8wm1__blackbox.v), so no half/quarter-used
+  -- larger macro fallback was needed.
+  component \gf180mcu_fd_ip_sram__sram64x8m8wm1\ is
+    port (
+      CLK  : in  std_logic;
+      CEN  : in  std_logic;
+      GWEN : in  std_logic;
+      WEN  : in  std_logic_vector(7 downto 0);
+      A    : in  std_logic_vector(5 downto 0);
+      D    : in  std_logic_vector(7 downto 0);
+      Q    : out std_logic_vector(7 downto 0));
+  end component;
+
 end package gf180_sram_comp_pkg;
