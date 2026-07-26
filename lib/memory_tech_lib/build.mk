@@ -6,6 +6,7 @@ include $(dir $(lastword $(MAKEFILE_LIST)))build_core.mk
 $(VHDLS) += ram_18x2048_1rw.vhd
 $(VHDLS) += ram_2x8x256_1rw.vhd
 $(VHDLS) += ram_2x8x64_1rw.vhd
+$(VHDLS) += ram_3x8x64_1rw.vhd
 $(VHDLS) += ram_32x1x512_2rw.vhd
 $(VHDLS) += ram_2x8x2048_2rw.vhd
 $(VHDLS) += ram_2x8x512_2rw.vhd
@@ -18,6 +19,7 @@ $(VHDLS) += rom_1r_mems.vhd
 $(VHDLS) += tech/sim/ram_18x2048_1rw_sim.vhd
 $(VHDLS) += tech/sim/ram_2x8x256_1rw_sim.vhd
 $(VHDLS) += tech/sim/ram_2x8x64_1rw_sim.vhd
+$(VHDLS) += tech/sim/ram_3x8x64_1rw_sim.vhd
 $(VHDLS) += tech/sim/ram_2x8x2048_2rw_sim.vhd
 $(VHDLS) += tech/sim/ram_2x8x512_2rw_sim.vhd
 $(VHDLS) += tech/sim/ram_32x1x512_2rw_sim.vhd
