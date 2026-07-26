@@ -50,13 +50,13 @@ if [ "$(printf '%s\n' "$CHANGED_MINUS" | wc -l)" -ne 1 ] || [ "$(printf '%s\n' "
   exit 1
 fi
 
-if ! printf '%s\n' "$CHANGED_MINUS" | grep -q 'CACHE_INDEX_BITS'; then
+if ! printf '%s\n' "$CHANGED_MINUS" | grep -qi 'CACHE_INDEX_BITS'; then
   echo "ERROR: the one changed line is not the CACHE_INDEX_BITS constant:" >&2
   printf '%s\n' "$DIFF" >&2
   exit 1
 fi
 
-if ! printf '%s\n' "$CHANGED_PLUS" | grep -q 'CACHE_INDEX_BITS.*:= *6'; then
+if ! printf '%s\n' "$CHANGED_PLUS" | grep -qi 'CACHE_INDEX_BITS.*:= *6'; then
   echo "ERROR: $OVERRIDE's CACHE_INDEX_BITS override is not := 6 (2 KB):" >&2
   printf '%s\n' "$DIFF" >&2
   exit 1
