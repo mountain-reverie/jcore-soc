@@ -105,11 +105,11 @@ if [ "${1:-}" = "--mmu" ]; then
   for g in "${MMU_GUARDS[@]}"; do
     if [ "$first" = 1 ]; then
       # first call builds the CONFIG_MMU_ARCH=1 cosim, then runs guard $g
-      JCORE_SOC="$ROOT" components/cpu/sim/mmu_sim.sh "$g"
+      JCORE_SOC="$ROOT" "$ROOT/components/cpu/sim/mmu_sim.sh" "$g"
       first=0
     else
       # -n reuses the built cosim (still regenerates the J4 decoder on disk)
-      JCORE_SOC="$ROOT" components/cpu/sim/mmu_sim.sh -n "$g"
+      JCORE_SOC="$ROOT" "$ROOT/components/cpu/sim/mmu_sim.sh" -n "$g"
     fi
   done
   echo "==> MMU translation guard PASSED (${MMU_GUARDS[*]})"
