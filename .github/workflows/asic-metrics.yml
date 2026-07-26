@@ -18,6 +18,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: cache_pkg_2k.vhd drift guard (2KB cache target-local override)
+        # Asserts targets/asic/gf180_j4mmu/cache_pkg_2k.vhd differs from the
+        # submodule's components/cpu/cache/cache_pkg.vhd in exactly one line
+        # (CACHE_INDEX_BITS := 6) -- catches upstream cache_pkg.vhd drift
+        # this target-local copy would otherwise silently miss. Cheap/no PDK,
+        # so it runs before the (also cheap) RTL sim gate.
+        run: tools/asic/tests/cache_pkg_2k_drift.sh
       - name: RTL boot + MMU translation cosim guard (hard gate)
         # sim/rtl.sh --mmu regenerates the SoC via soc_gen itself and builds a
         # real boot image; it transiently dirties components/cpu (MMU decoder
