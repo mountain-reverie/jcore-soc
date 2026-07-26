@@ -211,6 +211,6 @@ begin
             uart0_tx => uart0_tx
         );
     -- Zero out unused signals
-    debug_i <= (en => '0', cmd => BREAK, ir => (others => '0'), d => (others => '0'), d_en => '0');
+    debug_i <= (en => '0', cmd => break, ir => (others => '0'), d => (others => '0'), d_en => '0');
     dma_dbus_o <= (en => '0', a => (others => '0'), d => (others => '0'), wr => '0', we => (others => '0'), burst32 => '0', burst16 => '0', bgrp => '0');
 end;

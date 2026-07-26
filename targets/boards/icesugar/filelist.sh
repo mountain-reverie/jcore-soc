@@ -17,10 +17,12 @@ FILES=(
   # ghdl needs it analyzed before cpu.vhd for all variants.
   $CPU/core/tlb.vhd
   $CPU/core/mult_pkg.vhd
+  $CPU/core/divider_pkg.vhd
   $CPU/decode/decode_pkg.vhd
   $CPU/core/datapath_pkg.vhd
   $CPU/core/cpu.vhd
   $CPU/core/mult.vhd
+  $CPU/core/divider.vhd
   $CPU/core/datapath.vhd
   $CPU/core/shifter.vhd
   $CPU/core/register_file.vhd

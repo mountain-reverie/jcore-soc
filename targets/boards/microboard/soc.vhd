@@ -193,7 +193,7 @@ begin
         );
     -- Zero out unused signals
     cache01sel_ctrl_temp <= '0';
-    cpu1_event_i <= (en => '0', cmd => INTERRUPT, vec => (others => '0'), msk => '0', lvl => (others => '0'));
+    cpu1_event_i <= (en => '0', cmd => interrupt, vec => (others => '0'), msk => '0', lvl => (others => '0'));
     dcache0_ctrl <= (en => '0', inv => '0');
     dcache1_ctrl <= (en => '0', inv => '0');
     dma_dbus_o <= (en => '0', a => (others => '0'), d => (others => '0'), wr => '0', we => (others => '0'), burst32 => '0', burst16 => '0', bgrp => '0');
