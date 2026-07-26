@@ -166,13 +166,19 @@ SYNTH_TOP=""
 # is shared with synth_gf180.sh/emit_gf180_metrics.py -- left untouched here.
 SRC_VARIANT="base"
 case "$MACRO" in
-  dcache)
+  dcache|dcache_2k)
     ELAB_TOP="dcache_adapter_gf180"; SYNTH_TOP="dcache_adapter"; SRC_VARIANT="gf180_cache" ;;
-  icache)
+  icache|icache_2k)
     ELAB_TOP="icache_adapter_gf180"; SYNTH_TOP="icache_adapter"; SRC_VARIANT="gf180_cache" ;;
   boot_mem)
     ELAB_TOP="boot_mem_top_gf180"; SYNTH_TOP="boot_mem_top_gf180"; SRC_VARIANT="gf180_bootmem" ;;
 esac
+# icache_2k/dcache_2k reuse the exact gf180_cache netlist-gen codepath above
+# (same ELAB_TOP/SYNTH_TOP as icache/dcache -- the macro= name only selects
+# which librelane/<name>/config.json+netlist dir is used); what actually
+# switches the 24-bit-tag/2 KB cache_pkg binding in is CACHE=2k being set in
+# the environment when this script (and gen_synth_sources.sh below) runs --
+# see the CACHE env handling a few lines down.
 if [ -z "$ELAB_TOP" ]; then
   while read -r m elab_top synth_top _rest; do
     case "$m" in ''|\#*) continue;; esac
@@ -195,6 +201,16 @@ fi
 
 NETV="$MDIR/${SYNTH_TOP}.v"
 echo "run.sh: generating $NETV (ghdl -e $ELAB_TOP; synth -top $SYNTH_TOP; src-variant=$SRC_VARIANT)" >&2
+# 2 KB cache macros (icache_2k/dcache_2k): set CACHE=2k so
+# gen_synth_sources.sh substitutes cache_pkg_2k.vhd (CACHE_INDEX_BITS=6,
+# 24-bit tag) for the submodule's 8 KB cache_pkg.vhd, and picks up the
+# ram_3x8x64_1rw/ram_2x8x512_2rw gf180 wrapper files instead of the 8 KB
+# ram_2x8x256_1rw/ram_2x8x2048_2rw ones (see GF180_MEM_EXTRA in that script).
+# Base icache/dcache MUST NOT have CACHE set (stay 8 KB, byte-identical).
+case "$MACRO" in
+  icache_2k|dcache_2k) export CACHE=2k ;;
+  *) unset CACHE ;;
+esac
 source "$ROOT/targets/asic/gf180_j4mmu/metrics/gen_synth_sources.sh"   # exports GHDL_BASE, GHDL_BASE_GF180_CACHE, GHDL_BASE_GF180_BOOTMEM
 if [ "$SRC_VARIANT" = "gf180_cache" ]; then
   GHDL_CMD="$GHDL_BASE_GF180_CACHE"
@@ -238,7 +254,7 @@ TO_ARGS=()
 # dcache/icache carry vendor SRAM macros whose power pins the default PDN
 # generation doesn't fully strap (see OL_SKIP comment above) -- skip the
 # IR-drop signoff step for them unless the caller already set OL_SKIP.
-if [ -z "$OL_SKIP" ] && { [ "$MACRO" = "dcache" ] || [ "$MACRO" = "icache" ] || [ "$MACRO" = "boot_mem" ]; }; then
+if [ -z "$OL_SKIP" ] && { [ "$MACRO" = "dcache" ] || [ "$MACRO" = "icache" ] || [ "$MACRO" = "dcache_2k" ] || [ "$MACRO" = "icache_2k" ] || [ "$MACRO" = "boot_mem" ]; }; then
   # Checker.PowerGridViolations is also skipped: it's a *deferred* checker
   # (collects issues, only raised at the very end of the run regardless of
   # --to) that fires on the same macro-PDN-strap gap as IRDropReport above

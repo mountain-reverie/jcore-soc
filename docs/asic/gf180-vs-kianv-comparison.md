@@ -60,6 +60,48 @@ not depend on routing headroom either way.
 | qspi_flash_ctrl | 0.56 | logic |
 | mem_region_mux | 0.09 | logic |
 
+## 2 KB cache variant (this work): measured, then composed
+
+The area is **cache-dominated**, so the honest lever is cache size. Both caches were
+re-hardened standalone at **2 KB** (24-bit tag, `CACHE_INDEX_BITS=6`) through the same
+LibreLane detailed-routing + RCX flow (`run.sh macro=icache_2k` / `macro=dcache_2k`,
+stop at `Magic.WriteLEF`), binding the widened tag to 3×`sram64x8` and the data to
+4×`sram512x8` vendor macros (vs the 8 KB build's 2–4×`sram256x8` tag + 16×`sram512x8`
+data). Both routed clean.
+
+| 2 KB cache (measured, routed) | Placed silicon (cells + SRAM) | SRAM macros | Routed die | Util |
+|---|---|---|---|---|
+| icache_2k | **1.32 mm²** | 1.14 mm² (7 macros) | 4.32 mm² | 31.3 % |
+| dcache_2k | **1.79 mm²** | 1.44 mm² (10 macros) | 8.12 mm² | 22.4 % |
+| **both 2 KB caches** | **3.11 mm²** | 2.58 mm² | — | — |
+
+**Placed silicon is the comparable basis, not the die box.** The two routed dies differ
+(4.32 vs 8.12 mm²) only because `dcache_2k` was hardened on a deliberately loose
+floorplan (util 22 %) to clear an OpenROAD CTS clock-buffer legalization failure
+(`DPL-0036` on `clkbuf_3_*`: the level-3 clock buffers globally place over the clustered
+macro block and can't legalize nearby on a tight die — enlarging the die spreads them
+into open sites). That extra die area is routing/legalization whitespace, not silicon.
+
+**Composed 2 KB top (placed silicon).** Swapping the two 8 KB caches out of the measured
+12.80 mm² integrated top for the 2 KB ones:
+
+```
+top(2 KB) = top(8 KB) − caches(8 KB) + caches(2 KB)
+          = 12.80  − (3.83 + 4.19)  + (1.32 + 1.79)
+          = 12.80  −  8.03          +  3.11
+          = 7.89 mm² placed silicon
+```
+
+a **−4.91 mm² (−38 %)** reduction in placed silicon vs the 8 KB top. At the 8 KB top's
+measured **61.5 % routing utilization**, that composes to an implied **core die of
+≈ 7.89 / 0.615 ≈ 12.8 mm²** (core-only, no pad ring — same basis caveat as the 8 KB
+top). So the 2 KB variant lands **~39 % under KianV on placed silicon** (7.89 vs
+~13 mm²) and its estimated core die (~12.8 mm²) sits **~36 % under KianV's 20.1 mm²
+padded die** — even before accounting for the pad ring KianV's number includes and
+jcore's does not. The composed die is an **estimate** (the two 2 KB caches are measured
++ routed; the top was not re-integrated with them), whereas the 12.80 mm² 8 KB
+placed-silicon figure is a measured integrated result.
+
 ## Boot-memory refinement: scratchpad SRAM eliminated
 
 The 2 KB writable boot-time stack SRAM (4×`sram512x8` vendor macros) has been
@@ -155,3 +197,87 @@ routing-congestion sensitivity of this cache-dominated design) still apply.
   standalone while the wired SoC still used inferred-flop cache/boot RAM. The flash
   variant is now genuinely bound to the vendor-SRAM cache + boot architectures, and
   re-validated to boot.
+
+## 2 KB caches (Task 8): standalone hardens + composed padded-die estimate
+
+The 8 KB caches above are the SoC's dominant area cost. This section hardens the
+**2 KB cache variant** (`CACHE=2k`, `targets/asic/gf180_j4mmu/cache_pkg_2k.vhd`,
+`CACHE_INDEX_BITS=6`, 24-bit tag) through LibreLane standalone, to see how far a
+smaller-cache configuration could shrink the die.
+
+**MEASURED** (real LibreLane 2.4.2/docker runs, `OL_TO=Magic.WriteLEF`, gf180mcuC PDK):
+
+| Macro | Tag RAM | Data RAM | `design__instance__area` (placed silicon) | Run dir |
+|---|---|---|---|---|
+| icache_2k | 3×`sram64x8m8wm1` | 4×`sram512x8m8wm1` | **1.324 mm²** (macros 1.139 + std-cell 0.185) | `targets/asic/gf180_j4mmu/librelane/icache_2k/runs/smoke/final/metrics.json` |
+| dcache_2k | 6×`sram64x8m8wm1` (tag0+tag1) | 4×`sram512x8m8wm1` | **1.788 mm²** (macros 1.441 + std-cell 0.347) | `targets/asic/gf180_j4mmu/librelane/dcache_2k/runs/smoke/final/metrics.json` |
+
+Both runs reached `Magic.WriteLEF` cleanly (rc=0, `final/metrics.json` present) on the
+**second attempt** for each — the first attempt at each macro's floorplan (deliberately
+tight, mirroring the 8 KB configs' column/row pitch) hit `[DPL-0036] Detailed placement
+failed` at `OpenROAD.CTS` (2 clock buffers had nowhere legal to land once the macros'
+halos were carved out of a floorplan sized only slightly above the macros' own
+footprint). Both macro **instance hierarchy paths were correct on the first try**
+(`u_ucache_ram.tag.subword_gen:N.sram_i`, `u_ucache_ram.ram:N.ram_s.col_gen:M.sram_i`,
+`u_dcache_ram.tag0/tag1.subword_gen:N.sram_i`, `u_dcache_ram.ram:N.sc.ram_s.col_gen:M.sram_i`
+— no "unplaced macro" errors in either attempt), so the fix was purely floorplan
+headroom: widening `DIE_AREA` (icache_2k 1970×1400→2400×1800; dcache_2k
+1970×1900→2400×2300→2900×2800) let CTS legalize cleanly on the retry, at the cost of a
+deliberately loose (22–31 % `design__instance__utilization`) container — **not** a tight,
+proportional floorplan like the 8 KB configs' ~72 %. Because of that, this section uses
+`design__instance__area` (the actual placed cell+macro footprint OpenROAD reports) as
+the "measured area" for the 2 KB caches, not `DIE_AREA` — using the (arbitrarily
+generous) container size would overstate them. This differs from the 8 KB per-block
+table above, which uses each standalone run's `DIE_AREA` (a reasonably tight
+proxy for placed silicon at that config's own floorplan) — a methodological
+inconsistency called out here for honesty, not hidden.
+
+Along the way, a real bug was found and fixed (not present before this task): the base
+entity declarations `lib/memory_tech_lib/ram_3x8x64_1rw.vhd` and
+`ram_2x8x512_2rw.vhd` were missing from `GF180_MEM_EXTRA` in
+`targets/asic/gf180_j4mmu/metrics/gen_synth_sources.sh` (only their `(gf180)`
+architecture bodies had been added previously) — `ghdl --synth` failed with
+`unit "ram_3x8x64_1rw" not found in library "work"` until both entity files were added
+alongside the architectures.
+
+**ESTIMATED composition** (2 KB icache/dcache MEASURED above + the unchanged non-cache
+block areas from the 8 KB per-block table + the top-level integration glue overhead
+implied by the 8 KB top run, `12.80 − (5.06+5.06+1.22+0.02+0.05+0.41+0.56+0.09) ≈ 0.33 mm²`,
+reused unchanged since it is not cache-size-dependent):
+
+| Block | mm² | Source |
+|---|---|---|
+| icache_2k | 1.324 | MEASURED (this task) |
+| dcache_2k | 1.788 | MEASURED (this task) |
+| j4_core | 1.22 | 8 KB per-block table (unchanged) |
+| boot_mem | 0.02 | 8 KB per-block table (unchanged) |
+| sdram_ctrl | 0.05 | 8 KB per-block table (unchanged) |
+| devices | 0.41 | 8 KB per-block table (unchanged) |
+| qspi_flash_ctrl | 0.56 | 8 KB per-block table (unchanged) |
+| mem_region_mux | 0.09 | 8 KB per-block table (unchanged) |
+| top-level glue (reused) | 0.33 | derived from the 8 KB top run, not re-measured |
+| **Composed placed silicon, 2 KB caches** | **≈ 5.79 mm²** | sum, ESTIMATED |
+
+**Routed-die estimate**: reusing the 8 KB top run's measured **61.5 % core
+utilization** (same formula/approach as the 8 KB section; NOT re-derived for 2 KB —
+smaller macros plausibly route even more comfortably, but that is not verified here) —
+`5.79 / 0.615 ≈ 9.42 mm²` routed core-only die, ESTIMATED (no 2 KB top-level integration
+run was performed; this is a composition, not a measurement).
+
+**Padded-die estimate**: the 8 KB section explicitly marks the pad ring as
+**out of scope ("B-scope")** — no `gf180mcu_fd_io` pad-ring formula exists anywhere in
+this repo's prior work to reuse. This section adds its own ESTIMATED pad frame: treating
+the 9.42 mm² routed core as square (side ≈ 3.07 mm) and adding a ~350 µm pad-cell frame
+on all sides (a typical GF180 I/O-cell height, not a routed/placed pad ring, no specific
+pad count derived) gives a padded side of ≈ 3.77 mm → **≈ 14.2 mm² padded die,
+ESTIMATED**.
+
+**Verdict**: **≈ 14.2 mm² < 20.1 mm²** — the composed 2 KB-cache padded-die estimate
+fits comfortably under KianV's reference die, with roughly 6 mm² (30 %) of headroom.
+This is expected (2 KB caches are 1/4 the SRAM of the 8 KB parity-point config above)
+but should be read as a **composed, non-apples-to-apples-routed estimate**: only the
+two cache macros were actually hardened for this task; the rest of the composition (top
+glue, non-cache blocks, routing utilization factor, pad frame) is carried over or
+estimated, not independently re-measured at 2 KB. A real top-level 2 KB integration run
+(mirroring the 8 KB `librelane/top` hierarchical black-box flow) would be needed to
+turn this into a measured number.
