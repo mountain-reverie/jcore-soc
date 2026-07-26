@@ -25,7 +25,7 @@ constant CACHE_I_WIDTH_BITS      : natural := 1;  -- 16 bit instructions
 constant CACHE_D_WIDTH_BITS      : natural := 2;  -- 32 bit data
 
 constant CACHE_TAG_WIDTH         : natural := CACHE_REGION_WIDTH - CACHE_LINE_WIDTH_BITS - CACHE_INDEX_BITS;
-constant CACHE_PA_TAG_WIDTH      : natural := CACHE_TAG_WIDTH;  -- PA[27:13], 15 b: matches the 28-bit cache region (fetch addr is 28-bit)
+constant CACHE_PA_TAG_WIDTH      : natural := CACHE_TAG_WIDTH;  -- PA tag = CACHE_REGION_WIDTH - CACHE_LINE_WIDTH_BITS - CACHE_INDEX_BITS bits (15 b @ 8KB; widens as the cache shrinks)
 
 type mmu_cache_i_t is record
   pa_tag : std_logic_vector(CACHE_PA_TAG_WIDTH-1 downto 0);
