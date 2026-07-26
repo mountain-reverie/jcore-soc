@@ -60,6 +60,23 @@ for _f in "${_RAW_FILES[@]}"; do
   esac
 done
 
+# Task 4 (2 KB cache_pack spike): CACHE=2k substitutes the target-local
+# cache_pkg_2k.vhd (CACHE_INDEX_BITS=6, 2 KB) for the submodule's
+# components/cpu/cache/cache_pkg.vhd (CACHE_INDEX_BITS=8, 8 KB) -- same
+# package name `cache_pack`, mirrors sim/xip_sim.sh's CACHE=2k splice.
+# Default (CACHE unset) keeps the committed 8 KB behavior byte-identical.
+if [ "${CACHE:-}" = "2k" ]; then
+  _CACHE_FILES=()
+  for _f in "${FILES[@]}"; do
+    case "$_f" in
+      components/cpu/cache/cache_pkg.vhd)
+        _CACHE_FILES+=(targets/asic/gf180_j4mmu/cache_pkg_2k.vhd) ;;
+      *) _CACHE_FILES+=("$_f") ;;
+    esac
+  done
+  FILES=("${_CACHE_FILES[@]}")
+fi
+
 WORKDIR="${WORKDIR:-$GEN/work}"
 mkdir -p "$WORKDIR"
 GHDL_BASE="ghdl --std=93 -fexplicit -fsynopsys --syn-binding --workdir=$WORKDIR $CFG targets/clk_config.vhd ${FILES[*]}"
