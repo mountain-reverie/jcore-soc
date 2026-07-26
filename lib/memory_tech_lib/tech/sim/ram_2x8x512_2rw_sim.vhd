@@ -1,4 +1,4 @@
--- Models a 16x2048 RAM with 2 read/write ports.
+-- Models a 16x512 RAM with 2 read/write ports.
 
 -- Uses Vital_Timing to simulate read delay and check setup and hold times.
 -- This is not a proper Vital model but just uses some of the Vital_timing procedures.

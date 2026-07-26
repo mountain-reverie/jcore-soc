@@ -30,7 +30,6 @@ done
 # exactly one of).
 DIFF="$(diff -U0 "$SUBMODULE" "$OVERRIDE" || true)"
 HUNKS="$(printf '%s\n' "$DIFF" | grep -c '^@@' || true)"
-MINUS="$(printf '%s\n' "$DIFF" | grep -c '^-CACHE_INDEX_BITS\|^-constant CACHE_INDEX_BITS' || true)"
 CHANGED_MINUS="$(printf '%s\n' "$DIFF" | grep '^-' | grep -v '^---' || true)"
 CHANGED_PLUS="$(printf '%s\n' "$DIFF" | grep '^+' | grep -v '^+++' || true)"
 
