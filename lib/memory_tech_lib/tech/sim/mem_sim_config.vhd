@@ -23,6 +23,11 @@ configuration ram_1rw_sim of ram_1rw is
           use entity work.ram_2x8x64_1rw(sim);
         end for;
       end for;
+      for genram_3x8x64
+        for all : ram_3x8x64_1rw
+          use entity work.ram_3x8x64_1rw(sim);
+        end for;
+      end for;
       for genram_2x8x256
         for all : ram_2x8x256_1rw
           use entity work.ram_2x8x256_1rw(sim);
