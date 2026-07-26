@@ -176,12 +176,16 @@ GF180_MEM_EXTRA=(
   lib/memory_tech_lib/ram_32x1x512_2rw.vhd
   lib/memory_tech_lib/ram_2x8x256_1rw.vhd
   lib/memory_tech_lib/ram_2x8x2048_2rw.vhd
+  lib/memory_tech_lib/ram_3x8x64_1rw.vhd
+  lib/memory_tech_lib/ram_2x8x512_2rw.vhd
   lib/memory_tech_lib/tech/sim/ram_18x2048_1rw_sim.vhd
   lib/memory_tech_lib/tech/sim/ram_32x1x512_2rw_sim.vhd
   lib/memory_tech_lib/tech/gf180/gf180mcu_fd_ip_sram_comp.vhd
   components/memory/tests/gf180_sram_sim_stub.vhd
   lib/memory_tech_lib/tech/gf180/ram_2x8x256_1rw_gf180.vhd
   lib/memory_tech_lib/tech/gf180/ram_2x8x2048_2rw_gf180.vhd
+  lib/memory_tech_lib/tech/gf180/ram_3x8x64_1rw_gf180.vhd
+  lib/memory_tech_lib/tech/gf180/ram_2x8x512_2rw_gf180.vhd
   lib/memory_tech_lib/ram_1rw_mems.vhd
   lib/memory_tech_lib/ram_2rw_mems.vhd
   lib/memory_tech_lib/tech/gf180/mem_gf180_config.vhd
