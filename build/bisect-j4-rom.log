@@ -1,0 +1,55 @@
+# Task 5 bisect attempt: j4-rom, THRESHOLD=28.66, SEEDS=1
+#
+# NOTE: this is NOT a `git bisect log` replay -- the bisect never reached a
+# first-bad commit, so there is nothing for `git bisect log` to capture after
+# `git bisect reset`. This file is a hand-written record of what happened,
+# reconstructed from the run's stderr/stdout.
+#
+# git bisect start
+# git bisect bad 850fb17be50c1889eb97753322c789a7cf6cf75b
+# git bisect good 9b91c598b4f46519933aa61b43ed3d5abb2e07c1
+#
+# FIRST finding: 9b91c598b4f46519933aa61b43ed3d5abb2e07c1 is NOT an ancestor
+# of 850fb17be50c1889eb97753322c789a7cf6cf75b:
+#
+#   $ git merge-base --is-ancestor 9b91c59 850fb17 ; echo $?
+#   1   (not an ancestor)
+#   $ git merge-base 9b91c59 850fb17
+#   53891e2407a75c1f28732ff63dcd2410d4cb86fd
+#   $ git rev-list --count 9b91c59..850fb17
+#   167
+#
+# "old" and "new" are two tips on DIVERGED lines of development that happen to
+# share a commit subject ("feat(synth): FPGA-optimised J4 register file (EBR)
+# + per-core elaboration tag") -- they are not before/after points on one
+# line of history. `git bisect` between them walks the entire merge-base
+# subtree, which is ~167 commits of UNRELATED components/cpu mainline work
+# (SH-2A/J2A ISA groups, MMU S-I* hardening, insns2asm/measure tooling, CI,
+# vsg style passes, etc.) -- none of it authored to build standalone against
+# jcore-soc's fixed wrapper (targets/cpu_core.vhd and friends).
+#
+# RESULT: every single one of the 167 commits in the range -- both those on
+# the path from the merge-base to old and from the merge-base to new -- fails
+# to build via tools/fpga/soc_fmax.sh, with the SAME error at GHDL elaboration
+# for every one probed:
+#
+#   targets/cpu_core.vhd:60:49:error: generic "CORE_ID" is not an interface name
+#
+# i.e. the fixed jcore-soc-side targets/cpu_core.vhd generic-maps a CORE_ID
+# port/generic that most historical components/cpu commits' core/cpu.vhd (or
+# equivalent) does not expose -- only the two tip commits (9b91c59, 850fb17)
+# happen to match it, because they are the two specific pins this whole
+# investigation was set up to compare, not because the interface is stable
+# across the range.
+#
+# Consequence for `git bisect run`: every commit returns 125 (skip). After
+# exhausting the range git reported:
+#
+#   There are only 'skip'ped commits left to test.
+#   The first bad commit could be any of:
+#   <all ~140 remaining candidate SHAs>
+#   We cannot bisect more!
+#   error: bisect run cannot continue any more
+#
+# No first-bad commit was identified. `git bisect reset` was run and the
+# submodule was restored to investigate/j4-ecp5-fmax-attribution (722e164).
