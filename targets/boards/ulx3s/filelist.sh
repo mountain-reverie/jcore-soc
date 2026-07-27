@@ -18,12 +18,10 @@ FILES=(
   # generate), so ghdl needs it analyzed before cpu.vhd for ALL variants.
   $CPU/core/tlb.vhd
   $CPU/core/mult_pkg.vhd
-  $CPU/core/divider_pkg.vhd
   $CPU/decode/decode_pkg.vhd
   $CPU/core/datapath_pkg.vhd
   $CPU/core/cpu.vhd
   $CPU/core/mult.vhd
-  $CPU/core/divider.vhd
   $CPU/core/datapath.vhd
   $CPU/core/shifter.vhd
   $CPU/core/register_file.vhd
@@ -34,6 +32,39 @@ FILES=(
   $CPU/decode/decode_table.vhd
   $CPU/decode/decode_core.vhd
 )
+# jcore-cpu gained core/divider{,_pkg}.vhd at 998a09c (SH-2A sequential divider).
+# Pins older than that do not have them, and naming a nonexistent file makes ghdl
+# fail outright -- which would block bisecting the submodule across that boundary.
+# Include them only when present, and say so out loud: a silently shrinking file
+# list would mean quietly synthesizing a different design than intended.
+#
+# Order matters: divider_pkg must precede cpu.vhd (which `use`s it) and divider.vhd
+# must precede datapath.vhd. Both are inserted by rebuilding FILES around the
+# anchors rather than appending, so analyze order is preserved.
+_fl_with_divider=()
+for _f in "${FILES[@]}"; do
+  case "$_f" in
+    "$CPU/core/mult_pkg.vhd")
+      _fl_with_divider+=("$_f")
+      if [ -f "$CPU/core/divider_pkg.vhd" ]; then
+        _fl_with_divider+=("$CPU/core/divider_pkg.vhd")
+      else
+        echo "filelist: skipping absent $CPU/core/divider_pkg.vhd" >&2
+      fi
+      ;;
+    "$CPU/core/mult.vhd")
+      _fl_with_divider+=("$_f")
+      if [ -f "$CPU/core/divider.vhd" ]; then
+        _fl_with_divider+=("$CPU/core/divider.vhd")
+      else
+        echo "filelist: skipping absent $CPU/core/divider.vhd" >&2
+      fi
+      ;;
+    *) _fl_with_divider+=("$_f") ;;
+  esac
+done
+FILES=("${_fl_with_divider[@]}")
+unset _fl_with_divider _f
 # Splice in the soc_gen-generated variant synth sources, $CPU-prefixed.
 while IFS= read -r _f; do
   [ -n "$_f" ] && FILES+=("$CPU/$_f")
