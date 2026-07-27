@@ -80,9 +80,17 @@ FLOORPLAN=()
 case "$VARIANT" in
   *-dual) FLOORPLAN=(--pre-place targets/boards/ulx3s/floorplan_dual.py) ;;
 esac
+
+# Optional placement seed. nextpnr's placer is stochastic, so run-to-run Fmax
+# varies by several percent; a seed knob is what makes a measured noise band
+# possible. Unset SEED reproduces the historical command line exactly.
+SEED_ARG=()
+if [ -n "${SEED:-}" ]; then
+  SEED_ARG=(--seed "$SEED")
+fi
 nextpnr-ecp5 --85k --package CABGA381 \
   --json "$OUT/ulx3s.json" --lpf targets/boards/ulx3s/ulx3s.lpf \
-  --placer-heap-timingweight 35 "${FLOORPLAN[@]}" \
+  --placer-heap-timingweight 35 "${FLOORPLAN[@]}" "${SEED_ARG[@]}" \
   --timing-allow-fail --textcfg "$OUT/ulx3s.config" 2>&1 | tee "$OUT/nextpnr.log"
 ecppack "$OUT/ulx3s.config" "$OUT/ulx3s.bit"
 echo "built $OUT/ulx3s.bit"
