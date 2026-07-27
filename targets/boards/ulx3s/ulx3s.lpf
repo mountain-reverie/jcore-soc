@@ -14,6 +14,7 @@ LOCATE COMP "pin_btn6" SITE "D7";
 IOBUF PORT "pin_btn6" IO_TYPE=LVCMOS33 PULLMODE=DOWN;
 LOCATE COMP "pin_clk_25mhz" SITE "G2";
 IOBUF PORT "pin_clk_25mhz" IO_TYPE=LVCMOS33;
+FREQUENCY PORT "pin_clk_25mhz" 25 MHZ;
 LOCATE COMP "pin_ftdi_rxd" SITE "M1";
 IOBUF PORT "pin_ftdi_rxd" IO_TYPE=LVCMOS33;
 LOCATE COMP "pin_ftdi_txd" SITE "L4";
