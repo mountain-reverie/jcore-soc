@@ -9,9 +9,9 @@ import (
 )
 
 // LPF renders a Lattice .lpf constraint file for an ECP5 target: a LOCATE +
-// IOBUF line per padded pin. Per-pin IO standards and FREQUENCY constraints are
-// added in Phase 2 from the translated pins section; Phase 1 defaults to
-// LVCMOS33 so the build is wirable end to end.
+// IOBUF line per padded pin, plus a FREQUENCY line for any pin carrying a
+// `frequency` attribute (e.g. an oscillator input), giving nextpnr a real
+// timing target. Per-pin IO standards default to LVCMOS33.
 func LPF(res *elaborate.Resolution) (string, error) {
 	var b strings.Builder
 	for _, p := range sortedPins(res) {
@@ -25,6 +25,17 @@ func LPF(res *elaborate.Resolution) (string, error) {
 		// non-existent pin.
 		fmt.Fprintf(&b, "LOCATE COMP %q SITE %q;\n", port, strings.ToUpper(p.Pad))
 		fmt.Fprintf(&b, "IOBUF PORT %q %s;\n", port, lpfAttrs(p.Attrs))
+		if v, ok := p.Attrs["frequency"]; ok {
+			var freq string
+			if v.Kind == design.KindInt {
+				freq = fmt.Sprintf("%d", v.Int)
+			} else if v.Text != "" {
+				freq = v.Text
+			}
+			if freq != "" {
+				fmt.Fprintf(&b, "FREQUENCY PORT %q %s MHZ;\n", port, freq)
+			}
+		}
 	}
 	return b.String(), nil
 }
