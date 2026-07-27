@@ -164,8 +164,14 @@ begin
 
   -- cpu0 boot ROM region (ECP5 inferred EBR), fed via the local-mem splitter's
   -- rom side through the bus-delay shims. 14-bit = 16KB, matching one_cpu_m0.
+  -- RISING_EDGE_READ=true: moves the boot RAM's capture off the falling edge
+  -- and onto the rising edge, removing the historical 0.5-cycle posedge->
+  -- negedge critical path that capped ECP5 Fmax (nextpnr showed the 16
+  -- DP16KD block RAMs backing this instance as CLKAMUX/CLKBMUX=INV, the exact
+  -- sink of that path). Costs one wait state per boot-RAM access; see
+  -- bootram_infer's process/ack comments for the timing detail.
   sram : entity work.bootram_infer(inferred)
-    generic map (c_addr_width => 14)
+    generic map (c_addr_width => 14, RISING_EDGE_READ => true)
     port map (
       clk    => clk,
       ibus_i => cpu0_rominst_o,

@@ -5,7 +5,14 @@ use work.cpu2j0_pack.all;
 use work.boot_image_pkg.all;
 
 entity bootram_infer is
-  generic (c_addr_width : integer range 11 to 14 := 14);
+  generic (
+    c_addr_width : integer range 11 to 14 := 14;
+    -- Default false preserves the original falling-edge/0-wait-state timing
+    -- exactly (icesugar, the GF180 ASIC target and this file's own testbench
+    -- all rely on that byte-identical behaviour). Only ULX3S instantiations
+    -- set this true to move the capture to the rising edge for Fmax (see the
+    -- process and ack comments below) at the cost of one wait state/access.
+    RISING_EDGE_READ : boolean := false);
   port (
     clk    : in  std_logic;
     ibus_i : in  cpu_instruction_o_t;
@@ -37,19 +44,46 @@ architecture inferred of bootram_infer is
   signal d_word : word_t := (others => '0');
   signal i_word : word_t := (others => '0');
   signal i_half : std_logic := '0';
+
+  -- Only used when RISING_EDGE_READ: 1-cycle-delayed ack that accompanies
+  -- moving the capture from the falling edge (clkn-style) to the rising edge
+  -- (clk). See the process and the db_o.ack/ibus_o.ack assignments below.
+  signal db_ack_r   : std_logic := '0';
+  signal ibus_ack_r : std_logic := '0';
 begin
   -- synthesis translate_off
   assert BOOT_DEPTH <= WORDS
     report "boot_image_pkg BOOT_DEPTH exceeds boot RAM depth; image truncated"
     severity warning;
   -- synthesis translate_on
-  -- Data port (read/write) and instruction port (read-only), both on falling
-  -- edge so registered output is valid the same cycle ack=en is asserted,
-  -- matching memory_fpga's 0-wait contract (bus delays are FALSE).
+  -- Data port (read/write) and instruction port (read-only). RISING_EDGE_READ
+  -- is a generic (elaboration-time constant), so exactly one of the two edge
+  -- branches below is ever active in a given instance; this is not a runtime
+  -- mux.
+  --
+  -- Default (RISING_EDGE_READ = false): capture on the FALLING edge so
+  -- registered output is valid the same cycle ack=en is asserted, matching
+  -- memory_fpga's 0-wait contract (bus delays are FALSE). This is the
+  -- half-cycle path: the CPU asserts en+address at a rising edge, the
+  -- intervening falling edge clocks the data, and the CPU samples it at the
+  -- NEXT rising edge. Kept as the default so icesugar, the GF180 ASIC target
+  -- and this file's own testbench remain byte-identical.
+  --
+  -- RISING_EDGE_READ = true (ULX3S only): capture on the RISING edge instead,
+  -- giving this path a full clock period instead of half -- this is what
+  -- removes bootram_infer as the ECP5 Fmax limiter. Read data now lands one
+  -- cycle later than before, so ack is delayed a cycle to match (below); every
+  -- access costs one additional wait state.
   process(clk)
     variable di : integer;
+    variable capture_edge : boolean;
   begin
-    if falling_edge(clk) then
+    if RISING_EDGE_READ then
+      capture_edge := rising_edge(clk);
+    else
+      capture_edge := falling_edge(clk);
+    end if;
+    if capture_edge then
       -- data port
       di := to_integer(unsigned(db_i.a(c_addr_width - 1 downto 2)));
       if db_i.en = '1' and db_i.wr = '1' then
@@ -66,19 +100,30 @@ begin
       -- instruction port
       i_word <= mem(to_integer(unsigned(ibus_i.a(c_addr_width - 1 downto 2))));
       i_half <= ibus_i.a(1);
+      -- ack for RISING_EDGE_READ: a one-cycle pulse per access that self-clears
+      -- while en is still held, so back-to-back accesses (e.g. continuously
+      -- asserted instruction fetch) each ack exactly once. A plain registered
+      -- `en` is WRONG here: for a continuously-enabled port it would go high
+      -- on the second cycle and then STAY high while the data lags one cycle
+      -- behind, so the CPU would consume the wrong (stale) word every single
+      -- cycle -- a hang, not a slowdown. Unused (left low) when
+      -- RISING_EDGE_READ is false.
+      if RISING_EDGE_READ then
+        db_ack_r   <= db_i.en   and not db_ack_r;
+        ibus_ack_r <= ibus_i.en and not ibus_ack_r;
+      end if;
     end if;
   end process;
 
-  -- Timing contract (matches memory_fpga, boot-mem bus delays are FALSE): ack
-  -- is combinational = en, while d_word/i_word are registered from the falling
-  -- edge. The CPU asserts en+address at a rising edge, the intervening falling
-  -- edge clocks the data, and the CPU samples it at the NEXT rising edge (when
-  -- ack, asserted since the request, is still seen). Data is NOT valid on the
-  -- same rising edge en first rises.
+  -- Timing contract: default (RISING_EDGE_READ=false, matches memory_fpga,
+  -- boot-mem bus delays FALSE) ack is combinational = en, valid the same
+  -- cycle since d_word/i_word were captured on the falling edge in between.
+  -- RISING_EDGE_READ=true: ack is the registered, 1-cycle-delayed version
+  -- above, since d_word/i_word are now only valid one cycle after en.
   db_o.d   <= d_word;
-  db_o.ack <= db_i.en;
+  db_o.ack <= db_ack_r when RISING_EDGE_READ else db_i.en;
 
   -- big-endian halfword select: a(1)='0' -> high half (bits 31:16)
   ibus_o.d   <= i_word(31 downto 16) when i_half = '0' else i_word(15 downto 0);
-  ibus_o.ack <= ibus_i.en;
+  ibus_o.ack <= ibus_ack_r when RISING_EDGE_READ else ibus_i.en;
 end architecture;
