@@ -46,8 +46,14 @@ begin
   cpu1_data_master_en <= '0';
   cpu1_data_master_ack <= '0';
 
+  -- RISING_EDGE_READ=true: moves the boot RAM's capture off the falling edge
+  -- and onto the rising edge, removing the historical 0.5-cycle posedge->
+  -- negedge critical path that capped ECP5 Fmax (nextpnr showed the 16
+  -- DP16KD block RAMs backing this instance as CLKAMUX/CLKBMUX=INV, the exact
+  -- sink of that path). Costs one wait state per boot-RAM access; see
+  -- bootram_infer's process/ack comments for the timing detail.
   sram : entity work.bootram_infer(inferred)
-    generic map (c_addr_width => 14)
+    generic map (c_addr_width => 14, RISING_EDGE_READ => true)
     port map (clk => clk, ibus_i => sraminst_o, ibus_o => sraminst_i,
               db_i => sramdt_o, db_o => sramdt_i);
 
