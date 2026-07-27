@@ -80,3 +80,31 @@ func TestLPFDriveAndSlewrateAttrs(t *testing.T) {
 		t.Errorf("sdram_d0 LPF line missing DRIVE=4 SLEWRATE=FAST; got:\n%s", out)
 	}
 }
+
+func TestLPFFrequencyAttr(t *testing.T) {
+	res := &elaborate.Resolution{
+		Target: "ecp5",
+		Pins: []*elaborate.ResolvedPin{
+			{
+				Net: "clk25", Pad: "G2", In: "clk_in", PadDir: "in",
+				Attrs: map[string]design.Value{
+					"frequency": {Kind: design.KindInt, Int: 25},
+				},
+			},
+			{
+				Net: "led0", Pad: "B2", Out: "led_o0", PadDir: "out",
+			},
+		},
+	}
+	out, err := LPF(res)
+	if err != nil {
+		t.Fatalf("LPF: %v", err)
+	}
+	want := `FREQUENCY PORT "pin_clk25" 25 MHZ;`
+	if !strings.Contains(out, want) {
+		t.Errorf("clk25 LPF missing FREQUENCY line; got:\n%s", out)
+	}
+	if strings.Contains(out, `FREQUENCY PORT "pin_led0"`) {
+		t.Errorf("led0 has no frequency attr and must not get a FREQUENCY line; got:\n%s", out)
+	}
+}

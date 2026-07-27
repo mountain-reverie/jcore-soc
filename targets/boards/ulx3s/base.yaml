@@ -142,7 +142,7 @@ pins:
   type: pin-names
   rules:
     - { match: ".*", attrs: { iostandard: LVCMOS33 } }
-    - { match: clk_25mhz, signal: true, buff: false }
+    - { match: clk_25mhz, signal: true, buff: false, attrs: { frequency: 25 } }
     - { match: ftdi_rxd, signal: uart0_rx }
     - { match: ftdi_txd, signal: uart0_tx }
     - { match: [btn, n], in: ["gpio_di(", n, ")"], attrs: { pullmode: DOWN } }
