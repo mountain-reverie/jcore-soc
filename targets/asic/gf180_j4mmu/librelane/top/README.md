@@ -7,6 +7,37 @@ mem_region_mux) are placed as LEF macros and only the top-level interconnect
 glue (~760 cells) is real logic. This keeps peak memory ~0.9 GB (a flat
 whole-SoC flatten OOM'd).
 
+## Floorplan: 2KB dense + pin-order arrangement
+
+`config.json` binds the **2KB dense-hardened** caches (`../icache_2k`,
+`../dcache_2k`) and arranges the macros to follow the on-chip bus topology
+rather than a rectangular grid:
+
+- **Memory cluster, WEST** — `qspi_flash_ctrl` → `mem_region_mux` → `sdram_ctrl`
+  stacked at the west edge (the flash/DDR side).
+- **Caches, centre** — `dcache` (bottom) and `icache` (top), right-aligned so
+  their pin-ordered **East** edge (`ibus_*`/`a_mmu_*`/`ctrl_*`) faces the CPU and
+  their **West** edge (`dbus_*`/`snpc_*`) faces the memory cluster.
+- **CPU, EAST** — `cpus.core0.u_cpu` across a 300 µm routing channel from the
+  caches, with `devices` stacked to its north.
+- **boot ROM** — far-west, strap-aligned (x=180 / y=2160 catch the PDN straps at
+  180 µm pitch; a small isolated macro otherwise trips PDN-0233).
+
+Three levers compound: (1) dense cache hardening, (2) the caches' own
+`FP_PIN_ORDER_CFG` pin placement, (3) topology-driven macro placement.
+
+### Measured result (real LibreLane P&R, `OL_TO=Magic.WriteLEF`)
+
+| top variant | die | instance | util | route wirelength | DRC |
+|---|---|---|---|---|---|
+| prior 8 KB-cache grid | 4540×4670 = 21.20 mm² | 12.76 mm² | 61 % | — | 0 |
+| **2 KB dense + pin-order** | **4478×4450 = 19.93 mm²** | **10.89 mm²** | 55.7 % | **1.76 M DBU** | **0** |
+
+The instance area (real silicon + macros) drops **15 %** below the 8 KB grid and
+the die **6 %**, at 100 % detailed-route completion with 0 violations. The
+tighter die still routes because the pin-ordered caches + topology placement cut
+top-level wirelength ~24 % vs a loose 2 KB arrangement.
+
 ## Committed inputs
 
 - **`soc.v`** — the top-level interconnect netlist (glue only; the 8 macros are
