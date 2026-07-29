@@ -1,6 +1,6 @@
 {
   "DESIGN_NAME": "soc",
-  "_comment_toplevel": "Task 6 CAPSTONE: gf180_j4mmu FLASH-variant `soc` (targets/asic/gf180_j4mmu/soc.vhd), rebound to genuinely instantiate the vendor-SRAM-backed macros (Task 6 PHASE A: cpus_one_m0_gf180_arch.vhd -> bootram_infer(boot_mem_gf180); ddr_ram_mux_one_cpu_idcache_gf180.vhd -> icache_adapter_gf180/dcache_adapter_gf180), integrating all 8 hardened child macros (Tasks 3-5) as LEF-only blackbox instances via a hierarchy-preserving ghdl-yosys netlist-gen (see run.sh's top-only netlist-gen override). CORE-ONLY level (no pad ring yet -- B-scope pad ring is additive/stretch per the brief's own fallback ladder; this config gives the routed CORE area, KianV-comparable to their ~13.1mm^2 core).",
+  "_comment_toplevel": "gf180_j4mmu FLASH `soc` top -- 2KB dense + pin-order floorplan variant. Binds the 2KB dense-hardened icache_2k/dcache_2k macros (FP_PIN_ORDER_CFG routes ibus/a_mmu/ctrl East toward the CPU, dbus/snpc West toward memory). Connectivity-driven macro arrangement: memory cluster (qspi->mem_region_mux->sdram) West, caches center (right-aligned, ibus-East/dbus-West), CPU East across a 300um routing channel with devices North, boot ROM far-West strap-aligned. Core-only (no pad ring). See top/README.md for routed metrics.",
   "VERILOG_FILES": [
     "dir::soc.v",
     "dir::soc_macros_bb.v"
@@ -20,8 +20,8 @@
       "instances": {
         "cpus.core0.u_cpu": {
           "location": [
-            200.0,
-            3170.0
+            3301.76,
+            1627.72
           ],
           "orientation": "N"
         }
@@ -29,16 +29,16 @@
     },
     "icache_adapter": {
       "gds": [
-        "dir::../icache/runs/smoke/final/gds/icache_adapter.gds"
+        "dir::../icache_2k/runs/smoke/final/gds/icache_adapter.gds"
       ],
       "lef": [
-        "dir::../icache/runs/smoke/final/lef/icache_adapter.lef"
+        "dir::../icache_2k/runs/smoke/final/lef/icache_adapter.lef"
       ],
       "instances": {
         "ddr_ram_mux.u_icache": {
           "location": [
-            200.0,
-            200.0
+            1021.76,
+            2390.0
           ],
           "orientation": "N"
         }
@@ -46,16 +46,16 @@
     },
     "dcache_adapter": {
       "gds": [
-        "dir::../dcache/runs/smoke/final/gds/dcache_adapter.gds"
+        "dir::../dcache_2k/runs/smoke/final/gds/dcache_adapter.gds"
       ],
       "lef": [
-        "dir::../dcache/runs/smoke/final/lef/dcache_adapter.lef"
+        "dir::../dcache_2k/runs/smoke/final/lef/dcache_adapter.lef"
       ],
       "instances": {
         "ddr_ram_mux.u_dcache": {
           "location": [
-            2370.0,
-            200.0
+            1101.76,
+            60.0
           ],
           "orientation": "N"
         }
@@ -71,8 +71,8 @@
       "instances": {
         "cpus.sram": {
           "location": [
-            1516.635,
-            3170.0
+            50.0,
+            2160.0
           ],
           "orientation": "N"
         }
@@ -88,8 +88,8 @@
       "instances": {
         "sdram_ctrl": {
           "location": [
-            4212.05,
-            3170.0
+            160.0,
+            1299.68
           ],
           "orientation": "N"
         }
@@ -105,8 +105,8 @@
       "instances": {
         "devices": {
           "location": [
-            1876.635,
-            3170.0
+            3301.76,
+            2822.28
           ],
           "orientation": "N"
         }
@@ -122,8 +122,8 @@
       "instances": {
         "qspi_flash_ctrl": {
           "location": [
-            2730.29,
-            3170.0
+            160.0,
+            80.0
           ],
           "orientation": "N"
         }
@@ -139,32 +139,31 @@
       "instances": {
         "mem_region_mux": {
           "location": [
-            3692.05,
-            3170.0
+            160.0,
+            919.68
           ],
           "orientation": "N"
         }
       }
     }
   },
-  "_comment_floorplan": "SCRATCHPAD-REMOVAL REPACK: boot_mem shrank from 1.127mm^2 (1033x1091um-ish) to 140x140um (0.0196mm^2) once its writable SRAM lane was removed (pure ROM now). Since row1 (icache|dcache, 1970x2570 each) already fixes the die width at 4540um regardless of boot_mem's size, and boot_mem was the only thing anchoring the old row3, the old 3-row grid (row1: icache|dcache; row2: cpu|boot_mem|devices|qspi_flash_ctrl; row3: mem_region_mux|sdram_ctrl) is repacked to 2 rows: row1 unchanged (icache|dcache), row2 = cpu|boot_mem|devices|qspi_flash_ctrl|mem_region_mux|sdram_ctrl (all six remaining macros in one row, 200um gaps), height set by the tallest item in each row (row1: icache/dcache 2570um; row2: cpu 1114.555um). This drops DIE_AREA height from 4784 to ~4300um (row3 eliminated) while width stays 4540 (still row1-bound; row2's packed width is 4536.225, within margin). Macro footprint sum = 12.489mm^2 (1.222 cpu + 5.063 icache + 5.063 dcache + 0.0196 boot_mem + 0.413 devices + 0.564 qspi_flash_ctrl + 0.090 mem_region_mux + 0.054 sdram_ctrl). New DIE_AREA (4540 x 4300 = 19.522mm^2) gives util = 12.489/19.522 = 64.0%, matching the brief's ~65% KianV-comparable target (KianV: 20.1mm^2 die at ~65% util -> ~13.1mm^2 core).",
-  "_comment_routeclean_retry": "ROUTE-CLEAN RETRY (feat/gf180-librelane-die, bounded attempt): the 4540x4300 (66.6% util) 2-row repack reached placement/CTS but FAILED global routing with GRT-0118 congestion-too-high. Widened die height to 4540x4670 (21.20mm^2, ~58.9% util) for routing headroom: row1(icache|dcache) unchanged at y=200; row1->row2 gap doubled from 200 to 400um (row2 now at y=3170 instead of 2970); row2 inter-macro gaps widened from 200 to 220um (cpu/boot_mem/devices/qspi_flash_ctrl/mem_region_mux/sdram_ctrl re-spaced accordingly); margin above row2's top (cpu height 1114.555) to the die/core top grew from ~215um to ~365um. Same 8 macros, same netlist -- placement-only re-floorplan to relieve GRT-0118.",
   "FP_SIZING": "absolute",
   "DIE_AREA": [
     0,
     0,
-    4540,
-    4670
+    4478,
+    4450
   ],
   "CORE_AREA": [
     20,
     20,
-    4520,
-    4650
+    4458,
+    4430
   ],
   "FP_PDN_VPITCH": 180,
   "FP_PDN_HPITCH": 180,
   "PL_TARGET_DENSITY_PCT": 60,
   "RUN_LINTER": false,
-  "RUN_MCSTA": false
+  "RUN_MCSTA": false,
+  "_comment_floorplan": "Connectivity-driven arrangement, tight die 4478x4450=19.93mm2 (vs the prior 8KB-cache top's 4540x4670=21.20mm2). Macro instance footprint sum ~10.9mm2 (dense 2KB caches 4.28+3.92mm2 replace the 8KB 5.06+5.06). Levers: (1) dense cache hardening, (2) cache FP_PIN_ORDER_CFG pin placement, (3) memory/cache/CPU placement following the bus topology. Routed clean (detailed routing complete, DRC 0); wirelength ~1.76M DBU (-24% vs a loose-arranged 2KB top)."
 }

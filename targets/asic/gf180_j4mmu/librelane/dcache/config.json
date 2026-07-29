@@ -192,5 +192,7 @@
     10,
     1960,
     2560
-  ]
+  ],
+  "FP_PIN_ORDER_CFG": "dir::pin_order.cfg",
+  "_comment_pinorder": "FP_PIN_ORDER_CFG (pin_order.cfg) places CPU-side pins (ibus_*/a_mmu_*/ctrl_*/lock) on the EAST edge and memory-side pins (dbus_*/snpc_*) on the WEST edge so an integrating top can abut this macro's CPU port to the CPU and its memory port to the DDR/flash side with minimal top-level routing. PL_TARGET_DENSITY_PCT kept at 30 (pin-order adds edge placement pressure; the CTS clock tree needs spread room in the macro-bound margins)."
 }

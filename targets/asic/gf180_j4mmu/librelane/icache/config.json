@@ -6,7 +6,7 @@
   "CLOCK_PORT": "clk125",
   "CLOCK_PERIOD": 40.0,
   "FP_CORE_UTIL": 15,
-  "PL_TARGET_DENSITY_PCT": 45,
+  "PL_TARGET_DENSITY_PCT": 25,
   "_comment_macros": "icache_adapter_gf180 binds its tag RAM (ram_2x8x256_1rw, 2x macros) and data RAM (ram_2x8x2048_2rw, 8x macros) to the tech/gf180 vendor gf180mcu_fd_ip_sram hard IP, mirroring dcache/config.json (see that file's comment + lib/memory_tech_lib/tech/gf180/ram_2x8x{256_1rw,2x2048_2rw}_gf180.vhd).",
   "MACROS": {
     "gf180mcu_fd_ip_sram__sram256x8m8wm1": {
@@ -171,12 +171,14 @@
     0,
     0,
     1970,
-    2570
+    2850
   ],
   "CORE_AREA": [
     10,
     10,
     1960,
-    2560
-  ]
+    2840
+  ],
+  "FP_PIN_ORDER_CFG": "dir::pin_order.cfg",
+  "_comment_pinorder": "FP_PIN_ORDER_CFG (pin_order.cfg): CPU-side pins (ibus_*/a_mmu_*/ctrl_*/lock) EAST, memory-side (dbus_*/snpc_*) WEST -- same edge-abutment intent as ../dcache. NOTE: DIE height was grown 2570->2850 and PL_TARGET_DENSITY_PCT lowered 45->25 vs the pre-pin-order config: the clk pin lands on the SOUTH edge, which here is fully occupied by the data SRAM macros, so the CTS root clock buffers (clkbuf_*_f_clk125) had no legalization room without a taller north margin + more spread. Cost of pin-order on this macro-bound 8KB cache: +0.55mm2 die."
 }
