@@ -39,9 +39,10 @@ include $(TOOLS_DIR)/soc.mk
 #     `configuration soc_cpus_config` (cpus_config.vhd, from design.yaml's
 #     cpu.architecture).
 #   - one_cpu_m0_gf180 (this target's OWN cpus_one_m0_gf180_arch.vhd):
-#     bootram_infer(boot_mem)/c_addr_width=>12, 4 KiB (2 KiB read-only ROM
-#     vector lane + 2 KiB writable stack SRAM lane) -- FLASH variant only
-#     (boot_mem's premise is booting from flash XIP). The flash variant's
+#     bootram_infer(boot_mem_gf180)/c_addr_width=>12, 4 KiB pure read-only ROM
+#     (boot vector table, no vendor SRAM -- the boot-time stack lives in SDRAM)
+#     -- FLASH variant only (boot_mem's premise is booting from flash XIP). The
+#     flash variant's
 #     generated soc.vhd binds `cpus` via a bare `entity work.cpus` (no
 #     explicit arch/config -- socgen's ambiguous-architecture fallback), so
 #     it relies on GHDL's default-binding rule (last-analyzed architecture

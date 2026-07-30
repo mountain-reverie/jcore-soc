@@ -6,16 +6,15 @@ use work.cpu_core_pack.all;
 
 -- gf180_j4mmu-only cpus architecture: identical to
 -- targets/boards/ulx3s/cpus_one_m0_arch.vhd's one_cpu_m0 (BM Task 2) except
--- the boot memory binds bootram_infer(boot_mem_gf180) (Task 6 PHASE A
--- rebind: constant-ROM vector lane, kept as plain logic, + 2 KiB writable
--- stack lane now bound to the REAL vendor gf180mcu_fd_ip_sram__sram512x8m8wm1
--- macros, c_addr_width=>12, see
+-- the boot memory binds bootram_infer(boot_mem_gf180) (c_addr_width=>12, see
 -- lib/memory_tech_lib/tech/gf180/boot_mem_stack_gf180.vhd) instead of
--- (boot_mem)'s tech/inferred array-of-flops stack (same split, same
--- addressing, functionally-equivalent-by-construction -- see that file's
--- header). Simulated against components/memory/tests/gf180_sram_sim_stub.vhd
--- (the behavioral vendor-macro stub, sim-only -- wired into
--- targets/asic/gf180_j4mmu/sim/xip_sim.sh's analyze list). The base variant
+-- (boot_mem)'s tech/inferred array-of-flops -- functionally equivalent by
+-- construction (see that file's header). NOTE (SCRATCHPAD REMOVAL): boot_mem_gf180
+-- is now a PURE READ-ONLY constant ROM (the boot vector table); it has no vendor
+-- SRAM macro. The earlier writable-stack lane (0x800-0xFFF, once backed by 4x
+-- gf180mcu_fd_ip_sram__sram512x8m8wm1 macros) is GONE -- sdram_ctrl self-initialises
+-- in hardware so the reset vector's SP points into SDRAM (see boot_image_pkg.vhd).
+-- The base variant
 -- (cpus_one_m0_arch.vhd, shared with ulx3s/icesugar) is UNCHANGED and keeps
 -- bootram_infer(inferred)'s single 16 KiB read/write EBR array
 -- (c_addr_width=>14) -- this rebind is flash-variant-only.
@@ -100,9 +99,9 @@ begin
   cpu1_data_master_en <= '0';
   cpu1_data_master_ack <= '0';
 
-  -- BM Task 2: boot_mem (not inferred), c_addr_width=>12 (4 KiB: 0x000-0x7FF
-  -- read-only constant-ROM vector lane, 0x800-0xFFF writable stack SRAM
-  -- lane) -- see boot_image_pkg.vhd for the SP=0xFFC update this requires.
+  -- boot_mem (not inferred), c_addr_width=>12 (4 KiB window): a pure read-only
+  -- constant ROM (boot vector table), no vendor SRAM -- the boot-time stack lives
+  -- in SDRAM (see boot_image_pkg.vhd), not an on-chip scratchpad.
   sram : entity work.bootram_infer(boot_mem_gf180)
     generic map (c_addr_width => 12)
     port map (clk => clk, ibus_i => sraminst_o, ibus_o => sraminst_i,
