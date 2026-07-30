@@ -1,0 +1,12 @@
+{
+  "DESIGN_NAME": "cpus",
+  "VERILOG_FILES": [
+    "dir::cpus.v"
+  ],
+  "CLOCK_PORT": "clk",
+  "CLOCK_PERIOD": 100.0,
+  "FP_CORE_UTIL": 38,
+  "PL_TARGET_DENSITY_PCT": 42,
+  "_comment": "Approach A: harden the whole `cpus` cluster (entity cpus, arch one_cpu_m0_gf180) as ONE macro -- J4 core + pure-ROM boot memory (bootram_infer(boot_mem_gf180), now ROM-only, no vendor SRAM) + the bootmem_onewait_inst/data bridges. Replaces the separate j4_core + boot_mem macros in the top so the CPU<->boot reset-fetch bus stays internal. All std cells (CPU regfile/TLB are fabric flops; boot is logic-only ROM) -- no macro nesting. Util slightly below j4_core (30) for the added boot/onewait glue headroom.",
+  "_comment_clock": "100ns loose clock for the AREA/floorplan harden (OL_TO=Magic.WriteLEF, no timing signoff). CPU debug_o cone is a ~49ns unpipelined path; at 20/40ns the post-CTS resizer thrashed. Die/LEF area is clock-independent."
+}

@@ -172,6 +172,11 @@ case "$MACRO" in
     ELAB_TOP="icache_adapter_gf180"; SYNTH_TOP="icache_adapter"; SRC_VARIANT="gf180_cache" ;;
   boot_mem)
     ELAB_TOP="boot_mem_top_gf180"; SYNTH_TOP="boot_mem_top_gf180"; SRC_VARIANT="gf180_bootmem" ;;
+  cpus)
+    # Approach A: the whole CPU cluster (entity `cpus`, arch one_cpu_m0_gf180 via
+    # GHDL last-analyzed-wins) = J4 core + pure-ROM boot + onewait bridges, as one
+    # macro. Reuses the bootmem source set (FILES + boot_mem_stack_gf180.vhd).
+    ELAB_TOP="cpus"; SYNTH_TOP="cpus"; SRC_VARIANT="gf180_bootmem" ;;
 esac
 # icache_2k/dcache_2k reuse the exact gf180_cache netlist-gen codepath above
 # (same ELAB_TOP/SYNTH_TOP as icache/dcache -- the macro= name only selects

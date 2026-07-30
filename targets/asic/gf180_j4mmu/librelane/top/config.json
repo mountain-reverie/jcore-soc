@@ -10,23 +10,6 @@
   "SYNTH_ELABORATE_ONLY": false,
   "_comment_netlistgen": "soc.v is NOT raw RTL -- it is a pre-synthesized, hierarchy-preserving generic-gate netlist (ghdl -e soc; hierarchy -top soc; blackbox <8 macro modules>; synth -top soc -flatten; write_verilog), produced by a TOP-ONLY override of the shared ghdl-yosys netlist-gen (see run.sh). The 8 macro modules (cpu/icache_adapter/dcache_adapter/bootram_infer(boot_mem_gf180)/sdram_ctrl/devices/qspi_flash_ctrl/mem_region_mux) were explicitly `blackbox`-marked BEFORE `synth -flatten`, so their internal logic/vendor-SRAM cells never got re-synthesized or flattened into the top -- only the top-level interconnect glue (aic_irq_gen, cpus' delay lanes, ddr_ram_mux's bus_mux_typec, etc, ~760 cells total) is real logic here. soc_macros_bb.v supplies `(* blackbox *)`-marked empty module declarations (matching port lists) for the 8 macros (+ the 2 leaf vendor SRAM cell types, unused at this level) so LibreLane's own Yosys.Synthesis step's hierarchy check resolves the instances without re-deriving their bodies from RTL -- LibreLane instead binds them via MACROS' lef entries below (LEF-only, no .lib -- see LEF-only-vs-.lib note in the Task 6 report; OL_TO=Magic.WriteLEF stops before any timing signoff that would need .lib).",
   "MACROS": {
-    "cpu": {
-      "gds": [
-        "dir::../j4_core/runs/smoke/final/gds/cpu.gds"
-      ],
-      "lef": [
-        "dir::../j4_core/runs/smoke/final/lef/cpu.lef"
-      ],
-      "instances": {
-        "cpus.core0.u_cpu": {
-          "location": [
-            3301.76,
-            1627.72
-          ],
-          "orientation": "N"
-        }
-      }
-    },
     "icache_adapter": {
       "gds": [
         "dir::../icache_2k/runs/smoke/final/gds/icache_adapter.gds"
@@ -61,23 +44,6 @@
         }
       }
     },
-    "boot_mem_top_gf180": {
-      "gds": [
-        "dir::../boot_mem/runs/smoke/final/gds/boot_mem_top_gf180.gds"
-      ],
-      "lef": [
-        "dir::../boot_mem/runs/smoke/final/lef/boot_mem_top_gf180.lef"
-      ],
-      "instances": {
-        "cpus.sram": {
-          "location": [
-            50.0,
-            2160.0
-          ],
-          "orientation": "N"
-        }
-      }
-    },
     "sdram_ctrl": {
       "gds": [
         "dir::../smoke/runs/smoke/final/gds/sdram_ctrl.gds"
@@ -106,7 +72,7 @@
         "devices": {
           "location": [
             3301.76,
-            2822.28
+            2831.03
           ],
           "orientation": "N"
         }
@@ -145,19 +111,36 @@
           "orientation": "N"
         }
       }
+    },
+    "cpus": {
+      "gds": [
+        "dir::../cpus/runs/smoke/final/gds/cpus.gds"
+      ],
+      "lef": [
+        "dir::../cpus/runs/smoke/final/lef/cpus.lef"
+      ],
+      "instances": {
+        "cpus": {
+          "location": [
+            3301.76,
+            1618.98
+          ],
+          "orientation": "N"
+        }
+      }
     }
   },
   "FP_SIZING": "absolute",
   "DIE_AREA": [
     0,
     0,
-    4478,
+    4497,
     4450
   ],
   "CORE_AREA": [
     20,
     20,
-    4458,
+    4477,
     4430
   ],
   "FP_PDN_VPITCH": 180,
@@ -165,5 +148,5 @@
   "PL_TARGET_DENSITY_PCT": 60,
   "RUN_LINTER": false,
   "RUN_MCSTA": false,
-  "_comment_floorplan": "Connectivity-driven arrangement, tight die 4478x4450=19.93mm2 (vs the prior 8KB-cache top's 4540x4670=21.20mm2). Macro instance footprint sum ~10.9mm2 (dense 2KB caches 4.28+3.92mm2 replace the 8KB 5.06+5.06). Levers: (1) dense cache hardening, (2) cache FP_PIN_ORDER_CFG pin placement, (3) memory/cache/CPU placement following the bus topology. Routed clean (detailed routing complete, DRC 0); wirelength ~1.76M DBU (-24% vs a loose-arranged 2KB top)."
+  "_comment_floorplan": "Approach A: cpus cluster macro (core+pure-ROM boot+onewait, 1114x1132) replaces the separate cpu+boot_mem macros -- the CPU<->boot reset-fetch bus is now INTERNAL to cpus (was a ~3.2mm cross-die route to a far-west boot macro). 7 macros (was 8). die 4497x4450=20.01mm2."
 }
