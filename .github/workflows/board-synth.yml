@@ -316,11 +316,19 @@ jobs:
       # gen+render scripts rely on.
       - name: Install yosys + ghdl (OSS CAD Suite)
         uses: YosysHQ/setup-oss-cad-suite@v4
+        with:
+          # PIN the nightly: 'latest' re-rolls daily and has shipped both a
+          # segfaulting yosys and a crashing standalone `ghdl --version`. Pin to
+          # a known-good date so CI is reproducible; bump deliberately.
+          osscadsuite-version: '2026-07-28'
       - name: Verify yosys + ghdl available
         run: |
           yosys --version
-          ghdl --version | head -1
-          # loading `-m ghdl` succeeds only if the ghdl-yosys-plugin is present
+          # run.sh drives ghdl through the yosys `-m ghdl` PLUGIN (libghdl), not
+          # the standalone binary -- so gate on the plugin loading, and treat a
+          # flaky standalone `ghdl --version` (some nightlies crash on it) as
+          # informational only.
+          ghdl --version | head -1 || echo "note: standalone 'ghdl --version' unavailable; using yosys -m ghdl plugin"
           yosys -m ghdl -p "help" >/dev/null && echo "ghdl yosys plugin OK"
           # confirm the system python3 (with ciel/matplotlib) was NOT shadowed
           python3 -c "import matplotlib, json; print('system python3 intact')"
