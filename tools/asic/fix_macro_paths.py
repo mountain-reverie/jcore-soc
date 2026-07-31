@@ -32,7 +32,9 @@ from pathlib import Path
 SRAM_MODULE_RE = re.compile(r"gf180mcu_fd_ip_sram__")
 
 # semantic tokens (anchored, per '.'-split token). Accept `:N` or `[N]` index
-# forms so a future yosys index-syntax change still matches.
+# forms -- yosys 0.44 emits `subword_gen:1` (1-based colon), newer yosys emits
+# `subword_gen[0]` (0-based bracket); both must map to the same macro.
+_KIND_ORDER = {"tag": 0, "ram": 1, "col": 2, "sub": 3}
 _TOKEN_RES = [
     ("tag", re.compile(r"^tag(\d*)$")),                       # tag / tag0 / tag1
     ("ram", re.compile(r"^ram[:\[](\d+)\]?$")),               # data bank
@@ -42,14 +44,20 @@ _TOKEN_RES = [
 
 
 def canonical(path):
-    """Semantic signature of an instance path: the ordered (kind, index) tokens
-    that identify the macro, ignoring version-varying structural labels."""
+    """Semantic SORT KEY of an instance path: the ordered (kind_rank, index)
+    tokens that identify the macro, ignoring version-varying structural labels.
+
+    The index is kept as an int and used only for RELATIVE ordering, never
+    matched literally -- so the 1-based-colon vs 0-based-bracket difference
+    between yosys versions is a uniform offset that sorted-rank matching sees
+    through. Instances of one module are then paired by ascending sort key."""
     key = []
     for tok in path.strip().lstrip("\\").split("."):
         for kind, rx in _TOKEN_RES:
             m = rx.match(tok)
             if m:
-                key.append((kind, m.group(1)))
+                idx = int(m.group(1)) if m.group(1) else 0
+                key.append((_KIND_ORDER[kind], idx))
                 break
     return tuple(key)
 
@@ -73,32 +81,32 @@ def remap_config(cfg, netlist_text):
         if not insts:
             continue
         actual = netlist_instances(netlist_text, module)
-        # map canonical signature -> actual name
-        actual_by_key = {}
-        for name in actual:
-            actual_by_key.setdefault(canonical(name), name)
-        new_insts = {}
-        changed = False
-        for path, place in insts.items():
-            k = canonical(path)
-            hit = actual_by_key.get(k)
-            if hit is None:
-                raise SystemExit(
-                    f"fix_macro_paths: {module}: config instance {path!r} "
-                    f"(signature {k}) has no match among {len(actual)} netlist "
-                    f"instances {actual!r} -- placement/netlist disagree.")
-            if hit != path:
-                changed = True
-                remapped += 1
-            new_insts[hit] = place
-        if len(new_insts) != len(insts):
-            raise SystemExit(
-                f"fix_macro_paths: {module}: {len(insts)} placements collapsed "
-                f"to {len(new_insts)} after remap (duplicate signatures?)")
         if len(actual) != len(insts):
             raise SystemExit(
                 f"fix_macro_paths: {module}: netlist has {len(actual)} SRAM "
-                f"instances but config places {len(insts)} -- count mismatch.")
+                f"instances but config places {len(insts)} -- count mismatch "
+                f"(netlist: {actual!r}).")
+        # Pair config placements to netlist instances by ASCENDING semantic sort
+        # key. Both sides enumerate the same generate structure, so rank-K on
+        # each side is the same logical macro regardless of the version's index
+        # base/separator. A duplicate sort key on either side is a real ambiguity.
+        cfg_sorted = sorted(insts.items(), key=lambda kv: canonical(kv[0]))
+        net_sorted = sorted(actual, key=canonical)
+        cfg_keys = [canonical(p) for p, _ in cfg_sorted]
+        net_keys = [canonical(n) for n in net_sorted]
+        if len(set(cfg_keys)) != len(cfg_keys):
+            raise SystemExit(f"fix_macro_paths: {module}: duplicate config "
+                             f"sort keys {cfg_keys} -- cannot pair unambiguously.")
+        if len(set(net_keys)) != len(net_keys):
+            raise SystemExit(f"fix_macro_paths: {module}: duplicate netlist "
+                             f"sort keys {net_keys} -- cannot pair unambiguously.")
+        new_insts = {}
+        changed = False
+        for (path, place), name in zip(cfg_sorted, net_sorted):
+            new_insts[name] = place
+            if name != path:
+                changed = True
+                remapped += 1
         if changed:
             mv["instances"] = new_insts
             fixed_mods += 1
