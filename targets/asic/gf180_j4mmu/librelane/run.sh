@@ -281,6 +281,21 @@ fi
 # (macro=top's TOP-ONLY OVERRIDE branch above already computed MERGED and
 # jumps straight here.)
 
+# --- 2b. Version-robust vendor-SRAM placement. The cache configs hand-place
+# each gf180mcu_fd_ip_sram macro by its full hierarchical instance path, but
+# those paths carry ghdl-yosys generate-block labels that VARY BY YOSYS
+# VERSION (a single-branch generate-if yosys 0.44 keeps as
+# `.rows:1.genram_3x8x64.mem.` a newer yosys elides) -- a mismatch makes
+# LibreLane quit with "No macro instance <path> found". Rewrite the MERGED
+# config's SRAM instance keys to match THIS netlist's actual names, matched by
+# their semantic coordinates (tag/ram:N/col_gen:M/subword_gen:K). No-op for
+# macros without placed vendor SRAM (top/pad_ring/boot_mem). See
+# tools/asic/fix_macro_paths.py.
+if grep -q 'gf180mcu_fd_ip_sram__' "$MERGED" 2>/dev/null; then
+  python3 "$ROOT/tools/asic/fix_macro_paths.py" "$MERGED" "$NETV" \
+    || { echo "ERROR: fix_macro_paths failed for $MACRO" >&2; exit 1; }
+fi
+
 # --- 3. Run LibreLane under a hard wall-clock cap (same watchdog pattern as
 # components/cpu/synth/openlane/run.sh: `timeout` on the docker CLIENT does
 # not stop the container, so name it and `docker kill` on expiry).

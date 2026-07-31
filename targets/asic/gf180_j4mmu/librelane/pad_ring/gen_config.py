@@ -1,6 +1,7 @@
-import json,re,sys,os
+import json,re,sys,os,shutil,glob
 # paths resolve relative to this script (pad_ring/), so it runs from anywhere
-BASE=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SELF=os.path.dirname(os.path.abspath(__file__))          # .../librelane/pad_ring
+BASE=os.path.dirname(SELF)                                # .../librelane
 CHAN=float(sys.argv[1]) if len(sys.argv)>1 else 150.0
 PADH=350.0; PW=75.0; OFF=CHAN+PADH; COR=380.0
 tc=json.load(open(f'{BASE}/top/config.json'))
@@ -9,9 +10,19 @@ lefname={'cpus':'cpus','icache_adapter':'icache_adapter','dcache_adapter':'dcach
 CW,CHt=tc['DIE_AREA'][2],tc['DIE_AREA'][3]
 DW=round(CW+2*OFF); DH=round(CHt+2*OFF)
 MACROS={}
+# Co-locate the hardened child LEFs/GDS UNDER the pad_ring design dir
+# (macros/). Dockerized LibreLane only reads files under the design dir / PDK,
+# so a `dir::../<child>/runs/...` sibling path is rejected ("not located any
+# path readable to LibreLane") even though it is physically mounted; copying
+# them here keeps the flat integration reproducible in CI as well as locally.
+MACDIR=os.path.join(SELF,'macros'); os.makedirs(MACDIR,exist_ok=True)
 for mk,mv in tc['MACROS'].items():
-    d=f'../{lefmap[mk]}/runs/smoke/final'
-    MACROS[mk]={'lef':[f'dir::{d}/lef/{lefname[mk]}.lef'],'gds':[f'dir::{d}/gds/{lefname[mk]}.gds'],'instances':{}}
+    src=os.path.join(BASE,lefmap[mk],'runs','smoke','final')
+    for ext in ('lef','gds'):
+        s=os.path.join(src,ext,f'{lefname[mk]}.{ext}')
+        if os.path.exists(s): shutil.copy2(s,os.path.join(MACDIR,f'{lefname[mk]}.{ext}'))
+        else: print(f"WARN: {mk}: missing {s} (child not hardened?)",file=sys.stderr)
+    MACROS[mk]={'lef':[f'dir::macros/{lefname[mk]}.lef'],'gds':[f'dir::macros/{lefname[mk]}.gds'],'instances':{}}
     for inst,v in mv['instances'].items():
         x,y=v['location']
         MACROS[mk]['instances'][f'u_soc.{inst}']={'location':[round(x+OFF,2),round(y+OFF,2)],'orientation':v['orientation']}

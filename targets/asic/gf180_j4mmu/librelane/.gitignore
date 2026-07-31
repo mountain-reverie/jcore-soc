@@ -9,3 +9,4 @@
 !top/soc_macros_bb.v
 # pad_ring: netlist+config are generated (bind run-output child LEFs); see pad_ring/README.md
 pad_ring/config.json
+pad_ring/macros/
