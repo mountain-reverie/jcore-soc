@@ -305,6 +305,38 @@ jobs:
           sudo apt-get install -y --no-install-recommends python3-pip
           python3 -m pip install --quiet --break-system-packages ciel pytest
 
+      # yosys + ghdl + ghdl-yosys-plugin for the per-macro netlist generation
+      # (run.sh's `yosys -m ghdl ...`). This job runs on a BARE runner (not the
+      # jcore-cpu-ci container, which DOES ship this toolchain) so it can
+      # host-Docker LibreLane -- so the toolchain has to be brought in here.
+      # oss-cad-suite is the same yosys+ghdl+plugin bundle; cached across runs.
+      - name: Cache oss-cad-suite (yosys + ghdl + plugin)
+        id: cache-oss
+        uses: actions/cache@v4
+        with:
+          path: ~/oss-cad-suite
+          key: oss-cad-suite-linux-x64-v1
+      - name: Install oss-cad-suite
+        if: steps.cache-oss.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          url=$(curl -fsSL https://api.github.com/repos/YosysHQ/oss-cad-suite-build/releases/latest \
+                | grep -oE 'https://[^"]*oss-cad-suite-linux-x64-[0-9-]+\.tgz' | head -1)
+          echo "downloading $url"
+          curl -fsSL "$url" -o /tmp/oss.tgz
+          tar -xzf /tmp/oss.tgz -C "$HOME"   # extracts to ~/oss-cad-suite
+      - name: Put yosys/ghdl on PATH
+        run: |
+          echo "$HOME/oss-cad-suite/bin"    >> "$GITHUB_PATH"
+          echo "$HOME/oss-cad-suite/py3bin" >> "$GITHUB_PATH"
+          echo "LD_LIBRARY_PATH=$HOME/oss-cad-suite/lib:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+      - name: Verify yosys + ghdl available
+        run: |
+          yosys --version
+          ghdl --version | head -1
+          # loading `-m ghdl` succeeds only if the ghdl-yosys-plugin is present
+          yosys -m ghdl -p "help" >/dev/null && echo "ghdl yosys plugin OK"
+
       - name: Fetch GF180 PDK (pinned)
         run: ciel enable --pdk-family gf180mcu "$PDK_PIN"
 
