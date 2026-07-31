@@ -24,15 +24,15 @@
       "instances": {
         "u_ucache_ram.tag.rows:1.genram_2x8x256.mem.subword_gen:1.sram_i": {
           "location": [
-            50.0,
-            2089.52
+            1103.72,
+            50.0
           ],
           "orientation": "N"
         },
         "u_ucache_ram.tag.rows:1.genram_2x8x256.mem.subword_gen:2.sram_i": {
           "location": [
-            501.86,
-            2089.52
+            1655.58,
+            50.0
           ],
           "orientation": "N"
         }
@@ -60,21 +60,21 @@
         },
         "u_ucache_ram.ram:1.ram_s.rows:1.genram_2x8x2048.mem.row_gen:1.col_gen:2.sram_i": {
           "location": [
-            501.86,
+            551.86,
             50.0
           ],
           "orientation": "N"
         },
         "u_ucache_ram.ram:1.ram_s.rows:1.genram_2x8x2048.mem.row_gen:2.col_gen:1.sram_i": {
           "location": [
-            953.72,
+            2207.44,
             50.0
           ],
           "orientation": "N"
         },
         "u_ucache_ram.ram:1.ram_s.rows:1.genram_2x8x2048.mem.row_gen:2.col_gen:2.sram_i": {
           "location": [
-            1405.58,
+            2709.3,
             50.0
           ],
           "orientation": "N"
@@ -82,84 +82,84 @@
         "u_ucache_ram.ram:1.ram_s.rows:1.genram_2x8x2048.mem.row_gen:3.col_gen:1.sram_i": {
           "location": [
             50.0,
-            554.88
+            614.88
           ],
           "orientation": "N"
         },
         "u_ucache_ram.ram:1.ram_s.rows:1.genram_2x8x2048.mem.row_gen:3.col_gen:2.sram_i": {
           "location": [
-            501.86,
-            554.88
+            551.86,
+            614.88
           ],
           "orientation": "N"
         },
         "u_ucache_ram.ram:1.ram_s.rows:1.genram_2x8x2048.mem.row_gen:4.col_gen:1.sram_i": {
           "location": [
-            953.72,
-            554.88
+            1103.72,
+            614.88
           ],
           "orientation": "N"
         },
         "u_ucache_ram.ram:1.ram_s.rows:1.genram_2x8x2048.mem.row_gen:4.col_gen:2.sram_i": {
           "location": [
-            1405.58,
-            554.88
+            1655.58,
+            614.88
           ],
           "orientation": "N"
         },
         "u_ucache_ram.ram:2.ram_s.rows:1.genram_2x8x2048.mem.row_gen:1.col_gen:1.sram_i": {
           "location": [
-            50.0,
-            1059.76
+            2207.44,
+            614.88
           ],
           "orientation": "N"
         },
         "u_ucache_ram.ram:2.ram_s.rows:1.genram_2x8x2048.mem.row_gen:1.col_gen:2.sram_i": {
           "location": [
-            501.86,
-            1059.76
+            2709.3,
+            614.88
           ],
           "orientation": "N"
         },
         "u_ucache_ram.ram:2.ram_s.rows:1.genram_2x8x2048.mem.row_gen:2.col_gen:1.sram_i": {
           "location": [
-            953.72,
-            1059.76
+            50.0,
+            1179.76
           ],
           "orientation": "N"
         },
         "u_ucache_ram.ram:2.ram_s.rows:1.genram_2x8x2048.mem.row_gen:2.col_gen:2.sram_i": {
           "location": [
-            1405.58,
-            1059.76
+            551.86,
+            1179.76
           ],
           "orientation": "N"
         },
         "u_ucache_ram.ram:2.ram_s.rows:1.genram_2x8x2048.mem.row_gen:3.col_gen:1.sram_i": {
           "location": [
-            50.0,
-            1564.64
+            1103.72,
+            1179.76
           ],
           "orientation": "N"
         },
         "u_ucache_ram.ram:2.ram_s.rows:1.genram_2x8x2048.mem.row_gen:3.col_gen:2.sram_i": {
           "location": [
-            501.86,
-            1564.64
+            1655.58,
+            1179.76
           ],
           "orientation": "N"
         },
         "u_ucache_ram.ram:2.ram_s.rows:1.genram_2x8x2048.mem.row_gen:4.col_gen:1.sram_i": {
           "location": [
-            953.72,
-            1564.64
+            2207.44,
+            1179.76
           ],
           "orientation": "N"
         },
         "u_ucache_ram.ram:2.ram_s.rows:1.genram_2x8x2048.mem.row_gen:4.col_gen:2.sram_i": {
           "location": [
-            1405.58,
-            1564.64
+            2709.3,
+            1179.76
           ],
           "orientation": "N"
         }
@@ -170,15 +170,16 @@
   "DIE_AREA": [
     0,
     0,
-    1970,
-    2850
+    3200,
+    1700
   ],
   "CORE_AREA": [
     10,
     10,
-    1960,
-    2840
+    3190,
+    1690
   ],
   "FP_PIN_ORDER_CFG": "dir::pin_order.cfg",
-  "_comment_pinorder": "FP_PIN_ORDER_CFG (pin_order.cfg): CPU-side pins (ibus_*/a_mmu_*/ctrl_*/lock) EAST, memory-side (dbus_*/snpc_*) WEST -- same edge-abutment intent as ../dcache. NOTE: DIE height was grown 2570->2850 and PL_TARGET_DENSITY_PCT lowered 45->25 vs the pre-pin-order config: the clk pin lands on the SOUTH edge, which here is fully occupied by the data SRAM macros, so the CTS root clock buffers (clkbuf_*_f_clk125) had no legalization room without a taller north margin + more spread. Cost of pin-order on this macro-bound 8KB cache: +0.55mm2 die."
+  "_comment_pinorder": "FP_PIN_ORDER_CFG (pin_order.cfg): CPU-side pins (ibus_*/a_mmu_*/ctrl_*/lock) EAST, memory-side (dbus_*/snpc_*) WEST -- same edge-abutment intent as ../dcache. NOTE: DIE height was grown 2570->2850 and PL_TARGET_DENSITY_PCT lowered 45->25 vs the pre-pin-order config: the clk pin lands on the SOUTH edge, which here is fully occupied by the data SRAM macros, so the CTS root clock buffers (clkbuf_*_f_clk125) had no legalization room without a taller north margin + more spread. Cost of pin-order on this macro-bound 8KB cache: +0.55mm2 die.",
+  "_comment_flat": "Pins-SOUTH/memory-EAST. 2 tags (sram256x8) in the grid bottom-center (cols 2,3) with a routing pocket above. 16 data fill the 6x3 grid; outer col gaps (0-1,4-5) narrowed to 70um, inner gaps 120um (tag/routing pocket). Col x=[50, 552, 1104, 1656, 2207, 2709], last tile right 3141. Die 3200x1700."
 }

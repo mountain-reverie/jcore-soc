@@ -79,3 +79,25 @@ def test_build_die_doc_always_emits_kianv_even_without_top():
         assert "kianv-die-20.1mm2" in names
         assert "gf180-die-area-mm2" not in names
         assert "gf180-die-area-mm2 [j4_core]" in names
+
+
+# route.tcl writes design__die__area in um2 (width_um * height_um); 4120x4242.
+SAMPLE_PADDED = {
+    "design__die__width_um": 4120.0,
+    "design__die__height_um": 4242.0,
+    "design__die__area": 4120.0 * 4242.0,
+    "design__route__drc_errors": 0,
+    "design__route__wire_segments": 9468,
+}
+
+
+def test_build_die_doc_emits_padded_die_below_kianv():
+    with tempfile.TemporaryDirectory() as d:
+        pad = _write(d, "padring_metrics.json", SAMPLE_PADDED)
+        doc = build_die_doc(top_metrics=None, macro_metrics={}, commit="beef",
+                            padded_die=pad)
+        by_name = {m["name"]: m for m in doc["metrics"]}
+        padded = by_name["gf180-padded-die-mm2"]
+        assert padded["value"] == round(4120.0 * 4242.0 / 1e6, 6)  # ~17.48
+        assert padded["value"] < KIANV_DIE_MM2  # the whole point
+        assert by_name["gf180-padded-die-drc"]["value"] == 0

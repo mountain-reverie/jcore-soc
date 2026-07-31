@@ -5,8 +5,8 @@
   ],
   "CLOCK_PORT": "clk125",
   "CLOCK_PERIOD": 40.0,
-  "FP_CORE_UTIL": 25,
-  "PL_TARGET_DENSITY_PCT": 25,
+  "FP_CORE_UTIL": 15,
+  "PL_TARGET_DENSITY_PCT": 20,
   "_comment_macros": "gf180_j4mmu 2 KB-cache harden (Task 8, run.sh macro=dcache_2k): sibling of ../dcache/config.json (8 KB) and ../dcache_4k/config.json (4 KB spike, PL_TARGET_DENSITY_PCT=20 reused here per that spike's fixup). dcache_adapter_gf180 now binds tag0/tag1 to ram_3x8x64_1rw (3x sram64x8m8wm1 macros each = 6 total, one per 8-bit lane of the widened 24-bit tag) and its data RAM to ram_2x8x512_2rw (2x[outer loop]x2 cols = 4x sram512x8m8wm1 macros, no row tiling needed -- see lib/memory_tech_lib/tech/gf180/ram_3x8x64_1rw_gf180.vhd and ram_2x8x512_2rw_gf180.vhd). Instance path names follow the flattened hierarchy pattern captured in ../dcache_4k/config.merged.json's real OpenROAD run (u_dcache_ram.tag0/tag1.subword_gen:N.sram_i / u_dcache_ram.ram:N.sc.ram_s.col_gen:M.sram_i -- CACHE_SAME_CLOCK=true selects the 'sc' generate-if branch, matching ../dcache/config.json's 8 KB paths) -- NOT verified against this specific netlist's own OpenROAD unplaced-macro warnings (no prior run of dcache_2k exists yet); if OpenROAD.GeneratePDN reports unplaced macros, capture the real paths from its warning log and fix this file before retrying. Macros hand-arranged on the same 452 um column pitch / 505 um row pitch as ../dcache/config.json: 4 data macros (2 rows of 2 cols) at the bottom, then tag0's 3 macros, then tag1's 3 macros, each as their own row above. DIE_AREA/CORE_AREA reduced vs the 8 KB config (2 KB is ~1/4 the SRAM) but kept on the same proven column pitch/width for placement safety margin.",
   "MACROS": {
     "gf180mcu_fd_ip_sram__sram64x8m8wm1": {
@@ -25,42 +25,42 @@
         "u_dcache_ram.tag0.rows:1.genram_3x8x64.mem.subword_gen:1.sram_i": {
           "location": [
             50.0,
-            1059.76
+            599.88
           ],
           "orientation": "N"
         },
         "u_dcache_ram.tag0.rows:1.genram_3x8x64.mem.subword_gen:2.sram_i": {
           "location": [
-            501.86,
-            1059.76
+            536.86,
+            599.88
           ],
           "orientation": "N"
         },
         "u_dcache_ram.tag0.rows:1.genram_3x8x64.mem.subword_gen:3.sram_i": {
           "location": [
-            953.72,
-            1059.76
+            1023.72,
+            599.88
           ],
           "orientation": "N"
         },
         "u_dcache_ram.tag1.rows:1.genram_3x8x64.mem.subword_gen:1.sram_i": {
           "location": [
-            50.0,
-            1564.64
+            1510.58,
+            599.88
           ],
           "orientation": "N"
         },
         "u_dcache_ram.tag1.rows:1.genram_3x8x64.mem.subword_gen:2.sram_i": {
           "location": [
-            501.86,
-            1564.64
+            1997.44,
+            599.88
           ],
           "orientation": "N"
         },
         "u_dcache_ram.tag1.rows:1.genram_3x8x64.mem.subword_gen:3.sram_i": {
           "location": [
-            953.72,
-            1564.64
+            2484.3,
+            599.88
           ],
           "orientation": "N"
         }
@@ -82,28 +82,28 @@
         "u_dcache_ram.ram:1.sc.ram_s.rows:1.genram_2x8x512.mem.col_gen:1.sram_i": {
           "location": [
             50.0,
-            50.0
+            35.0
           ],
           "orientation": "N"
         },
         "u_dcache_ram.ram:1.sc.ram_s.rows:1.genram_2x8x512.mem.col_gen:2.sram_i": {
           "location": [
-            501.86,
-            50.0
+            536.86,
+            35.0
           ],
           "orientation": "N"
         },
         "u_dcache_ram.ram:2.sc.ram_s.rows:1.genram_2x8x512.mem.col_gen:1.sram_i": {
           "location": [
-            50.0,
-            554.88
+            1023.72,
+            35.0
           ],
           "orientation": "N"
         },
         "u_dcache_ram.ram:2.sc.ram_s.rows:1.genram_2x8x512.mem.col_gen:2.sram_i": {
           "location": [
-            501.86,
-            554.88
+            1510.58,
+            35.0
           ],
           "orientation": "N"
         }
@@ -114,15 +114,16 @@
   "DIE_AREA": [
     0,
     0,
-    1900,
-    2250
+    3000,
+    900
   ],
   "CORE_AREA": [
     10,
     10,
-    1890,
-    2240
+    2990,
+    890
   ],
   "FP_PIN_ORDER_CFG": "dir::pin_order.cfg",
-  "_comment_dense_pinorder": "DENSE+PIN-ORDER (vs the original 2KB harden): DIE_AREA tightened 2900x2800->1900x2250 (8.12->4.28mm2) with FP_CORE_UTIL/PL_TARGET_DENSITY_PCT raised to 25/25 -- the original macro placement (proven 452um column / 505um row pitch) is UNCHANGED, only the surrounding die margin shrank to what CTS still legalizes. FP_PIN_ORDER_CFG (pin_order.cfg) puts ibus_*/a_mmu_*/ctrl_*/lock EAST, dbus_*/snpc_* WEST for top-level edge abutment. Consumed by the flagship ../top (2KB dense+pin-order soc floorplan)."
+  "_comment_dense_pinorder": "DENSE+PIN-ORDER (vs the original 2KB harden): DIE_AREA tightened 2900x2800->1900x2250 (8.12->4.28mm2) with FP_CORE_UTIL/PL_TARGET_DENSITY_PCT raised to 25/25 -- the original macro placement (proven 452um column / 505um row pitch) is UNCHANGED, only the surrounding die margin shrank to what CTS still legalizes. FP_PIN_ORDER_CFG (pin_order.cfg) puts ibus_*/a_mmu_*/ctrl_*/lock EAST, dbus_*/snpc_* WEST for top-level edge abutment. Consumed by the flagship ../top (2KB dense+pin-order soc floorplan).",
+  "_comment_flat": "dcache is SOUTH of the CPU: CPU-side pins (ibus/a_mmu/ctrl/lock) and the tag block face NORTH, memory (dbus/snpc) EAST. 4 data in a south row, 6 tags (2 banks) in a north row near the CPU pins. Tile bbox 2916x833. Die 1900x2250 -> 3000x900."
 }

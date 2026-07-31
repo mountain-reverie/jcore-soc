@@ -5,8 +5,8 @@
   ],
   "CLOCK_PORT": "clk125",
   "CLOCK_PERIOD": 40.0,
-  "FP_CORE_UTIL": 18,
-  "PL_TARGET_DENSITY_PCT": 18,
+  "FP_CORE_UTIL": 15,
+  "PL_TARGET_DENSITY_PCT": 20,
   "_comment_macros": "gf180_j4mmu 2 KB-cache harden (Task 8, run.sh macro=icache_2k): sibling of ../icache/config.json (8 KB) and ../icache_4k/config.json (4 KB spike). icache_adapter_gf180 now binds its tag RAM to ram_3x8x64_1rw (3x vendor sram64x8m8wm1 macros, one per 8-bit lane of the widened 24-bit tag -- see lib/memory_tech_lib/tech/gf180/ram_3x8x64_1rw_gf180.vhd) and its data RAM to ram_2x8x512_2rw (2x[outer loop]x2 cols = 4x sram512x8m8wm1 macros, no row tiling needed since 512-deep maps 1:1 onto the macro -- see ram_2x8x512_2rw_gf180.vhd). Instance path names below follow the flattened hierarchy pattern captured in ../icache_4k/config.merged.json's real OpenROAD run (u_ucache_ram.tag.subword_gen:N.sram_i / u_ucache_ram.ram:N.ram_s.col_gen:M.sram_i -- the generic ram_1rw/ram_2rw 'rows'/'genram_*'/'mem' generate labels are elided by ghdl-yosys for these single-branch generate-if selections, unlike the 8 KB config's paths which predate that observation) -- NOT verified against this specific netlist's own OpenROAD unplaced-macro warnings (no prior run of icache_2k exists yet); if OpenROAD.GeneratePDN reports unplaced macros, capture the real paths from its warning log and fix this file before retrying. Macros are hand-arranged on the same 452 um column pitch / 505 um row pitch as ../icache/config.json: data macros (4x sram512x8, 2 rows of 2 cols) at the bottom, tag macros (3x sram64x8) as a third row above. DIE_AREA/CORE_AREA reduced vs the 8 KB config (2 KB is ~1/4 the SRAM) but kept on the same proven column pitch/width for placement safety margin.",
   "MACROS": {
     "gf180mcu_fd_ip_sram__sram64x8m8wm1": {
@@ -25,21 +25,21 @@
         "u_ucache_ram.tag.rows:1.genram_3x8x64.mem.subword_gen:1.sram_i": {
           "location": [
             50.0,
-            1059.76
+            35.0
           ],
           "orientation": "N"
         },
         "u_ucache_ram.tag.rows:1.genram_3x8x64.mem.subword_gen:2.sram_i": {
           "location": [
-            501.86,
-            1059.76
+            536.86,
+            35.0
           ],
           "orientation": "N"
         },
         "u_ucache_ram.tag.rows:1.genram_3x8x64.mem.subword_gen:3.sram_i": {
           "location": [
-            953.72,
-            1059.76
+            1023.72,
+            35.0
           ],
           "orientation": "N"
         }
@@ -61,28 +61,28 @@
         "u_ucache_ram.ram:1.ram_s.rows:1.genram_2x8x512.mem.col_gen:1.sram_i": {
           "location": [
             50.0,
-            50.0
+            327.88
           ],
           "orientation": "N"
         },
         "u_ucache_ram.ram:1.ram_s.rows:1.genram_2x8x512.mem.col_gen:2.sram_i": {
           "location": [
-            501.86,
-            50.0
+            536.86,
+            327.88
           ],
           "orientation": "N"
         },
         "u_ucache_ram.ram:2.ram_s.rows:1.genram_2x8x512.mem.col_gen:1.sram_i": {
           "location": [
-            50.0,
-            554.88
+            1023.72,
+            327.88
           ],
           "orientation": "N"
         },
         "u_ucache_ram.ram:2.ram_s.rows:1.genram_2x8x512.mem.col_gen:2.sram_i": {
           "location": [
-            501.86,
-            554.88
+            1510.58,
+            327.88
           ],
           "orientation": "N"
         }
@@ -93,15 +93,16 @@
   "DIE_AREA": [
     0,
     0,
-    1980,
-    1980
+    2000,
+    900
   ],
   "CORE_AREA": [
     10,
     10,
-    1970,
-    1970
+    1990,
+    890
   ],
   "FP_PIN_ORDER_CFG": "dir::pin_order.cfg",
-  "_comment_dense_pinorder": "DENSE+PIN-ORDER (vs the original 2KB harden): DIE_AREA tightened 2400x1800->1980x1980 (4.32->3.92mm2), FP_CORE_UTIL/PL_TARGET_DENSITY_PCT at 18/18 (lower than dcache_2k -- this cache's thinner logic + South-edge clk pin needs more spread for the CTS clock tree to legalize). Original macro placement UNCHANGED. FP_PIN_ORDER_CFG as in ../icache. Consumed by the flagship ../top."
+  "_comment_dense_pinorder": "DENSE+PIN-ORDER (vs the original 2KB harden): DIE_AREA tightened 2400x1800->1980x1980 (4.32->3.92mm2), FP_CORE_UTIL/PL_TARGET_DENSITY_PCT at 18/18 (lower than dcache_2k -- this cache's thinner logic + South-edge clk pin needs more spread for the CTS clock tree to legalize). Original macro placement UNCHANGED. FP_PIN_ORDER_CFG as in ../icache. Consumed by the flagship ../top.",
+  "_comment_flat": "Pins-SOUTH/memory-EAST, tags spread under the left 3 data cols (leaves a contiguous std-cell region on the south-right for the clock tree -- centering the tags fragmented it and failed CTS). Tight vertical stack (tag y=35.0, 60.0um gap). Die 1980x1980 -> 2000x900."
 }

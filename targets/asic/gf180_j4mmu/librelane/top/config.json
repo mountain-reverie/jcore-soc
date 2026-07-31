@@ -1,6 +1,5 @@
 {
   "DESIGN_NAME": "soc",
-  "_comment_toplevel": "gf180_j4mmu FLASH `soc` top -- 2KB dense + pin-order floorplan variant. Binds the 2KB dense-hardened icache_2k/dcache_2k macros (FP_PIN_ORDER_CFG routes ibus/a_mmu/ctrl East toward the CPU, dbus/snpc West toward memory). Connectivity-driven macro arrangement: memory cluster (qspi->mem_region_mux->sdram) West, caches center (right-aligned, ibus-East/dbus-West), CPU East across a 300um routing channel with devices North, boot ROM far-West strap-aligned. Core-only (no pad ring). See top/README.md for routed metrics.",
   "VERILOG_FILES": [
     "dir::soc.v",
     "dir::soc_macros_bb.v"
@@ -8,8 +7,24 @@
   "CLOCK_PORT": "clk_sys",
   "CLOCK_PERIOD": 40.0,
   "SYNTH_ELABORATE_ONLY": false,
-  "_comment_netlistgen": "soc.v is NOT raw RTL -- it is a pre-synthesized, hierarchy-preserving generic-gate netlist (ghdl -e soc; hierarchy -top soc; blackbox <8 macro modules>; synth -top soc -flatten; write_verilog), produced by a TOP-ONLY override of the shared ghdl-yosys netlist-gen (see run.sh). The 8 macro modules (cpu/icache_adapter/dcache_adapter/bootram_infer(boot_mem_gf180)/sdram_ctrl/devices/qspi_flash_ctrl/mem_region_mux) were explicitly `blackbox`-marked BEFORE `synth -flatten`, so their internal logic/vendor-SRAM cells never got re-synthesized or flattened into the top -- only the top-level interconnect glue (aic_irq_gen, cpus' delay lanes, ddr_ram_mux's bus_mux_typec, etc, ~760 cells total) is real logic here. soc_macros_bb.v supplies `(* blackbox *)`-marked empty module declarations (matching port lists) for the 8 macros (+ the 2 leaf vendor SRAM cell types, unused at this level) so LibreLane's own Yosys.Synthesis step's hierarchy check resolves the instances without re-deriving their bodies from RTL -- LibreLane instead binds them via MACROS' lef entries below (LEF-only, no .lib -- see LEF-only-vs-.lib note in the Task 6 report; OL_TO=Magic.WriteLEF stops before any timing signoff that would need .lib).",
   "MACROS": {
+    "cpus": {
+      "gds": [
+        "dir::../cpus/runs/smoke/final/gds/cpus.gds"
+      ],
+      "lef": [
+        "dir::../cpus/runs/smoke/final/lef/cpus.lef"
+      ],
+      "instances": {
+        "cpus": {
+          "location": [
+            1002.93,
+            1090.0
+          ],
+          "orientation": "N"
+        }
+      }
+    },
     "icache_adapter": {
       "gds": [
         "dir::../icache_2k/runs/smoke/final/gds/icache_adapter.gds"
@@ -20,8 +35,8 @@
       "instances": {
         "ddr_ram_mux.u_icache": {
           "location": [
-            1021.76,
-            2390.0
+            560.0,
+            2322.05
           ],
           "orientation": "N"
         }
@@ -37,25 +52,8 @@
       "instances": {
         "ddr_ram_mux.u_dcache": {
           "location": [
-            1101.76,
-            60.0
-          ],
-          "orientation": "N"
-        }
-      }
-    },
-    "sdram_ctrl": {
-      "gds": [
-        "dir::../smoke/runs/smoke/final/gds/sdram_ctrl.gds"
-      ],
-      "lef": [
-        "dir::../smoke/runs/smoke/final/lef/sdram_ctrl.lef"
-      ],
-      "instances": {
-        "sdram_ctrl": {
-          "location": [
-            160.0,
-            1299.68
+            60.0,
+            20.0
           ],
           "orientation": "N"
         }
@@ -71,8 +69,8 @@
       "instances": {
         "devices": {
           "location": [
-            3301.76,
-            2831.03
+            2207.06,
+            1330.24
           ],
           "orientation": "N"
         }
@@ -88,42 +86,25 @@
       "instances": {
         "qspi_flash_ctrl": {
           "location": [
-            160.0,
-            80.0
+            161.17,
+            1462.37
           ],
           "orientation": "N"
         }
       }
     },
-    "mem_region_mux": {
+    "sdram_ctrl": {
       "gds": [
-        "dir::../mem_region_mux/runs/smoke/final/gds/mem_region_mux.gds"
+        "dir::../smoke/runs/smoke/final/gds/sdram_ctrl.gds"
       ],
       "lef": [
-        "dir::../mem_region_mux/runs/smoke/final/lef/mem_region_mux.lef"
+        "dir::../smoke/runs/smoke/final/lef/sdram_ctrl.lef"
       ],
       "instances": {
-        "mem_region_mux": {
+        "sdram_ctrl": {
           "location": [
-            160.0,
-            919.68
-          ],
-          "orientation": "N"
-        }
-      }
-    },
-    "cpus": {
-      "gds": [
-        "dir::../cpus/runs/smoke/final/gds/cpus.gds"
-      ],
-      "lef": [
-        "dir::../cpus/runs/smoke/final/lef/cpus.lef"
-      ],
-      "instances": {
-        "cpus": {
-          "location": [
-            3301.76,
-            1618.98
+            161.17,
+            1090.0
           ],
           "orientation": "N"
         }
@@ -134,19 +115,20 @@
   "DIE_AREA": [
     0,
     0,
-    4497,
-    4450
+    3120,
+    3242
   ],
   "CORE_AREA": [
     20,
     20,
-    4477,
-    4430
+    3100,
+    3222
   ],
   "FP_PDN_VPITCH": 180,
   "FP_PDN_HPITCH": 180,
   "PL_TARGET_DENSITY_PCT": 60,
   "RUN_LINTER": false,
   "RUN_MCSTA": false,
-  "_comment_floorplan": "Approach A: cpus cluster macro (core+pure-ROM boot+onewait, 1114x1132) replaces the separate cpu+boot_mem macros -- the CPU<->boot reset-fetch bus is now INTERNAL to cpus (was a ~3.2mm cross-die route to a far-west boot macro). 7 macros (was 8). die 4497x4450=20.01mm2."
+  "_comment_toplevel": "2K-cache STACKED top: icache(north)/CPU+devices(middle)/dcache(south); qspi+sdram WEST of CPU, devices EAST; mem_region_mux FLATTENED into the SoC glue (not a macro) so the router places its logic freely between the caches' dbus (east edges), sdram and qspi. 6 macros.",
+  "FP_PIN_ORDER_CFG": "dir::pin_order.cfg"
 }
