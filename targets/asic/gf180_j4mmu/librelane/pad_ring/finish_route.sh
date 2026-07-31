@@ -26,15 +26,20 @@ echo "finish_route.sh: reading $ODB" >&2
 
 # path of the odb / outputs *inside* the container (repo mounted at /work)
 rel() { echo "/work/${1#$ROOT/}"; }
-PDK_ROOT="${PDK_ROOT:-$(find "$HOME/.ciel" -maxdepth 4 -type d -name 'gf180mcuC' 2>/dev/null | head -1)}"
 
-# driver tcl written into the mounted runs dir (process substitution can't
-# cross the docker boundary): read the restored design, then source route.tcl.
-DRIVER="$RUNS/_finish_route.tcl"
+# driver tcl written into the pad_ring dir (process substitution can't cross
+# the docker boundary): read the restored design, then source route.tcl.
+# NOT runs/ -- LibreLane's docker runs as root, so runs/ is root-owned and this
+# (runner-user) write would be "Permission denied"; pad_ring/ is runner-owned
+# and equally mounted at /work. The openroad container writes its outputs
+# (routed_flat.def / padring_metrics.json) into runs/ as root, which is fine.
+DRIVER="$HERE/_finish_route.tcl"
 { echo "read_db $(rel "$ODB")"; echo "source $(rel "$HERE/route.tcl")"; } > "$DRIVER"
 
+# route.tcl operates entirely on the design restored by read_db (tech + cells +
+# macros + placement + nets are all in the odb) -- no PDK/LEF mount needed.
 docker run --rm \
-  -v "$ROOT":/work -v "$PDK_ROOT":/pdk \
+  -v "$ROOT":/work \
   -e PADRING_DEF="$(rel "$RUNS/routed_flat.def")" \
   -e PADRING_DRC="$(rel "$RUNS/flatpr_drc.rpt")" \
   -e PADRING_JSON="$(rel "$RUNS/padring_metrics.json")" \

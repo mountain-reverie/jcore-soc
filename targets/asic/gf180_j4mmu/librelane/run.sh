@@ -154,7 +154,11 @@ if [ "$MACRO" = "pad_ring" ]; then
   jq -s '.[0] * .[1]' "$HERE/common.json" "$MCFG" > "$MERGED"
   # Stop after CTS (the direct-OpenROAD route.tcl takes over); skip PDN/IR-drop
   # signoff (IO power ring is strapped by pad abutment, not by the core PDN).
-  OL_TO="${OL_TO:-OpenROAD.CTS}"
+  # FORCE it (not ${OL_TO:-...}) -- the generic path already defaulted OL_TO to
+  # Magic.WriteLEF above, so a `:-` fallback never fires and the flow would run
+  # all the way to global routing and trip the (expected) GRT-0118 congestion
+  # error that route.tcl exists to bypass with -allow_congestion.
+  OL_TO="OpenROAD.CTS"
   if [ -z "$OL_SKIP" ]; then
     OL_SKIP="OpenROAD.IRDropReport Checker.PowerGridViolations Checker.DisconnectedPins"
   fi
