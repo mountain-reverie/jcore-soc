@@ -130,6 +130,36 @@ OL_SKIP="${OL_SKIP:-}"
 # top/README.md (bespoke to the top design's
 # multi-architecture-configuration binding chain in a way the shared
 # per-macro path below has no need to support for any other macro).
+if [ "$MACRO" = "pad_ring" ]; then
+  # pad_ring: FLAT chip integration -- the flash-variant `soc` (its 6 child
+  # macros black-boxed) plus the GF180 IO pad ring, in ONE routing domain (no
+  # soc-as-macro boundary). This is what shrinks the die to 17.5 mm^2 (vs
+  # 25.8 mm^2 soc-as-macro). Netlist + config are GENERATED (not committed --
+  # they reference the ciel PDK IO-cell LEFs by absolute path); run the two
+  # generators first (see pad_ring/README.md):
+  #   python3 pad_ring/gen_netlist.py     # -> pad_ring.v + pad_cells_bb.v
+  #   python3 pad_ring/gen_config.py      # -> config.json (consumes ../top/soc.v)
+  # LibreLane hardens through placement + CTS here; the final global+detailed
+  # route is finished by direct OpenROAD (pad_ring/route.tcl) because it needs
+  # `global_route -allow_congestion` to push past GRT-0118, which LibreLane's
+  # grt step errors on. route.tcl marks the *_PAD chip terminals + power/ground
+  # nets $setSpecial (they are strapped by pad abutment, not routed).
+  NETV="$MDIR/pad_ring.v"
+  if [ ! -f "$NETV" ] || [ ! -f "$MDIR/pad_cells_bb.v" ]; then
+    echo "ERROR: $MDIR/pad_ring.v and/or pad_cells_bb.v missing -- run" \
+         "pad_ring/gen_netlist.py first (see pad_ring/README.md)." >&2; exit 1
+  fi
+  echo "run.sh: macro=pad_ring uses the generated $NETV (flat soc+pads)." >&2
+  MERGED="$MDIR/config.merged.json"
+  jq -s '.[0] * .[1]' "$HERE/common.json" "$MCFG" > "$MERGED"
+  # Stop after CTS (the direct-OpenROAD route.tcl takes over); skip PDN/IR-drop
+  # signoff (IO power ring is strapped by pad abutment, not by the core PDN).
+  OL_TO="${OL_TO:-OpenROAD.CTS}"
+  if [ -z "$OL_SKIP" ]; then
+    OL_SKIP="OpenROAD.IRDropReport Checker.PowerGridViolations Checker.DisconnectedPins"
+  fi
+  goto_librelane=1
+fi
 if [ "$MACRO" = "top" ]; then
   NETV="$MDIR/soc.v"
   if [ ! -f "$NETV" ] || [ ! -f "$MDIR/soc_macros_bb.v" ]; then

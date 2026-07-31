@@ -248,15 +248,21 @@ jobs:
           path: metrics-gf180/metrics-gf180.json
 
   gf180-die-area:
-    # Nightly/dispatch-only GF180 padded-die place & route: hardens the 8
-    # macros + the integrated `top` through LibreLane (multi-hour) and
-    # publishes routed die/core/placed-silicon area vs. the KianV 20.1mm2
-    # reference line, into the SAME benchmark/deploy-pages pipeline as
-    # gf180-synth-metrics above. This is orders of magnitude heavier than
-    # the synth-only job (real place & route, not just yosys stat), so it
-    # must NEVER run on pull_request or an ordinary push -- schedule/
-    # workflow_dispatch only.
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # Master-merge GF180 padded-die place & route (the ASIC-building benchmark):
+    # builds the COMPLETE chip -- the flash-variant soc (2 KB caches) wrapped in
+    # a KianV-style gf180mcu_fd_io pad ring, routed FLAT -- and publishes the
+    # padded die area (17.5 mm2, 0 DRC) vs. the KianV 20.1 mm2 reference line
+    # into the SAME benchmark/deploy-pages pipeline as gf180-synth-metrics
+    # above, plus the routed-die PNG as a build artifact. This flat flow
+    # replaced the earlier soc-as-macro top run (core-only, 21.2 mm2) and is
+    # faster. It is still real multi-hour place & route (orders of magnitude
+    # heavier than the synth-only job), so it must NEVER run on pull_request --
+    # push to the default branch (master merge) + schedule + manual dispatch
+    # only. See targets/asic/gf180_j4mmu/librelane/pad_ring/README.md.
+    if: >-
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'push'
+          && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'))
     # github-hosted for now (works for the per-macro legs; the `top` leg's
     # docker image (~5.3GB) + PDK (~3.5GB) is tight against the ~14GB free
     # disk github-hosted runners provide alongside the OS/tooling already
@@ -309,11 +315,10 @@ jobs:
       - name: Regenerate SoC + shared v2p'd sources
         run: targets/asic/gf180_j4mmu/prep_sources.sh
 
-      - name: GF180 padded-die place & route (8 macros + top)
-        # Guarded so a partial P&R (or the `top` leg's known GDS-merge
-        # finishing-step failure -- see gf180_die.sh's header comment)
-        # still leaves whatever metrics.json WAS produced on disk for the
-        # next step to publish, instead of failing the whole job.
+      - name: GF180 padded-die place & route (flat soc + pad ring)
+        # Guarded so a partial build still leaves whatever metrics.json +
+        # PNG were produced on disk for the next steps to publish, instead
+        # of failing the whole job. gf180_die.sh itself exits 0 regardless.
         continue-on-error: true
         run: targets/asic/gf180_j4mmu/metrics/gf180_die.sh
 
@@ -336,6 +341,14 @@ jobs:
           # download-artifact step consumes.
           name: metrics-die
           path: metrics-die/metrics-die.json
+
+      - name: Upload padded-die visual (routed flat pad ring)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gf180-padded-die-png
+          path: metrics-die/gf180-padded-die.png
+          if-no-files-found: warn
 
   benchmark:
     needs: [bitstream, bitstream-icesugar, gf180-synth-metrics, gf180-die-area]

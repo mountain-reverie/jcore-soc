@@ -25,7 +25,12 @@ tools/fpga/to_gha_bench.py unchanged:
     {"target","board","commit","metrics":[{"name","unit","value","dir"},...]}
 
 Series emitted (unit mm2, dir=smaller-is-better):
-  gf180-die-area-mm2            -- top, routed die area
+  gf180-padded-die-mm2          -- flat pad-ring COMPLETE chip die (with IO pad
+                                   ring); the headline number vs KianV's 20.1.
+                                   From --padded-die (pad_ring/runs/
+                                   padring_metrics.json, written by route.tcl).
+  gf180-padded-die-drc          -- flat pad-ring detailed-route DRC count (0)
+  gf180-die-area-mm2            -- top, routed die area (soc-as-macro, core-only)
   gf180-core-area-mm2           -- top, routed core area
   gf180-placed-silicon-mm2      -- top, placed-instance area (silicon proxy)
   gf180-die-area-mm2 [<macro>]  -- per-macro routed die area, one per macro
@@ -76,9 +81,24 @@ def _mm2(um2):
 
 
 def build_die_doc(top_metrics, macro_metrics, commit,
-                   target="gf180mcu-mcu7t5v0", board="gf180_j4mmu"):
-    """top_metrics: path or None. macro_metrics: {macro: path}."""
+                   target="gf180mcu-mcu7t5v0", board="gf180_j4mmu",
+                   padded_die=None):
+    """top_metrics: path or None. macro_metrics: {macro: path}.
+    padded_die: path to pad_ring/runs/padring_metrics.json or None."""
     metrics = []
+
+    # Flat pad-ring padded chip (this work): the headline number, a COMPLETE
+    # die WITH a gf180mcu_fd_io pad ring, directly comparable to KianV's 20.1.
+    if padded_die is not None:
+        pm = json.loads(Path(padded_die).read_text())
+        if pm.get("design__die__area") is not None:
+            metrics.append({"name": "gf180-padded-die-mm2", "unit": "mm2",
+                             "value": _mm2(float(pm["design__die__area"])),
+                             "dir": "smaller"})
+        if pm.get("design__route__drc_errors") is not None:
+            metrics.append({"name": "gf180-padded-die-drc", "unit": "count",
+                             "value": int(pm["design__route__drc_errors"]),
+                             "dir": "smaller"})
 
     if top_metrics is not None:
         m = parse_or_metrics(top_metrics)
@@ -123,6 +143,9 @@ def main(argv=None):
                      metavar="MACRO=METRICS_JSON",
                      help="repeatable: per-macro metrics.json, e.g. "
                           "j4_core=librelane/j4_core/runs/smoke/final/metrics.json")
+    ap.add_argument("--padded-die", default=None,
+                     help="path to pad_ring/runs/padring_metrics.json "
+                          "(flat pad-ring padded chip die area + DRC count)")
     ap.add_argument("--commit", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--target", default="gf180mcu-mcu7t5v0")
@@ -136,7 +159,8 @@ def main(argv=None):
             ap.error(f"expected MACRO=METRICS_JSON, got: {pair!r}")
         macro_metrics[macro] = path
 
-    doc = build_die_doc(a.top, macro_metrics, a.commit, a.target, a.board)
+    doc = build_die_doc(a.top, macro_metrics, a.commit, a.target, a.board,
+                         padded_die=a.padded_die)
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     with open(a.out, "w") as f:
         json.dump(doc, f, indent=2)

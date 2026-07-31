@@ -9,15 +9,51 @@ external-SDRAM architecture. (wafer.space/news/kianv-riscv-soc)
 
 ## Headline
 
-At GF180, the jcore **J4 + MMU** flash SoC lands **at parity with KianV**. The
-robust, fair basis is **placed silicon** (cells + SRAM macros): **12.80 mm²**
-with the boot scratchpad removed, versus KianV's ~13 mm² (both at ~61–65 %
-utilization) — i.e. jcore is now **~2 % under** KianV (it was ~5 % over before
-the scratchpad removal). This is now backed by a **fully-routed** integrated
-top (detailed routing + RCX clean, no GRT-0118 congestion) at **21.20 mm² die
-/ 61.5 % util** — not a placement estimate. The two are genuine peers — both
-MMU/Linux-class, both cache-SRAM-dominated, both external SDRAM + SPI-flash
-boot. The area is **driven by the two 8 KB caches**, not core efficiency.
+At GF180, the jcore **J4 + MMU** flash SoC now lands **below KianV as a
+complete, padded chip**: **17.5 mm² die with a full `gf180mcu_fd_io` pad ring**,
+detailed-routed at **0 DRC**, versus KianV's **20.1 mm² padded die** — a
+**~13 % smaller** whole chip on the same PDK, no longer a core-only comparison.
+This closes the last honesty caveat of the earlier analysis (which was
+core-only, no pad ring): the number below now includes the pads KianV's number
+includes. See **[Full-chip pad ring](#full-chip-pad-ring-this-work)**.
+
+The lever that got there was two-fold: a **2 KB-cache** floorplan (the area is
+cache-dominated) and, decisively, **flat chip integration** — routing the soc
+core and the pad ring in one domain instead of wrapping a hardened soc macro in
+a separate pad ring (25.8 → 17.5 mm²). The two SoCs remain genuine peers — both
+MMU/Linux-class, both cache-SRAM-dominated, both external SDRAM + SPI-flash boot.
+
+*(Earlier framing, still valid as the routing-independent basis:* at 8 KB caches
+the fair core-only comparison is **placed silicon** — cells + SRAM macros —
+**12.80 mm²** vs KianV's ~13 mm², i.e. **~2 % under**, backed by a fully-routed
+core-only top at **21.20 mm² / 61.5 % util**. Placed silicon does not depend on
+routing headroom or pad ring and is the like-for-like number at 8 KB.*)*
+
+## Full-chip pad ring (this work)
+
+The final step wraps the flash-variant `soc` in a **KianV-style peripheral pad
+ring** (58 `bi_t` bidirectional signal pads + 16 `dvdd`/`dvss` power pads,
+spread evenly S18/E19/N18/W19) and — the key move — integrates it **flat**: the
+6 soc child blocks (`cpus`, the 2 cache adapters, `sdram_ctrl`,
+`qspi_flash_ctrl`, `devices`) are black-boxed but the top interconnect glue and
+the pads route together in **one domain**, with no hard soc/pad-ring macro
+boundary.
+
+| integration | die | pad ring | DRC | route |
+|---|---|---|---|---|
+| soc-as-macro (hardened soc wrapped in a pad ring) | 5080×5080 = **25.8 mm²** | yes | 0 | macro-boundary |
+| **flat (soc children black-boxed, glue + pads one domain)** | **4120×4242 = 17.5 mm²** | yes | **0** | flat, direct-OpenROAD |
+| **KianV reference** | **20.1 mm²** | yes | — | — |
+
+Flattening removes the macro-pin keep-out and lets the placer interleave pad
+drivers against the core, recovering ~8 mm² — enough to put the **whole padded
+chip below KianV**. The flat design is congested enough that LibreLane's GRT
+step errors on GRT-0118, so the final route is finished with **direct OpenROAD**
+(`global_route -allow_congestion`; `*_PAD`/power nets marked special as they are
+strapped by pad abutment) → **0 DRC, fully detailed-routed**. Flow + generators:
+`targets/asic/gf180_j4mmu/librelane/pad_ring/` (see its `README.md`). This flow
+is also faster than the earlier soc-as-macro integration and now runs as the
+master-merge ASIC benchmark in CI (`.github/workflows/board-synth.yml`).
 
 ## Integrated top (this work)
 
@@ -141,16 +177,19 @@ routing overhead eats into it.**
 
 | | jcore J4+MMU flash | KianV |
 |---|---|---|
-| Placed silicon (cells + SRAM) | **12.80 mm²** (measured, post-scratchpad-removal) | ~13 mm² |
-| Core / die basis | 21.20 mm² core-only, **fully-routed** (RCX-clean, 61.5 % util, no pad ring) | 20.1 mm² padded die |
+| Full padded chip (with pad ring) | **17.5 mm² die, 0 DRC** (flat integration, 2 KB caches) | 20.1 mm² padded die |
+| Placed silicon (cells + SRAM, 8 KB) | **12.80 mm²** (measured, post-scratchpad-removal) | ~13 mm² |
+| Core / die basis (8 KB, core-only) | 21.20 mm² core-only, **fully-routed** (RCX-clean, 61.5 % util, no pad ring) | 20.1 mm² padded die |
 | ISA / class | SH-2-compatible J4, SH-4-class MMU | RV32IMA + SV32 |
 | Linux-capable | yes (MMU in RTL) | yes (uLinux/XV6) |
 | On-chip cache SRAM | 2×8 KB (vendor macros) | yes ("cache SRAM around the core") |
 | External DRAM | SDRAM controller | 32 MiB SDRAM controller |
 | Flash boot | QSPI XIP (PR #98) | SPI-flash XIP |
 
-**Verdict:** the J4+MMU flash SoC **fits the same ~20 mm² GF180 die class as KianV, at
-parity — now dead-even, ~2 % under KianV on placed silicon.** Both are SRAM-dominated;
+**Verdict:** as a **complete padded chip** the J4+MMU flash SoC is now **~13 %
+smaller than KianV** (17.5 vs 20.1 mm², flat pad-ring integration, 0 DRC); at
+8 KB caches the routing-independent placed-silicon basis is **~2 % under KianV**
+(dead-even parity). Both are SRAM-dominated;
 the lever for either is cache size. This corrects an earlier naive impression of large
 headroom that came from summing per-block die boxes (double-counting whitespace)
 against KianV's full die — the integrated **12.80 mm² placed-silicon** figure
@@ -163,9 +202,13 @@ routing-congestion sensitivity of this cache-dominated design) still apply.
 
 ## Basis / caveats (honesty)
 
-- **Core-only** (no pad ring). A `gf180mcu_fd_io` pad ring (B-scope) would push the
-  jcore *die* above core, further past KianV's 20.1 mm². KianV's number is a full
-  padded die, so jcore is if anything understated here.
+- **Pad ring: now closed.** The 8 KB placed-silicon/core-only figures below are
+  no-pad-ring. That caveat is superseded by the [full-chip pad-ring
+  result](#full-chip-pad-ring-this-work): the 2 KB-cache design **with** a
+  `gf180mcu_fd_io` pad ring, integrated flat, is **17.5 mm² at 0 DRC — below**
+  KianV's padded 20.1 mm². So the padded like-for-like comparison now exists and
+  favors jcore; the placed-silicon rows remain the routing-independent basis at
+  8 KB.
 - **Density sensitivity:** the caches were hardened loose (internal util ~15 %), so
   their LEF footprints (5.06 mm² each) carry macro-internal whitespace; the top's
   65.3 % util sits on top of that. A tighter cache hardening would reduce the die. The
