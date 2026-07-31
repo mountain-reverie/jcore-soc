@@ -30,6 +30,26 @@ for k in range(5): add(f'gpio_{k}','bi',o=f'gpio_do[{k}]',i=f'gpio_di[{k}]',oe="
 print(f"// {len(sig)} signal pads")
 NPWR_DVDD=8; NPWR_DVSS=8
 
+# Read the ACTUAL pin list of each IO cell from its LEF, so both the
+# instantiations and the blackbox stubs connect only ports the PDK cell really
+# has -- the gf180 cells are asymmetric (dvdd has DVDD/DVSS/VSS but no VDD;
+# dvss has DVDD/DVSS/VDD but no VSS; bi_t has no ON) and hard-wiring a fixed
+# port set makes LibreLane's yosys quit ("cell does not have a port named ...").
+import glob
+IOLEF=os.environ.get('IO_LEF_DIR','')
+if not os.path.isdir(IOLEF):
+    pats=[]
+    if os.environ.get('PDK_ROOT'):
+        pats.append(os.path.join(os.environ['PDK_ROOT'],'libs.ref/gf180mcu_fd_io/lef'))
+    pats.append(os.path.expanduser('~/.ciel/ciel/gf180mcu/versions/*/gf180mcu*/libs.ref/gf180mcu_fd_io/lef'))
+    for pat in pats:
+        c=glob.glob(pat)
+        if c: IOLEF=c[0]; break
+if not os.path.isdir(IOLEF):
+    sys.exit(f"gen_netlist: could not locate gf180mcu_fd_io LEF dir (set PDK_ROOT or IO_LEF_DIR); tried {pats}")
+cellpins={c:[l.split()[1] for l in open(f'{IOLEF}/gf180mcu_fd_io__{c}.lef') if l.strip().startswith('PIN ')]
+          for c in ('bi_t','dvdd','dvss')}
+
 L=[]
 L.append('/* pad_ring: soc core + GF180 IO pad ring (KianV-structured, 58 signals). Generated. */')
 L.append('module pad_ring (')
@@ -47,17 +67,23 @@ for p,w in soc_ports.items():
     L.append(f'  wire {"["+str(w-1)+":0] " if w>1 else ""}{p};')
 # tie unbonded gpio_di[31:5] low
 L.append("  assign gpio_di[31:5] = 27'b0;")
-# instantiate signal pads
-tie='.ON(VDD), .CS(VDD), .SL(VSS), .PU(VSS), .PD(VSS), .PDRV0(VDD), .PDRV1(VDD), .DVDD(DVDD), .DVSS(DVSS), .VDD(VDD), .VSS(VSS)'
+# instantiate signal pads -- connect only pins the bi_t cell actually has
+def inst(cell, name, conn):
+    ports=', '.join(f'.{p}({conn[p]})' for p in cellpins[cell] if p in conn)
+    return f'  gf180mcu_fd_io__{cell} {name} ({ports});'
 for nm,d,o,i,oe in sig:
     A = o if o else "1'b0"
-    Y = f'.Y({i}), ' if i else ''
     OE = "1'b1" if d=='out' else ("1'b0" if d=='in' else oe)
     IE = "1'b0" if d=='out' else "1'b1"
-    L.append(f'  {BIT} pad_{nm} (.PAD({nm}_PAD), .A({A}), {Y}.OE({OE}), .IE({IE}), {tie});')
-# power pads
-for k in range(NPWR_DVDD): L.append(f'  {DVDD} pwr_dvdd_{k} (.DVDD(DVDD), .VDD(VDD), .DVSS(DVSS), .VSS(VSS));')
-for k in range(NPWR_DVSS): L.append(f'  {DVSS} pwr_dvss_{k} (.DVDD(DVDD), .VDD(VDD), .DVSS(DVSS), .VSS(VSS));')
+    conn={'PAD':f'{nm}_PAD','A':A,'OE':OE,'IE':IE,
+          'CS':'VDD','SL':'VSS','PU':'VSS','PD':'VSS','PDRV0':'VDD','PDRV1':'VDD','ON':'VDD',
+          'DVDD':'DVDD','DVSS':'DVSS','VDD':'VDD','VSS':'VSS'}
+    if i: conn['Y']=i   # pad->core input only where used
+    L.append(inst('bi_t',f'pad_{nm}',conn))
+# power pads -- each cell connects only its own real pins to same-named nets
+pw={'DVDD':'DVDD','DVSS':'DVSS','VDD':'VDD','VSS':'VSS'}
+for k in range(NPWR_DVDD): L.append(inst('dvdd',f'pwr_dvdd_{k}',pw))
+for k in range(NPWR_DVSS): L.append(inst('dvss',f'pwr_dvss_{k}',pw))
 # soc core
 conns=', '.join(f'.{p}({p})' for p in soc_ports)
 L.append(f'  soc u_soc ({conns});')
@@ -65,15 +91,9 @@ L.append('endmodule')
 open(os.path.join(DIR,'pad_ring.v'),'w').write('\n'.join(L)+'\n')
 print(f"wrote pad_ring.v : {len(sig)} signal pads + {NPWR_DVDD+NPWR_DVSS} power pads")
 
-# also emit the IO-cell blackbox stubs (pad_cells_bb.v)
-IOLEF='/home/cedric/.ciel/ciel/gf180mcu/versions/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/gf180mcuC/libs.ref/gf180mcu_fd_io/lef'
-import glob
-if not os.path.isdir(IOLEF):
-    cand=glob.glob(os.path.expanduser('~/.ciel/ciel/gf180mcu/versions/*/gf180mcuC/libs.ref/gf180mcu_fd_io/lef'))
-    IOLEF=cand[0] if cand else IOLEF
+# also emit the IO-cell blackbox stubs (pad_cells_bb.v) from the same pin lists
 out=['/* GF180 IO pad cell blackbox stubs (generated) */']
-for cell in ('bi_t','dvdd','dvss'):
-    pins=[l.split()[1] for l in open(f'{IOLEF}/gf180mcu_fd_io__{cell}.lef') if l.strip().startswith('PIN ')]
+for cell,pins in cellpins.items():
     out+=['(* blackbox *)',f'module gf180mcu_fd_io__{cell} ({", ".join(pins)});']+[f'  inout {p};' for p in pins]+['endmodule','']
 open(os.path.join(DIR,'pad_cells_bb.v'),'w').write('\n'.join(out))
 print("wrote pad_cells_bb.v")
