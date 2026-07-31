@@ -303,7 +303,8 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends python3-pip
-          python3 -m pip install --quiet --break-system-packages ciel pytest
+          # ciel (PDK), pytest (metrics-emitter tests), matplotlib (render_def.py PNG)
+          python3 -m pip install --quiet --break-system-packages ciel pytest matplotlib
 
       # yosys + ghdl + ghdl-yosys-plugin for the per-macro netlist generation
       # (run.sh's `yosys -m ghdl ...`). This job runs on a BARE runner (not the
