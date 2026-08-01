@@ -35,8 +35,8 @@
       "instances": {
         "ddr_ram_mux.u_icache": {
           "location": [
-            560.0,
-            2322.05
+            560,
+            2410
           ],
           "orientation": "N"
         }
@@ -69,8 +69,8 @@
       "instances": {
         "devices": {
           "location": [
-            2207.06,
-            1330.24
+            2320,
+            1330
           ],
           "orientation": "N"
         }
@@ -116,13 +116,13 @@
     0,
     0,
     3120,
-    3242
+    3400
   ],
   "CORE_AREA": [
-    20,
-    20,
-    3100,
-    3222
+    10,
+    10,
+    3110,
+    3390
   ],
   "FP_PDN_VPITCH": 180,
   "FP_PDN_HPITCH": 180,

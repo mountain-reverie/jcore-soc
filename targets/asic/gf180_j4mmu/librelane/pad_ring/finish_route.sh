@@ -12,7 +12,7 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../../../../.." && pwd)"
-OL_IMAGE="${OL_IMAGE:-ghcr.io/librelane/librelane:2.4.2}"
+OL_IMAGE="${OL_IMAGE:-ghcr.io/librelane/librelane:3.0.5}"
 RUNS="$HERE/runs"
 
 # newest CTS odb from the run.sh macro=pad_ring harden

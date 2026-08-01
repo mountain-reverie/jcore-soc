@@ -182,3 +182,17 @@ floorplan re-tune where a tight 7T die no longer fits).
 Logic ~+23-38% (9T cells); SRAM-bound caches flat (library-independent). All
 harden end-to-end; the KLayout-render step fails on SRAM CIF (cosmetic; die/LEF
 produced before it). SRAM MACRO lib fields converted 5v00->3.3V per-corner.
+
+## Phase 3 result (2026-07-31): pad ring at 9T/3.3V = 18.13 mm²
+Flat pad ring hardens to CTS + global-route on 3.0.5+D at 9T/3.3V: **die
+4120x4400 = 18.13 mm²** (placed/global-routed confirmed) — still BELOW KianV's
+20.1 mm² even at the KianV-matched operating point. Top floorplan re-tuned for
+the bigger 9T children (die 3120->3400, devices/icache shifted; clean).
+
+KNOWN 3.x LIMITATION (detailed route): 3.0.5's TritonRoute is stricter than
+2.4.2 about pins outside CORE_AREA and hard-errors DRT-0073 (no access point)
+on the perimeter pads' PAD terminals. The flat-macro pad approach worked on
+2.4.2 but conflicts on 3.0.5: CORE_AREA excluding the pad margin -> DRT-0073;
+including it -> PDN-0179 (straps can't repair channels around pads). Proper fix
+= LibreLane's real IO/pad-ring flow (not the flat-macro shortcut) -- a scoped
+follow-up. The die AREA (the KianV comparison metric) is confirmed regardless.
