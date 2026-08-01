@@ -16,7 +16,7 @@ set drc_rpt [expr {[info exists ::env(PADRING_DRC)] ? $::env(PADRING_DRC) : "fla
 set out_json [expr {[info exists ::env(PADRING_JSON)] ? $::env(PADRING_JSON) : "padring_metrics.json"}]
 
 set blk [[[ord::get_db] getChip] getBlock]
-set nsig 0; set nspec 0
+set nsig 0; set nspec 0; set ndisc 0
 foreach net [$blk getNets] {
   set n [$net getName]; set st [$net getSigType]
   # *_PAD chip terminals + power/ground are strapped by pad abutment, not routed
@@ -27,6 +27,18 @@ foreach net [$blk getNets] {
 puts ">>> FLAT route: $nsig signal nets, $nspec special (PAD/power/ties)"
 global_route -allow_congestion -congestion_iterations 100
 puts ">>> global route done"
+# 3.0.5 TritonRoute (stricter than 2.4.2) computes pin access even for special
+# nets and hard-errors (DRT-0073) on the pad PAD terminals at the die edge,
+# which it cannot create an access point for. Those *_PAD nets are external chip
+# terminals (pad<->top-port, strapped by abutment, never internally routed), so
+# disconnect their instance terminals before detailed routing -- the internal
+# soc<->pad core-side nets (A/Y/OE/IE) still route normally.
+foreach net [$blk getNets] {
+  if {[string match "*_PAD" [$net getName]]} {
+    foreach iterm [$net getITerms] { odb::dbITerm_disconnect $iterm; incr ndisc }
+  }
+}
+puts ">>> disconnected $ndisc PAD-terminal iterms (external chip pads)"
 detailed_route -output_drc $drc_rpt -verbose 1
 puts ">>> detailed route done"
 write_def $out_def
