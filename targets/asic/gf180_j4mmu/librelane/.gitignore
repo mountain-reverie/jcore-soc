@@ -7,6 +7,9 @@
 # committed inputs (run.sh macro=top consumes them; regen recipe in top/README.md)
 !top/soc.v
 !top/soc_macros_bb.v
+# EXCEPTION: chip_core's flat whole-soc netlist is a committed input too
+# (run.sh macro=chip_core consumes it; regen recipe in chip_core/README.md)
+!chip_core/chip_core.v
 # pad_ring: netlist+config are generated (bind run-output child LEFs); see pad_ring/README.md
 pad_ring/config.json
 pad_ring/macros/

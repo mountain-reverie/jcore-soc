@@ -164,6 +164,25 @@ if [ "$MACRO" = "pad_ring" ]; then
   fi
   goto_librelane=1
 fi
+if [ "$MACRO" = "chip_core" ]; then
+  # Flat whole-soc core (KianV-style): the entire soc flattened into one netlist
+  # (all logic std cells, only vendor SRAM as auto-placed macros), routed as a
+  # single macro. chip_top then wraps this in the IO pad ring (the real
+  # LibreLane Chip/Padring flow -- no chip-level routing). chip_core.v is
+  # GENERATED (flatten top/soc.v + the 6 child netlists; see chip_core/README).
+  NETV="$MDIR/chip_core.v"
+  if [ ! -f "$NETV" ]; then
+    echo "ERROR: $NETV missing -- generate it by flattening soc.v + the child" \
+         "netlists (see chip_core/README.md)." >&2; exit 1
+  fi
+  echo "run.sh: macro=chip_core uses the generated flat-soc $NETV." >&2
+  MERGED="$MDIR/config.merged.json"
+  jq -s '.[0] * .[1]' "$HERE/common.json" "$MCFG" > "$MERGED"
+  if [ -z "$OL_SKIP" ]; then
+    OL_SKIP="OpenROAD.IRDropReport Checker.PowerGridViolations KLayout.Render"
+  fi
+  goto_librelane=1
+fi
 if [ "$MACRO" = "top" ]; then
   NETV="$MDIR/soc.v"
   if [ ! -f "$NETV" ] || [ ! -f "$MDIR/soc_macros_bb.v" ]; then
@@ -295,7 +314,10 @@ fi
 # their semantic coordinates (tag/ram:N/col_gen:M/subword_gen:K). No-op for
 # macros without placed vendor SRAM (top/pad_ring/boot_mem). See
 # tools/asic/fix_macro_paths.py.
-if grep -q 'gf180mcu_fd_ip_sram__' "$MERGED" 2>/dev/null; then
+# chip_core places all 17 SRAMs by their exact names taken from the committed
+# flat netlist (frozen, like top/soc.v) -- no version drift, and the tag SRAMs'
+# semantic coordinates collide in the pairing heuristic, so skip the rewrite.
+if [ "$MACRO" != "chip_core" ] && grep -q 'gf180mcu_fd_ip_sram__' "$MERGED" 2>/dev/null; then
   python3 "$ROOT/tools/asic/fix_macro_paths.py" "$MERGED" "$NETV" \
     || { echo "ERROR: fix_macro_paths failed for $MACRO" >&2; exit 1; }
 fi
