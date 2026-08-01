@@ -1,0 +1,201 @@
+{
+  "DESIGN_NAME": "soc",
+  "VERILOG_FILES": [
+    "dir::chip_core.v"
+  ],
+  "CLOCK_PORT": "clk_sys",
+  "CLOCK_PERIOD": 30.0,
+  "FP_SIZING": "absolute",
+  "DIE_AREA": [
+    0,
+    0,
+    3900,
+    3900
+  ],
+  "CORE_AREA": [
+    10,
+    10,
+    3890,
+    3890
+  ],
+  "PL_TARGET_DENSITY_PCT": 35,
+  "FP_PDN_MULTILAYER": true,
+  "RUN_LINTER": false,
+  "RUN_MCSTA": false,
+  "MACROS": {
+    "gf180mcu_fd_ip_sram__sram64x8m8wm1": {
+      "lef": [
+        "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lef/gf180mcu_fd_ip_sram__sram64x8m8wm1.lef"
+      ],
+      "gds": [
+        "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/gds/gf180mcu_fd_ip_sram__sram64x8m8wm1.gds"
+      ],
+      "lib": {
+        "*_tt_025C_3v30": [
+          "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram64x8m8wm1__tt_025C_3v30.lib"
+        ],
+        "*_ss_n40C_3v00": [
+          "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram64x8m8wm1__ss_n40C_3v00.lib"
+        ],
+        "*_ss_125C_3v00": [
+          "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram64x8m8wm1__ss_125C_3v00.lib"
+        ],
+        "*_ff_n40C_3v60": [
+          "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram64x8m8wm1__ff_n40C_3v60.lib"
+        ],
+        "*_ff_125C_3v60": [
+          "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram64x8m8wm1__ff_125C_3v60.lib"
+        ]
+      },
+      "instances": {
+        "ddr_ram_mux.u_dcache.u_dcache_ram.tag0.rows:1.genram_3x8x64.mem.subword_gen:1.sram_i": {
+          "location": [
+            100.0,
+            2219.52
+          ],
+          "orientation": "N"
+        },
+        "ddr_ram_mux.u_dcache.u_dcache_ram.tag0.rows:1.genram_3x8x64.mem.subword_gen:2.sram_i": {
+          "location": [
+            100.0,
+            2497.4
+          ],
+          "orientation": "N"
+        },
+        "ddr_ram_mux.u_dcache.u_dcache_ram.tag0.rows:1.genram_3x8x64.mem.subword_gen:3.sram_i": {
+          "location": [
+            100.0,
+            2775.28
+          ],
+          "orientation": "N"
+        },
+        "ddr_ram_mux.u_dcache.u_dcache_ram.tag1.rows:1.genram_3x8x64.mem.subword_gen:1.sram_i": {
+          "location": [
+            100.0,
+            3053.16
+          ],
+          "orientation": "N"
+        },
+        "ddr_ram_mux.u_dcache.u_dcache_ram.tag1.rows:1.genram_3x8x64.mem.subword_gen:2.sram_i": {
+          "location": [
+            100.0,
+            3331.04
+          ],
+          "orientation": "N"
+        },
+        "ddr_ram_mux.u_dcache.u_dcache_ram.tag1.rows:1.genram_3x8x64.mem.subword_gen:3.sram_i": {
+          "location": [
+            3368.14,
+            2219.52
+          ],
+          "orientation": "N"
+        },
+        "ddr_ram_mux.u_icache.u_ucache_ram.tag.rows:1.genram_3x8x64.mem.subword_gen:1.sram_i": {
+          "location": [
+            3368.14,
+            2497.4
+          ],
+          "orientation": "N"
+        },
+        "ddr_ram_mux.u_icache.u_ucache_ram.tag.rows:1.genram_3x8x64.mem.subword_gen:2.sram_i": {
+          "location": [
+            3368.14,
+            2775.28
+          ],
+          "orientation": "N"
+        },
+        "ddr_ram_mux.u_icache.u_ucache_ram.tag.rows:1.genram_3x8x64.mem.subword_gen:3.sram_i": {
+          "location": [
+            3368.14,
+            3053.16
+          ],
+          "orientation": "N"
+        }
+      }
+    },
+    "gf180mcu_fd_ip_sram__sram512x8m8wm1": {
+      "lef": [
+        "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lef/gf180mcu_fd_ip_sram__sram512x8m8wm1.lef"
+      ],
+      "gds": [
+        "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/gds/gf180mcu_fd_ip_sram__sram512x8m8wm1.gds"
+      ],
+      "lib": {
+        "*_tt_025C_3v30": [
+          "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram512x8m8wm1__tt_025C_3v30.lib"
+        ],
+        "*_ss_n40C_3v00": [
+          "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram512x8m8wm1__ss_n40C_3v00.lib"
+        ],
+        "*_ss_125C_3v00": [
+          "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram512x8m8wm1__ss_125C_3v00.lib"
+        ],
+        "*_ff_n40C_3v60": [
+          "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram512x8m8wm1__ff_n40C_3v60.lib"
+        ],
+        "*_ff_125C_3v60": [
+          "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram512x8m8wm1__ff_125C_3v60.lib"
+        ]
+      },
+      "instances": {
+        "ddr_ram_mux.u_dcache.u_dcache_ram.ram:1.sc.ram_s.rows:1.genram_2x8x512.mem.col_gen:1.sram_i": {
+          "location": [
+            100.0,
+            100.0
+          ],
+          "orientation": "N"
+        },
+        "ddr_ram_mux.u_dcache.u_dcache_ram.ram:1.sc.ram_s.rows:1.genram_2x8x512.mem.col_gen:2.sram_i": {
+          "location": [
+            100.0,
+            629.88
+          ],
+          "orientation": "N"
+        },
+        "ddr_ram_mux.u_dcache.u_dcache_ram.ram:2.sc.ram_s.rows:1.genram_2x8x512.mem.col_gen:1.sram_i": {
+          "location": [
+            100.0,
+            1159.76
+          ],
+          "orientation": "N"
+        },
+        "ddr_ram_mux.u_dcache.u_dcache_ram.ram:2.sc.ram_s.rows:1.genram_2x8x512.mem.col_gen:2.sram_i": {
+          "location": [
+            100.0,
+            1689.64
+          ],
+          "orientation": "N"
+        },
+        "ddr_ram_mux.u_icache.u_ucache_ram.ram:1.ram_s.rows:1.genram_2x8x512.mem.col_gen:1.sram_i": {
+          "location": [
+            3368.14,
+            100.0
+          ],
+          "orientation": "N"
+        },
+        "ddr_ram_mux.u_icache.u_ucache_ram.ram:1.ram_s.rows:1.genram_2x8x512.mem.col_gen:2.sram_i": {
+          "location": [
+            3368.14,
+            629.88
+          ],
+          "orientation": "N"
+        },
+        "ddr_ram_mux.u_icache.u_ucache_ram.ram:2.ram_s.rows:1.genram_2x8x512.mem.col_gen:1.sram_i": {
+          "location": [
+            3368.14,
+            1159.76
+          ],
+          "orientation": "N"
+        },
+        "ddr_ram_mux.u_icache.u_ucache_ram.ram:2.ram_s.rows:1.genram_2x8x512.mem.col_gen:2.sram_i": {
+          "location": [
+            3368.14,
+            1689.64
+          ],
+          "orientation": "N"
+        }
+      }
+    }
+  },
+  "_comment": "Flat whole-soc chip_core (KianV-style): entire soc synthesized flat, only vendor SRAM as (auto-placed) macros. 9T/3.3V on 3.0.5. This is the routed core that chip_top wraps in pads."
+}
