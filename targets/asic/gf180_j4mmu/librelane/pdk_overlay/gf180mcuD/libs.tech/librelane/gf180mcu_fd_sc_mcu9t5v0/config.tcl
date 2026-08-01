@@ -5,12 +5,19 @@ set current_folder [file dirname [file normalize [info script]]]
 set ::env(PLACE_SITE) "GF018hv5v_green_sc9"
 
 # welltap and endcap cell
-set ::env(FP_WELLTAP_CELL) "$::env(STD_CELL_LIBRARY)__filltie"
-set ::env(FP_ENDCAP_CELL) "$::env(STD_CELL_LIBRARY)__endcap"
+set ::env(WELLTAP_CELL) "$::env(STD_CELL_LIBRARY)__filltie"
+set ::env(ENDCAP_CELL) "$::env(STD_CELL_LIBRARY)__endcap"
 
 # defaults (can be overridden by designs):
 set ::env(SYNTH_DRIVING_CELL) "$::env(STD_CELL_LIBRARY)__inv_1/ZN"
-set ::env(SYNTH_CLK_DRIVING_CELL) "$::env(STD_CELL_LIBRARY)__inv_4/ZN"
+# jcore-soc local compat shim: LibreLane 2.4.x's pdk_compat.migrate_old_config
+# unconditionally reads config['SYNTH_DRIVING_CELL_PIN'] to rebuild
+# SYNTH_CLK_DRIVING_CELL for any gf180mcu* PDK (config/pdk_compat.py "x2.
+# Invalid Variables (gf180mcu)" block), but this ciel pin's config.tcl never
+# defines a separate SYNTH_DRIVING_CELL_PIN (old combined "cell/pin" schema
+# throughout) -- raised a bare KeyError. Define it so the compat shim can run.
+if { ![info exist ::env(SYNTH_DRIVING_CELL_PIN)] } { set ::env(SYNTH_DRIVING_CELL_PIN) "ZN" }
+set ::env(SYNTH_CLK_DRIVING_CELL) "$::env(STD_CELL_LIBRARY)__inv_4"
 
 # update these
 set ::env(OUTPUT_CAP_LOAD) "72.91" ; # femtofarad from pin I in liberty file
@@ -23,8 +30,6 @@ set ::env(FILL_CELLS) "$::env(STD_CELL_LIBRARY)__fill_*"
 set ::env(DECAP_CELLS) "$::env(STD_CELL_LIBRARY)__fillcap_*"
 
 # Diode Insertion
-# A fake diode has to be created, for now don't use any strategy that uses fake diode
-# set ::env(FAKEDIODE_CELL) ""
 set ::env(DIODE_CELL) "$::env(STD_CELL_LIBRARY)__antenna/I"
 
 set ::env(CELL_PAD_EXCLUDE) "$::env(STD_CELL_LIBRARY)__filltie $::env(STD_CELL_LIBRARY)__fill_* $::env(STD_CELL_LIBRARY)__endcap"
@@ -33,7 +38,9 @@ set ::env(CELL_PAD_EXCLUDE) "$::env(STD_CELL_LIBRARY)__filltie $::env(STD_CELL_L
 set ::env(CTS_ROOT_BUFFER) "$::env(STD_CELL_LIBRARY)__clkbuf_16"
 set ::env(CTS_CLK_BUFFERS) "$::env(STD_CELL_LIBRARY)__clkbuf_2 $::env(STD_CELL_LIBRARY)__clkbuf_4 $::env(STD_CELL_LIBRARY)__clkbuf_8"
 
-set ::env(FP_PDN_RAIL_WIDTH) 0.6
+set ::env(PDN_RAIL_WIDTH) 0.6
+# jcore-soc local compat shim: see top-level config.tcl FP_PDN_* alias block.
+set ::env(FP_PDN_RAIL_WIDTH) $::env(PDN_RAIL_WIDTH)
 
 # The library maximum transition is 8.9ns; setting it to lower value
 set ::env(MAX_TRANSITION_CONSTRAINT) 3

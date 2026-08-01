@@ -4,7 +4,7 @@ set ::env(DEF_UNITS_PER_MICRON) 2000
 
 set ::env(VDD_PIN) "VDD"
 set ::env(GND_PIN) "VSS"
-set ::env(VDD_PIN_VOLTAGE) "5.00"
+set ::env(VDD_PIN_VOLTAGE) "3.30"
 set ::env(GND_PIN_VOLTAGE) "0.00"
 
 set ::env(SCL_POWER_PINS) "VDD VNW"
@@ -19,31 +19,9 @@ if { ![info exist ::env(PAD_CELL_LIBRARY)] } {
 }
 
 # Technology lib
-set ::env(CELL_LIBS) [dict create]
-dict set ::env(CELL_LIBS) *_tt_025C_5v00 "\
-    $::env(PDK_ROOT)/$::env(PDK)/libs.ref/$::env(STD_CELL_LIBRARY)/lib/$::env(STD_CELL_LIBRARY)__tt_025C_5v00.lib\
-"
-dict set ::env(CELL_LIBS) *_ff_n40C_5v50 "\
-    $::env(PDK_ROOT)/$::env(PDK)/libs.ref/$::env(STD_CELL_LIBRARY)/lib/$::env(STD_CELL_LIBRARY)__ff_n40C_5v50.lib\
-"
-dict set ::env(CELL_LIBS) *_ss_125C_4v50 "\
-    $::env(PDK_ROOT)/$::env(PDK)/libs.ref/$::env(STD_CELL_LIBRARY)/lib/$::env(STD_CELL_LIBRARY)__ss_125C_4v50.lib\
-"
 
 # Corners
-set ::env(STA_CORNERS) "\
-nom_tt_025C_5v00 \
-nom_ss_125C_4v50 \
-nom_ff_n40C_5v50 \
-min_tt_025C_5v00 \
-min_ss_125C_4v50 \
-min_ff_n40C_5v50 \
-max_tt_025C_5v00 \
-max_ss_125C_4v50 \
-max_ff_n40C_5v50 \
-"
 
-set ::env(DEFAULT_CORNER) "nom_tt_025C_5v00"
 
 set ::env(TIMING_VIOLATION_CORNERS) "*tt*"
 
@@ -281,6 +259,3 @@ if { ![info exist ::env(DECAP_CELL)] } { set ::env(DECAP_CELL) $::env(STD_CELL_L
 # derive the per-corner LIB dict + STA_CORNERS); this ciel pin only defines
 # the newer-looking CELL_LIBS dict (never consumed by this compat path).
 # Point all three at the single tt/ff/ss corner libs already used above.
-set ::env(LIB_SYNTH) "$::env(PDK_ROOT)/$::env(PDK)/libs.ref/$::env(STD_CELL_LIBRARY)/lib/$::env(STD_CELL_LIBRARY)__tt_025C_5v00.lib"
-set ::env(LIB_FASTEST) "$::env(PDK_ROOT)/$::env(PDK)/libs.ref/$::env(STD_CELL_LIBRARY)/lib/$::env(STD_CELL_LIBRARY)__ff_n40C_5v50.lib"
-set ::env(LIB_SLOWEST) "$::env(PDK_ROOT)/$::env(PDK)/libs.ref/$::env(STD_CELL_LIBRARY)/lib/$::env(STD_CELL_LIBRARY)__ss_125C_4v50.lib"

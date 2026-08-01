@@ -65,7 +65,7 @@ if [ ! -f "$MCFG" ]; then
   exit 1
 fi
 
-OL_IMAGE="${OL_IMAGE:-ghcr.io/librelane/librelane:2.4.2}"
+OL_IMAGE="${OL_IMAGE:-ghcr.io/librelane/librelane:3.0.5}"
 PDK_ROOT="${PDK_ROOT:-$HOME/.ciel}"
 OL_TIMEOUT="${OL_TIMEOUT:-3600}"
 # Default stop point: Magic.WriteLEF (right after detailed routing + LEF
