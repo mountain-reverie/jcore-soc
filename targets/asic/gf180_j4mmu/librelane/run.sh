@@ -182,7 +182,7 @@ if [ "$MACRO" = "top" ]; then
   # comment further below) even though "top" isn't in that case's MACRO
   # list; set it here unless the caller already did.
   if [ -z "$OL_SKIP" ]; then
-    OL_SKIP="OpenROAD.IRDropReport Checker.PowerGridViolations"
+    OL_SKIP="OpenROAD.IRDropReport Checker.PowerGridViolations KLayout.Render"
   fi
   goto_librelane=1
 fi
@@ -318,7 +318,7 @@ if [ -z "$OL_SKIP" ] && { [ "$MACRO" = "dcache" ] || [ "$MACRO" = "icache" ] || 
   # for dcache_adapter were written to runs/smoke/52-magic-writelef/ before
   # this error surfaces) -- skipping it is required to get a clean exit
   # code and a final/ views directory out of the run.
-  OL_SKIP="OpenROAD.IRDropReport Checker.PowerGridViolations"
+  OL_SKIP="OpenROAD.IRDropReport Checker.PowerGridViolations KLayout.Render"
 fi
 for s in $OL_SKIP; do
   TO_ARGS+=(--skip "$s")
