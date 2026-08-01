@@ -1,10 +1,42 @@
 {
-  "PDK": "gf180mcuC",
-  "STD_CELL_LIBRARY": "gf180mcu_fd_sc_mcu7t5v0",
+  "PDK": "gf180mcuD",
+  "STD_CELL_LIBRARY": "gf180mcu_fd_sc_mcu9t5v0",
   "CLOCK_PORT": "clk",
   "CLOCK_PERIOD": 40.0,
   "FP_CORE_UTIL": 40,
   "PL_TARGET_DENSITY_PCT": 45,
   "RUN_LINTER": false,
-  "RUN_MCSTA": false
+  "RUN_MCSTA": false,
+  "_comment_9t_3v3": "KianV-matched 9T @ 3.3V. Corners defined in pdk_overlay config.tcl (converted 5v00->3v30). Needs LibreLane 3.0.5 (2.4.2 fails DFFLEGALIZE on the explicit-corner path).",
+  "LIB": {
+    "*_tt_025C_3v30": [
+      "pdk_dir::libs.ref/gf180mcu_fd_sc_mcu9t5v0/lib/gf180mcu_fd_sc_mcu9t5v0__tt_025C_3v30.lib",
+      "pdk_dir::libs.ref/gf180mcu_fd_io/lib/gf180mcu_fd_io__tt_025C_3v30.lib"
+    ],
+    "*_ss_n40C_3v00": [
+      "pdk_dir::libs.ref/gf180mcu_fd_sc_mcu9t5v0/lib/gf180mcu_fd_sc_mcu9t5v0__ss_n40C_3v00.lib",
+      "pdk_dir::libs.ref/gf180mcu_fd_io/lib/gf180mcu_fd_io__ss_125C_2v97.lib"
+    ],
+    "*_ss_125C_3v00": [
+      "pdk_dir::libs.ref/gf180mcu_fd_sc_mcu9t5v0/lib/gf180mcu_fd_sc_mcu9t5v0__ss_125C_3v00.lib",
+      "pdk_dir::libs.ref/gf180mcu_fd_io/lib/gf180mcu_fd_io__ss_125C_2v97.lib"
+    ],
+    "*_ff_n40C_3v60": [
+      "pdk_dir::libs.ref/gf180mcu_fd_sc_mcu9t5v0/lib/gf180mcu_fd_sc_mcu9t5v0__ff_n40C_3v60.lib",
+      "pdk_dir::libs.ref/gf180mcu_fd_io/lib/gf180mcu_fd_io__ff_n40C_3v63.lib"
+    ],
+    "*_ff_125C_3v60": [
+      "pdk_dir::libs.ref/gf180mcu_fd_sc_mcu9t5v0/lib/gf180mcu_fd_sc_mcu9t5v0__ff_125C_3v60.lib",
+      "pdk_dir::libs.ref/gf180mcu_fd_io/lib/gf180mcu_fd_io__ff_125C_3v63.lib"
+    ]
+  },
+  "DEFAULT_CORNER": "nom_tt_025C_3v30",
+  "STA_CORNERS": [
+    "max_tt_025C_3v30",
+    "max_ss_n40C_3v00",
+    "max_ss_125C_3v00",
+    "max_ff_n40C_3v60",
+    "max_ff_125C_3v60"
+  ],
+  "PAD_LIBS": {}
 }

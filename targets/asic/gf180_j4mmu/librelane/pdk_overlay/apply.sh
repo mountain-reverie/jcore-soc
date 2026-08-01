@@ -17,11 +17,11 @@
 set -euo pipefail
 PIN="${PDK_PIN:-f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7}"
 CIEL_ROOT="${CIEL_ROOT:-$HOME/.ciel}"
-DEST="$CIEL_ROOT/ciel/gf180mcu/versions/$PIN/gf180mcuC/libs.tech/librelane"
-SRC="$(cd "$(dirname "$0")" && pwd)/gf180mcuC/libs.tech/librelane"
+DEST="$CIEL_ROOT/ciel/gf180mcu/versions/$PIN/gf180mcuD/libs.tech/librelane"
+SRC="$(cd "$(dirname "$0")" && pwd)/gf180mcuD/libs.tech/librelane"
 if [ ! -d "$DEST" ]; then
   echo "apply.sh: PDK librelane tcl dir not found at $DEST -- run 'ciel enable --pdk-family gf180mcu $PIN' first" >&2
   exit 1
 fi
 cp -rv "$SRC"/. "$DEST"/
-echo "apply.sh: LibreLane/gf180mcuC compat overlay applied to $DEST"
+echo "apply.sh: LibreLane/gf180mcuD compat overlay applied to $DEST"

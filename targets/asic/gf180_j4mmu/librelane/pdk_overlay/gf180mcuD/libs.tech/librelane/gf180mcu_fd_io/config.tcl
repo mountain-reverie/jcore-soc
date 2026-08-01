@@ -12,14 +12,14 @@ dict set ::env(PAD_FAKE_SITES) "GF_COR_Site" "355, 355"
 
 # Technology lib
 set ::env(PAD_LIBS) [dict create]
-dict set ::env(PAD_LIBS) *_tt_025C_5v00 "\
-    [glob $::env(PDK_ROOT)/$::env(PDK)/libs.ref/$::env(PAD_CELL_LIBRARY)/lib/*__tt_025C_5v00.lib]\
+dict set ::env(PAD_LIBS) *_tt_025C_3v30 "\
+    [glob $::env(PDK_ROOT)/$::env(PDK)/libs.ref/$::env(PAD_CELL_LIBRARY)/lib/*__tt_025C_3v30.lib]\
 "
-dict set ::env(PAD_LIBS) *_ff_n40C_5v50 "\
-    [glob $::env(PDK_ROOT)/$::env(PDK)/libs.ref/$::env(PAD_CELL_LIBRARY)/lib/*__ff_n40C_5v50.lib]\
+dict set ::env(PAD_LIBS) *_ff_n40C_3v63 "\
+    [glob $::env(PDK_ROOT)/$::env(PDK)/libs.ref/$::env(PAD_CELL_LIBRARY)/lib/*__ff_n40C_3v63.lib]\
 "
-dict set ::env(PAD_LIBS) *_ss_125C_4v50 "\
-    [glob $::env(PDK_ROOT)/$::env(PDK)/libs.ref/$::env(PAD_CELL_LIBRARY)/lib/*__ss_125C_4v50.lib]\
+dict set ::env(PAD_LIBS) *_ss_125C_2v97 "\
+    [glob $::env(PDK_ROOT)/$::env(PDK)/libs.ref/$::env(PAD_CELL_LIBRARY)/lib/*__ss_125C_2v97.lib]\
 "
 
 # These corners are for 3.3V SCL libraries
