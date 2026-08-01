@@ -196,3 +196,30 @@ on the perimeter pads' PAD terminals. The flat-macro pad approach worked on
 including it -> PDN-0179 (straps can't repair channels around pads). Proper fix
 = LibreLane's real IO/pad-ring flow (not the flat-macro shortcut) -- a scoped
 follow-up. The die AREA (the KianV comparison metric) is confirmed regardless.
+
+## The REAL pad-ring flow (from KianV) — Chip/Padring flow, no chip-level routing
+
+KianV's `scripts/padring.py` defines a `PadringFlow` (SequentialFlow) whose
+steps are: Synthesis -> Floorplan -> SetPowerConnections -> **OpenROAD.PadRing**
+-> ManualMacroPlacement -> KLayout.StreamOut -> KLayout.SealRing. **There is NO
+GlobalRoute/DetailedRoute/CTS/Placement of std cells.** So chip_top is an
+ASSEMBLY of pads + a pre-hardened core MACRO, not a full P&R -- which is exactly
+why KianV never hits our DRT-0073 (our flat approach routes the soc glue AT chip
+level, so TritonRoute must access the pad pins; KianV's core routing is internal
+to the pre-hardened core macro).
+
+3.0.5's `OpenROAD.PadRing` step takes `PAD_SOUTH/EAST/NORTH/WEST` (pad instance
+names per edge) + `PAD_CFG`; it places + connects the pads. `PDN_CFG` +
+`PDN_CORE_RING`(+CONNECT_TO_PADS) build the core ring that straps to the pads
+(fixes our PDN-0179). `CORE_AREA` is inset by the pad depth; the core macro is
+placed at `expr::$DIE_AREA - pad_depth`.
+
+**Adoption plan:**
+1. Harden the flat soc (6 child macros + glue) as a ROUTED `chip_core` macro
+   (run.sh macro=top on 3.0.5, full route+LEF), with I/O pins placed at the
+   boundary in the pad order.
+2. `chip_top.sv` = pads (bidir + dvdd/dvss + clk/rst, w/ OE/PU/PD control) around
+   the `chip_core` macro (adapt KianV's src/chip_top.sv).
+3. Copy KianV's PadringFlow (scripts/padring.py) + config (flow, PAD_* lists,
+   PDN_CFG core ring, CORE_AREA inset) + pdn_cfg.tcl, adapted to our nets/pads.
+4. Run the padring flow -> properly-assembled, sealed, 0-DRC padded die.
