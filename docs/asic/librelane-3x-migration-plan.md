@@ -151,3 +151,21 @@ Additional 3.x overrides needed (all in common.json): `PAD_LIBS: {}` for
 pad-less macros (overrides migrate's 5v00 AND dodges io.tcl's raw-dict PAD_LIBS
 loop bug at line 240). `OL_TO=Magic.WriteLEF` is NOT honored in 3.x (ran past to
 RCX) — the run.sh stop-point step id needs updating for 3.x.
+
+## Phase 2 progress (2026-07-31)
+Both cell classes validated on 3.0.5 + gf180mcuD + 9T/3.3V:
+- **cpus** (logic): die **1.57 mm²** (7T/5V was 1.24 — the ~27% 9T cost).
+- **icache_2k** (SRAM): die **1.8 mm²** (7T/5V was 1.8 — caches are SRAM-bound,
+  so library-independent, as expected). `fix_macro_paths` "already match"
+  (3.0.5 yosys aligns). SRAM MACRO `lib` fields converted 5v00→3.3V per-corner
+  (reusable helper: MACROS[*fd_ip_sram*].lib -> {corner: [sram__<corner>.lib]}).
+
+FLOW-HYGIENE items (don't block area measurement — metrics come from route/RCX):
+- `OL_TO=Magic.WriteLEF` no longer stops the 3.x flow cleanly (runs into
+  signoff). run.sh's `--to` needs the exact 3.x step id (TBD).
+- KLayout **render** step fails on the SRAM cells' CIF boundary (cosmetic) for
+  cache macros — add to OL_SKIP or stop before it once the step id is confirmed.
+
+REMAINING (Phase 2): dcache_2k, sdram(smoke), devices, qspi_flash,
+mem_region_mux, boot — same recipe (SRAM-lib convert for cache/boot; 9T
+floorplan re-tune where a tight 7T die no longer fits).
