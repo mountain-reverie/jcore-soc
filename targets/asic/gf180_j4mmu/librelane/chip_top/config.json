@@ -1,0 +1,351 @@
+{
+  "meta": {
+    "version": 2,
+    "flow": "Chip"
+  },
+  "DESIGN_NAME": "chip_top",
+  "VERILOG_FILES": [
+    "dir::chip_top.sv",
+    "dir::../chip_core/chip_core.v"
+  ],
+  "CLOCK_PORT": "clk_sys_PAD",
+  "CLOCK_NET": "clk_sys",
+  "CLOCK_PERIOD": 33.0,
+  "FP_SIZING": "absolute",
+  "DIE_AREA": [
+    0,
+    0,
+    4784.0,
+    4784.0
+  ],
+  "CORE_AREA": [
+    442.0,
+    442.0,
+    4342.0,
+    4342.0
+  ],
+  "PL_TARGET_DENSITY_PCT": 40,
+  "PAD_SOUTH": [
+    "pad_dvdd_0",
+    "pad_dvdd_1",
+    "pad_clk_sys",
+    "pad_qfl_cs_n",
+    "pad_uart0_tx",
+    "pad_sd_cmd_ras_n",
+    "pad_sd_cmd_a_2",
+    "pad_sd_cmd_a_6",
+    "pad_sd_cmd_a_10",
+    "pad_sd_cmd_ba_1",
+    "pad_spi2_cs_1",
+    "pad_gpio_3",
+    "pad_gpio_7",
+    "pad_dvdd_2",
+    "pad_dvdd_3",
+    "pad_gpio_11",
+    "pad_gpio_15",
+    "pad_gpio_19",
+    "pad_gpio_23",
+    "pad_gpio_27",
+    "pad_gpio_31",
+    "pad_qfl_io_3",
+    "pad_sd_dq_3",
+    "pad_sd_dq_7",
+    "pad_sd_dq_11",
+    "pad_sd_dq_15"
+  ],
+  "PAD_EAST": [
+    "pad_dvdd_4",
+    "pad_dvdd_5",
+    "pad_reset",
+    "pad_qfl_sck",
+    "pad_sd_cmd_cas_n",
+    "pad_sd_cmd_we_n",
+    "pad_sd_cmd_a_3",
+    "pad_sd_cmd_a_7",
+    "pad_sd_cmd_a_11",
+    "pad_sd_cmd_dqm_0",
+    "pad_gpio_0",
+    "pad_gpio_4",
+    "pad_dvdd_6",
+    "pad_dvdd_7",
+    "pad_gpio_8",
+    "pad_gpio_12",
+    "pad_gpio_16",
+    "pad_gpio_20",
+    "pad_gpio_24",
+    "pad_gpio_28",
+    "pad_qfl_io_0",
+    "pad_sd_dq_0",
+    "pad_sd_dq_4",
+    "pad_sd_dq_8",
+    "pad_sd_dq_12"
+  ],
+  "PAD_NORTH": [
+    "pad_dvss_0",
+    "pad_dvss_1",
+    "pad_uart0_rx",
+    "pad_spi2_clk",
+    "pad_sd_cmd_cke",
+    "pad_sd_cmd_a_0",
+    "pad_sd_cmd_a_4",
+    "pad_sd_cmd_a_8",
+    "pad_sd_cmd_a_12",
+    "pad_sd_cmd_dqm_1",
+    "pad_gpio_1",
+    "pad_gpio_5",
+    "pad_dvss_2",
+    "pad_dvss_3",
+    "pad_gpio_9",
+    "pad_gpio_13",
+    "pad_gpio_17",
+    "pad_gpio_21",
+    "pad_gpio_25",
+    "pad_gpio_29",
+    "pad_qfl_io_1",
+    "pad_sd_dq_1",
+    "pad_sd_dq_5",
+    "pad_sd_dq_9",
+    "pad_sd_dq_13"
+  ],
+  "PAD_WEST": [
+    "pad_dvss_4",
+    "pad_dvss_5",
+    "pad_spi2_miso",
+    "pad_spi2_mosi",
+    "pad_sd_cmd_cs_n",
+    "pad_sd_cmd_a_1",
+    "pad_sd_cmd_a_5",
+    "pad_sd_cmd_a_9",
+    "pad_sd_cmd_ba_0",
+    "pad_spi2_cs_0",
+    "pad_gpio_2",
+    "pad_gpio_6",
+    "pad_dvss_6",
+    "pad_dvss_7",
+    "pad_gpio_10",
+    "pad_gpio_14",
+    "pad_gpio_18",
+    "pad_gpio_22",
+    "pad_gpio_26",
+    "pad_gpio_30",
+    "pad_qfl_io_2",
+    "pad_sd_dq_2",
+    "pad_sd_dq_6",
+    "pad_sd_dq_10",
+    "pad_sd_dq_14"
+  ],
+  "VDD_NETS": [
+    "VDD"
+  ],
+  "GND_NETS": [
+    "VSS"
+  ],
+  "PDN_MULTILAYER": true,
+  "PDN_CORE_RING": true,
+  "PDN_CORE_RING_CONNECT_TO_PADS": true,
+  "GRT_ALLOW_CONGESTION": true,
+  "IGNORE_DISCONNECTED_MODULES": [
+    "gf180mcu_fd_io__bi_t",
+    "gf180mcu_fd_io__in_c",
+    "gf180mcu_fd_io__dvdd",
+    "gf180mcu_fd_io__dvss"
+  ],
+  "RUN_LINTER": false,
+  "RUN_MCSTA": false,
+  "MACROS": {
+    "gf180mcu_fd_ip_sram__sram64x8m8wm1": {
+      "gds": [
+        "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/gds/gf180mcu_fd_ip_sram__sram64x8m8wm1.gds"
+      ],
+      "lef": [
+        "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lef/gf180mcu_fd_ip_sram__sram64x8m8wm1.lef"
+      ],
+      "vh": [
+        "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/verilog/gf180mcu_fd_ip_sram__sram64x8m8wm1__blackbox.v"
+      ],
+      "lib": {
+        "*_tt_025C_3v30": [
+          "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram64x8m8wm1__tt_025C_3v30.lib"
+        ],
+        "*_ss_n40C_3v00": [
+          "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram64x8m8wm1__ss_n40C_3v00.lib"
+        ],
+        "*_ss_125C_3v00": [
+          "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram64x8m8wm1__ss_125C_3v00.lib"
+        ],
+        "*_ff_n40C_3v60": [
+          "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram64x8m8wm1__ff_n40C_3v60.lib"
+        ],
+        "*_ff_125C_3v60": [
+          "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram64x8m8wm1__ff_125C_3v60.lib"
+        ]
+      },
+      "instances": {
+        "u_soc.ddr_ram_mux.u_dcache.u_dcache_ram.tag0.rows:1.genram_3x8x64.mem.subword_gen:1.sram_i": {
+          "location": [
+            532.0,
+            2641.52
+          ],
+          "orientation": "N"
+        },
+        "u_soc.ddr_ram_mux.u_dcache.u_dcache_ram.tag0.rows:1.genram_3x8x64.mem.subword_gen:2.sram_i": {
+          "location": [
+            532.0,
+            2919.4
+          ],
+          "orientation": "N"
+        },
+        "u_soc.ddr_ram_mux.u_dcache.u_dcache_ram.tag0.rows:1.genram_3x8x64.mem.subword_gen:3.sram_i": {
+          "location": [
+            532.0,
+            3197.28
+          ],
+          "orientation": "N"
+        },
+        "u_soc.ddr_ram_mux.u_dcache.u_dcache_ram.tag1.rows:1.genram_3x8x64.mem.subword_gen:1.sram_i": {
+          "location": [
+            532.0,
+            3475.16
+          ],
+          "orientation": "N"
+        },
+        "u_soc.ddr_ram_mux.u_dcache.u_dcache_ram.tag1.rows:1.genram_3x8x64.mem.subword_gen:2.sram_i": {
+          "location": [
+            532.0,
+            3753.04
+          ],
+          "orientation": "N"
+        },
+        "u_soc.ddr_ram_mux.u_dcache.u_dcache_ram.tag1.rows:1.genram_3x8x64.mem.subword_gen:3.sram_i": {
+          "location": [
+            3820.14,
+            2641.52
+          ],
+          "orientation": "N"
+        },
+        "u_soc.ddr_ram_mux.u_icache.u_ucache_ram.tag.rows:1.genram_3x8x64.mem.subword_gen:1.sram_i": {
+          "location": [
+            3820.14,
+            2919.4
+          ],
+          "orientation": "N"
+        },
+        "u_soc.ddr_ram_mux.u_icache.u_ucache_ram.tag.rows:1.genram_3x8x64.mem.subword_gen:2.sram_i": {
+          "location": [
+            3820.14,
+            3197.28
+          ],
+          "orientation": "N"
+        },
+        "u_soc.ddr_ram_mux.u_icache.u_ucache_ram.tag.rows:1.genram_3x8x64.mem.subword_gen:3.sram_i": {
+          "location": [
+            3820.14,
+            3475.16
+          ],
+          "orientation": "N"
+        }
+      }
+    },
+    "gf180mcu_fd_ip_sram__sram512x8m8wm1": {
+      "gds": [
+        "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/gds/gf180mcu_fd_ip_sram__sram512x8m8wm1.gds"
+      ],
+      "lef": [
+        "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lef/gf180mcu_fd_ip_sram__sram512x8m8wm1.lef"
+      ],
+      "vh": [
+        "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/verilog/gf180mcu_fd_ip_sram__sram512x8m8wm1__blackbox.v"
+      ],
+      "lib": {
+        "*_tt_025C_3v30": [
+          "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram512x8m8wm1__tt_025C_3v30.lib"
+        ],
+        "*_ss_n40C_3v00": [
+          "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram512x8m8wm1__ss_n40C_3v00.lib"
+        ],
+        "*_ss_125C_3v00": [
+          "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram512x8m8wm1__ss_125C_3v00.lib"
+        ],
+        "*_ff_n40C_3v60": [
+          "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram512x8m8wm1__ff_n40C_3v60.lib"
+        ],
+        "*_ff_125C_3v60": [
+          "pdk_dir::libs.ref/gf180mcu_fd_ip_sram/lib/gf180mcu_fd_ip_sram__sram512x8m8wm1__ff_125C_3v60.lib"
+        ]
+      },
+      "instances": {
+        "u_soc.ddr_ram_mux.u_dcache.u_dcache_ram.ram:1.sc.ram_s.rows:1.genram_2x8x512.mem.col_gen:1.sram_i": {
+          "location": [
+            532.0,
+            522.0
+          ],
+          "orientation": "N"
+        },
+        "u_soc.ddr_ram_mux.u_dcache.u_dcache_ram.ram:1.sc.ram_s.rows:1.genram_2x8x512.mem.col_gen:2.sram_i": {
+          "location": [
+            532.0,
+            1051.88
+          ],
+          "orientation": "N"
+        },
+        "u_soc.ddr_ram_mux.u_dcache.u_dcache_ram.ram:2.sc.ram_s.rows:1.genram_2x8x512.mem.col_gen:1.sram_i": {
+          "location": [
+            532.0,
+            1581.76
+          ],
+          "orientation": "N"
+        },
+        "u_soc.ddr_ram_mux.u_dcache.u_dcache_ram.ram:2.sc.ram_s.rows:1.genram_2x8x512.mem.col_gen:2.sram_i": {
+          "location": [
+            532.0,
+            2111.64
+          ],
+          "orientation": "N"
+        },
+        "u_soc.ddr_ram_mux.u_icache.u_ucache_ram.ram:1.ram_s.rows:1.genram_2x8x512.mem.col_gen:1.sram_i": {
+          "location": [
+            3820.14,
+            522.0
+          ],
+          "orientation": "N"
+        },
+        "u_soc.ddr_ram_mux.u_icache.u_ucache_ram.ram:1.ram_s.rows:1.genram_2x8x512.mem.col_gen:2.sram_i": {
+          "location": [
+            3820.14,
+            1051.88
+          ],
+          "orientation": "N"
+        },
+        "u_soc.ddr_ram_mux.u_icache.u_ucache_ram.ram:2.ram_s.rows:1.genram_2x8x512.mem.col_gen:1.sram_i": {
+          "location": [
+            3820.14,
+            1581.76
+          ],
+          "orientation": "N"
+        },
+        "u_soc.ddr_ram_mux.u_icache.u_ucache_ram.ram:2.ram_s.rows:1.genram_2x8x512.mem.col_gen:2.sram_i": {
+          "location": [
+            3820.14,
+            2111.64
+          ],
+          "orientation": "N"
+        }
+      }
+    }
+  },
+  "FP_MACRO_HORIZONTAL_HALO": 10,
+  "FP_MACRO_VERTICAL_HALO": 10,
+  "FP_PDN_HORIZONTAL_HALO": 5,
+  "FP_PDN_VERTICAL_HALO": 5,
+  "PL_MAX_DISPLACEMENT_X": 800,
+  "PL_MAX_DISPLACEMENT_Y": 500,
+  "PL_RESIZER_HOLD_SLACK_MARGIN": 0.6,
+  "GRT_RESIZER_HOLD_SLACK_MARGIN": 0.5,
+  "PNR_SDC_FILE": "dir::chip_top.sdc",
+  "SIGNOFF_SDC_FILE": "dir::chip_top.sdc",
+  "FALLBACK_SDC_FILE": "dir::chip_top.sdc",
+  "RSZ_DONT_TOUCH_LIST": [
+    "clk_sys",
+    "reset"
+  ]
+}

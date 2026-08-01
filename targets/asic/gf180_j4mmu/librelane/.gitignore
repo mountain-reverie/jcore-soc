@@ -13,3 +13,5 @@
 # pad_ring: netlist+config are generated (bind run-output child LEFs); see pad_ring/README.md
 pad_ring/config.json
 pad_ring/macros/
+# chip_top pad wrapper is a committed generated input (regen: chip_top/README.md)
+!chip_top/chip_top.sv
