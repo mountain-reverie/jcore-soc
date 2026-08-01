@@ -276,8 +276,15 @@ jobs:
     # Docker-in-Docker doesn't work from inside another container on
     # github-hosted runners -- it needs the runner's own host docker.
     env:
+      # LibreLane 3.0.5 + gf180mcuD + 9T/3.3V (KianV-matched) -- see
+      # docs/asic/librelane-3x-migration-plan.md. The pin ships gf180mcuD;
+      # common.json selects PDK=gf180mcuD. NOTE: this image bump needs a live
+      # workflow_dispatch to shake out the runner/env on 3.0.5 (same as the
+      # original 2.4.2 CI bring-up); and the flat pad ring's padded-die metric
+      # is placed/global-routed (3.0.5 DRT-0073 on the perimeter pads blocks the
+      # final detailed route -- a scoped IO/pad-flow follow-up).
       PDK_PIN: f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7
-      OL_IMAGE: ghcr.io/librelane/librelane:2.4.2
+      OL_IMAGE: ghcr.io/librelane/librelane:3.0.5
     defaults:
       run:
         shell: bash
