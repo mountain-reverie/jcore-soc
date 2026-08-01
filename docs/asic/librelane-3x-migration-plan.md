@@ -169,3 +169,16 @@ FLOW-HYGIENE items (don't block area measurement — metrics come from route/RCX
 REMAINING (Phase 2): dcache_2k, sdram(smoke), devices, qspi_flash,
 mem_region_mux, boot — same recipe (SRAM-lib convert for cache/boot; 9T
 floorplan re-tune where a tight 7T die no longer fits).
+
+## Phase 2 COMPLETE ✅ — all 6 pad-ring children at 9T/3.3V on 3.0.5
+| macro | 7T/5V | 9T/3.3V | Δ |
+|---|---|---|---|
+| cpus | 1.24 | 1.57 | +27% (logic) |
+| icache_2k | 1.8 | 1.8 | flat (SRAM) |
+| dcache_2k | 2.7 | 2.7 | flat (SRAM) |
+| sdram | 0.05 | 0.069 | +38% |
+| devices | 0.41 | 0.514 | +25% |
+| qspi_flash | 0.56 | 0.691 | +23% |
+Logic ~+23-38% (9T cells); SRAM-bound caches flat (library-independent). All
+harden end-to-end; the KLayout-render step fails on SRAM CIF (cosmetic; die/LEF
+produced before it). SRAM MACRO lib fields converted 5v00->3.3V per-corner.
