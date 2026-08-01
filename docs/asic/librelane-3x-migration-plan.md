@@ -223,3 +223,27 @@ placed at `expr::$DIE_AREA - pad_depth`.
 3. Copy KianV's PadringFlow (scripts/padring.py) + config (flow, PAD_* lists,
    PDN_CFG core ring, CORE_AREA inset) + pdn_cfg.tcl, adapted to our nets/pads.
 4. Run the padring flow -> properly-assembled, sealed, 0-DRC padded die.
+
+## Real pad-ring flow: implementation status + the architectural fork
+Groundwork DONE: KianV's PadringFlow recipe fully understood + documented above;
+3.0.5 confirmed to support it (OpenROAD.PadRing step + PAD_* vars + Chip flow).
+
+BLOCKER at step 1 (chip_core): hardening our soc AS a macro fails DPL-0036
+(detailed placement) on 3.0.5 -- our **6-separate-hardened-child-macro**
+decomposition fragments the std-cell rows so the ~760 soc-glue cells can't
+legalize (looser density + macro halos don't fix it; it's row fragmentation,
+not congestion). KianV avoids this by synthesizing the whole soc FLAT (one P&R,
+only SRAM as macros) -- so chip_core is one clean placement.
+
+THE FORK (pick before finishing the real pad ring):
+  A. Flat whole-soc chip_core (KianV-style): synthesize the entire soc flat
+     (all logic std cells + SRAM macros) as one design -> clean placement, no
+     row fragmentation. Changes our decomposition (the 6-macro split was a
+     2.4.2 memory workaround; 3.0.5 + more RAM may not need it). Bigger single
+     P&R.
+  B. Keep the 6-macro split, but re-floorplan chip_core so the macros leave
+     contiguous glue rows (macros packed to the edges, glue in a clear band).
+     Iterative floorplan work.
+Then: chip_top.sv (pads + chip_core, adapt KianV src/chip_top.sv) + the
+PadringFlow (scripts/padring.py) + pdn_cfg.tcl. This is a focused multi-hour
+sub-project.
