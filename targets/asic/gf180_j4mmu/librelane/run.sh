@@ -164,6 +164,21 @@ if [ "$MACRO" = "pad_ring" ]; then
   fi
   goto_librelane=1
 fi
+if [ "$MACRO" = "chip_top" ]; then
+  # Full-chip pad-ring assembly: the flat soc (chip_core.v) wrapped in a gf180
+  # IO pad ring, hardened by LibreLane's built-in "Chip" flow (meta.flow:Chip
+  # in config.json -> OpenROAD.PadRing places the pads as a ring, no chip-level
+  # macro routing, which is the real fix for the DRT-0073 the flat pad_ring hit).
+  # Consumes committed inputs: chip_top.sv (pad wrapper) + ../chip_core/chip_core.v.
+  if [ ! -f "$MDIR/chip_top.sv" ] || [ ! -f "$MDIR/../chip_core/chip_core.v" ]; then
+    echo "ERROR: chip_top.sv and/or ../chip_core/chip_core.v missing (see chip_top/README.md)." >&2; exit 1
+  fi
+  echo "run.sh: macro=chip_top -> LibreLane Chip flow (pad ring) over chip_top.sv + chip_core.v." >&2
+  MERGED="$MDIR/config.merged.json"
+  jq -s '.[0] * .[1]' "$HERE/common.json" "$MCFG" > "$MERGED"
+  [ -z "$OL_SKIP" ] && OL_SKIP="OpenROAD.IRDropReport Checker.PowerGridViolations"
+  goto_librelane=1
+fi
 if [ "$MACRO" = "chip_core" ]; then
   # Flat whole-soc core (KianV-style): the entire soc flattened into one netlist
   # (all logic std cells, only vendor SRAM as auto-placed macros), routed as a
@@ -317,7 +332,8 @@ fi
 # chip_core places all 17 SRAMs by their exact names taken from the committed
 # flat netlist (frozen, like top/soc.v) -- no version drift, and the tag SRAMs'
 # semantic coordinates collide in the pairing heuristic, so skip the rewrite.
-if [ "$MACRO" != "chip_core" ] && grep -q 'gf180mcu_fd_ip_sram__' "$MERGED" 2>/dev/null; then
+case "$MACRO" in chip_core|chip_top) _skip_fmp=1 ;; *) _skip_fmp=0 ;; esac
+if [ "$_skip_fmp" = 0 ] && grep -q 'gf180mcu_fd_ip_sram__' "$MERGED" 2>/dev/null; then
   python3 "$ROOT/tools/asic/fix_macro_paths.py" "$MERGED" "$NETV" \
     || { echo "ERROR: fix_macro_paths failed for $MACRO" >&2; exit 1; }
 fi
