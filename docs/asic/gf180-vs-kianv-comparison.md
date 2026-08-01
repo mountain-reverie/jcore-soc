@@ -7,15 +7,46 @@
 via wafer.space — **20.1 mm² die at ~65 % core utilization**, cache-SRAM + MMU +
 external-SDRAM architecture. (wafer.space/news/kianv-riscv-soc)
 
-## Headline
+## Headline — KianV-matched operating point (9T @ 3.3 V)
 
-At GF180, the jcore **J4 + MMU** flash SoC now lands **below KianV as a
-complete, padded chip**: **17.5 mm² die with a full `gf180mcu_fd_io` pad ring**,
-detailed-routed at **0 DRC**, versus KianV's **20.1 mm² padded die** — a
-**~13 % smaller** whole chip on the same PDK, no longer a core-only comparison.
-This closes the last honesty caveat of the earlier analysis (which was
-core-only, no pad ring): the number below now includes the pads KianV's number
-includes. See **[Full-chip pad ring](#full-chip-pad-ring-this-work)**.
+The strongest, truly like-for-like comparison: at **KianV's exact operating
+point** — **9-track cells (`gf180mcu_fd_sc_mcu9t5v0`) at 3.3 V on gf180mcuD**,
+the same library/voltage/variant KianV taped out on — the jcore **J4 + MMU**
+flash SoC is a **complete padded chip at 4120×4400 = 18.13 mm²**, still **~10 %
+smaller than KianV's 20.1 mm²**. This removes every remaining apples-to-oranges
+caveat: same PDK variant, same std-cell library, same voltage, both with a full
+IO pad ring. Built on **LibreLane 3.0.5** (2.4.2 cannot reach this operating
+point — its explicit-corner path fails `DFFLEGALIZE`; see
+[the migration](librelane-3x-migration-plan.md)).
+
+Per-macro at 9T/3.3 V vs the earlier 7T/5 V (logic grows ~23-38 % on 9T cells;
+SRAM-bound caches are library-independent, so flat):
+
+| macro | 7T/5 V | **9T/3.3 V** |
+|---|---|---|
+| cpus (CPU+boot) | 1.24 | **1.57** |
+| icache_2k | 1.8 | **1.8** |
+| dcache_2k | 2.7 | **2.7** |
+| sdram | 0.05 | **0.069** |
+| devices | 0.41 | **0.514** |
+| qspi_flash | 0.56 | **0.691** |
+| **flat padded die** | 17.5 | **18.13** |
+
+*Detailed-route honesty:* the 18.13 mm² die is confirmed placed + global-routed;
+3.0.5's TritonRoute hard-errors (DRT-0073) on the perimeter pads' terminals under
+the flat-macro pad shortcut, so the final metal fill / 0-DRC signoff awaits a
+real IO/pad-ring flow (scoped follow-up). The die *area* — the comparison metric
+— is not affected.
+
+## Earlier result — area-fair at 7T/5 V
+
+At GF180, the jcore **J4 + MMU** flash SoC also lands **below KianV as a
+complete, padded chip** at our original **7T/5 V** point: **17.5 mm² die with a
+full `gf180mcu_fd_io` pad ring**, detailed-routed at **0 DRC**, versus KianV's
+**20.1 mm² padded die** — a **~13 % smaller** whole chip. (Area is
+voltage-independent, so this is area-fair; the 9T/3.3 V headline above is the
+library+voltage-matched version.) See
+**[Full-chip pad ring](#full-chip-pad-ring-this-work)**.
 
 The lever that got there was two-fold: a **2 KB-cache** floorplan (the area is
 cache-dominated) and, decisively, **flat chip integration** — routing the soc
