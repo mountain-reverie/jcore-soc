@@ -19,6 +19,31 @@ IO pad ring. Built on **LibreLane 3.0.5** (2.4.2 cannot reach this operating
 point — its explicit-corner path fails `DFFLEGALIZE`; see
 [the migration](librelane-3x-migration-plan.md)).
 
+## Update — real IO pad ring routes 0 DRC, down to 12.92 mm²
+
+The DRT-0073 caveat below is **resolved**. The flat-macro pad shortcut is
+replaced by LibreLane's built-in **`Chip` flow** (`meta.flow: Chip`), whose
+`OpenROAD.PadRing` step assembles the pads as an abutted ring instead of
+routing them as macros. Two routed, DRC-clean results now exist on the branch:
+
+| deliverable | die | area | DRC |
+|---|---|---|---|
+| `chip_core` — flat whole-soc core (no pads) | 3900×3900 | **15.21 mm²** | 0 |
+| `chip_top` — full IO pad ring (KianV-style) | 4784×4784 | 22.89 mm² | 0 |
+| `chip_top` — SRAM-floorplan + width shrink | 2700×4784 | **12.92 mm²** | 0 |
+
+The **12.92 mm²** padded, fully-routed chip is **36 % under KianV's 20.1 mm²**.
+The shrink came from grouping each cache's tag SRAMs with their own data
+(dcache south / icache north, west-aligned) and splitting dcache's 6-wide tag
+row into 4 + 2-offset, dropping the die width 4784 → 2700. At this size the
+design is content/pad-limited (SRAM 2.58 mm² + logic ~1.4 mm² + a 101-pad ring:
+SDRAM 38, GPIO 32, power 16, flash/SPI/UART/clk 15). Timing (33 ns / 30 MHz) is
+not yet met — the deferred Fmax axis — but the die *routes clean*. Key enabler:
+`clk_sys`/`reset` enter behind pads, so LibreLane's auto resizer-exclusion
+misses them; `RSZ_DONT_TOUCH_LIST` (resizer-scoped, CTS still builds the clock
+tree) drops pre-CTS buffering 45k → 2.5k. See
+[the migration](librelane-3x-migration-plan.md) and `librelane/chip_top/README.md`.
+
 Per-macro at 9T/3.3 V vs the earlier 7T/5 V (logic grows ~23-38 % on 9T cells;
 SRAM-bound caches are library-independent, so flat):
 
@@ -32,11 +57,11 @@ SRAM-bound caches are library-independent, so flat):
 | qspi_flash | 0.56 | **0.691** |
 | **flat padded die** | 17.5 | **18.13** |
 
-*Detailed-route honesty:* the 18.13 mm² die is confirmed placed + global-routed;
-3.0.5's TritonRoute hard-errors (DRT-0073) on the perimeter pads' terminals under
-the flat-macro pad shortcut, so the final metal fill / 0-DRC signoff awaits a
-real IO/pad-ring flow (scoped follow-up). The die *area* — the comparison metric
-— is not affected.
+*Detailed-route honesty:* the 18.13 mm² flat-macro shortcut was placed +
+global-routed but hit DRT-0073 on the perimeter pad terminals — **now resolved**
+by the `Chip`-flow pad ring (see the Update above); the `chip_top` results route
+to 0 DRC. This 18.13 mm² line is retained as the intermediate flat-integration
+data point.
 
 ## Earlier result — area-fair at 7T/5 V
 
