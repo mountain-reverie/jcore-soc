@@ -196,6 +196,5 @@
         }
       }
     }
-  },
-  "_comment": "Flat whole-soc chip_core (KianV-style): entire soc synthesized flat, only vendor SRAM as (auto-placed) macros. 9T/3.3V on 3.0.5. This is the routed core that chip_top wraps in pads."
+  }
 }
