@@ -136,6 +136,8 @@ $(BOARD_NAMES): tools
 	echo "VHDL_FILES:=$(VHDL_FILES)" >> "$(REL_OUTPUT_DIR)/Makefile.tmp"
 	echo "VHDL_FILES_ASIC:=$(VHDL_FILES_ASIC)" >> "$(REL_OUTPUT_DIR)/Makefile.tmp"
 	echo "include ../../targets/boards/$@/Makefile" >> "$(REL_OUTPUT_DIR)/Makefile.tmp"
+	echo "print-vhdl-files:" >> "$(REL_OUTPUT_DIR)/Makefile.tmp"
+	echo "	@echo $$(VHDL_FILES)" >> "$(REL_OUTPUT_DIR)/Makefile.tmp"
 	test -e "$(REL_OUTPUT_DIR)/Makefile" && cmp "$(REL_OUTPUT_DIR)/Makefile.tmp" "$(REL_OUTPUT_DIR)/Makefile" || mv "$(REL_OUTPUT_DIR)/Makefile.tmp" "$(REL_OUTPUT_DIR)/Makefile"
 	rm -f "$(REL_OUTPUT_DIR)/Makefile.tmp"
 	make -C "$(REL_OUTPUT_DIR)" $(TARGET)
