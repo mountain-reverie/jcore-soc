@@ -14,7 +14,7 @@ CPU=components/cpu
 FILES=(
   $CPU/cpu2j0_pkg.vhd
   $CPU/core/components_pkg.vhd
-  # tlb: cpu.vhd directly instantiates work.tlb (entity inst. in the MMU_ARCH
+  # tlb: cpu.vhd directly instantiates work.tlb (entity inst. in the PRIV_ARCH
   # generate), so ghdl needs it analyzed before cpu.vhd for ALL variants.
   $CPU/core/tlb.vhd
   $CPU/core/mult_pkg.vhd

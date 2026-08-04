@@ -13,7 +13,7 @@ BRD=targets/boards/icesugar
 FILES=(
   $CPU/cpu2j0_pkg.vhd
   $CPU/core/components_pkg.vhd
-  # tlb: cpu.vhd directly instantiates work.tlb in the MMU_ARCH generate, so
+  # tlb: cpu.vhd directly instantiates work.tlb in the PRIV_ARCH generate, so
   # ghdl needs it analyzed before cpu.vhd for all variants.
   $CPU/core/tlb.vhd
   $CPU/core/mult_pkg.vhd

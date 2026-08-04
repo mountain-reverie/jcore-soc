@@ -6,7 +6,6 @@ configuration soc_cpus_config of cpus is
         for u_cpu : cpu
           use configuration work.cpu_synth_j4
             generic map (
-              MMU_ARCH => true,
               PRIV_ARCH => true
             );
         end for;

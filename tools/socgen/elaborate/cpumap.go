@@ -7,9 +7,12 @@ import "fmt"
 // without creating an import cycle (emit already imports elaborate).
 const CPUsConfigName = "soc_cpus_config"
 
-// cpuSynth maps (model, decode, mult) to the cpu repo's synth configuration name,
-// the generics it must be bound with, and the model/decode-specific source
-// files the synth filelist needs. Paths are cpu-submodule-relative (no
+// cpuSynth maps (model, decode, mult) to the cpu repo's synth configuration
+// name and the model/decode-specific source files the synth filelist needs.
+// These are soc-side IMPLEMENTATION choices only (which decode table variant
+// -- ROM vs direct decoder -- and which multiplier, e.g. ice40 DSP): they are
+// not architectural facts, so they stay hardcoded here rather than in
+// components/cpu/variants.toml. Paths are cpu-submodule-relative (no
 // components/cpu/ prefix); the consumer (filelist.sh) prefixes them with $CPU/.
 // These files are the variant-specific decode tables, their configurations, the
 // cpu_synth config, and the alternate register/mult/shifter architectures the
@@ -17,37 +20,68 @@ const CPUsConfigName = "soc_cpus_config"
 // among coexisting architectures), exactly as components/cpu/synth/cpu_synth.sh
 // appends them. Verified by ghdl analysis of each (model, decode, mult) set.
 //
-// NOTE: core/tlb.vhd is NOT listed here. cpu.vhd directly instantiates
-// work.tlb (entity instantiation inside a `g_mmu : if MMU_ARCH generate`), so
-// ghdl requires tlb analyzed BEFORE cpu.vhd regardless of variant. It therefore
+// The ARCHITECTURAL facts -- the generics a variant binds true (e.g. j4's
+// PRIV_ARCH, which now implies MMU: the submodule dropped the separate
+// MMU_ARCH generic) -- come from components/cpu/variants.toml via
+// variantFor, composed in with these files by CPUSynthConfig below.
+//
+// NOTE: core/tlb.vhd is NOT listed here, even though variants.toml's [j4]
+// table names it in extra_files. cpu.vhd directly instantiates work.tlb
+// (entity instantiation inside a `g_mmu : if PRIV_ARCH generate`), so ghdl
+// requires tlb analyzed BEFORE cpu.vhd regardless of variant. It therefore
 // belongs in the static base list ahead of cpu.vhd (matching cpu_synth.sh's
-// base FILES), not in this post-decode_core fragment. filelist.sh carries it in
-// the base array.
+// base FILES), not in this post-decode_core fragment. filelist.sh carries it
+// in the base array unconditionally; CPUSynthConfig deliberately does not
+// re-emit it here (see cpuVariantExtraFiles below).
 var cpuSynth = map[[3]string]struct {
-	cfg      string
-	generics map[string]string
-	files    []string
+	cfg   string
+	files []string
 }{
-	{"j2", "direct", ""}: {"cpu_synth_direct", nil, []string{"decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_config.vhd"}},
-	{"j1", "rom", ""}:    {"cpu_synth_j1", nil, []string{"core/register_file_ebr.vhd", "core/mult_seq.vhd", "core/shifter_seq.vhd", "decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j1_config.vhd"}},
+	{"j2", "direct", ""}: {"cpu_synth_direct", []string{"decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_config.vhd"}},
+	{"j1", "rom", ""}:    {"cpu_synth_j1", []string{"core/register_file_ebr.vhd", "core/mult_seq.vhd", "core/shifter_seq.vhd", "decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j1_config.vhd"}},
 	// core/dsp_arith.vhd: single-SB_MAC16 DSP-backed ALU adder, enabled only
 	// for this variant via synth/cpu_synth_j1_dsp_config.vhd (DSP_ALU=>true).
 	// Must be analyzed here even though it is unused hardware for J2/J4/other
 	// J1 variants (their datapath keeps DSP_ALU=false -> the arith_unit LUT fn).
-	{"j1", "rom", "dsp"}: {"cpu_synth_j1_dsp", nil, []string{"core/register_file_ebr.vhd", "core/mult_ice40dsp.vhd", "core/dsp_arith.vhd", "core/shifter_seq.vhd", "decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j1_dsp_config.vhd"}},
-	{"j4", "direct", ""}: {"cpu_synth_j4", map[string]string{"PRIV_ARCH": "true", "MMU_ARCH": "true"}, []string{"decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_j4_config.vhd"}},
-	{"j4", "rom", ""}:    {"cpu_synth_j4_rom", map[string]string{"PRIV_ARCH": "true", "MMU_ARCH": "true"}, []string{"decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j4_rom_config.vhd"}},
+	{"j1", "rom", "dsp"}: {"cpu_synth_j1_dsp", []string{"core/register_file_ebr.vhd", "core/mult_ice40dsp.vhd", "core/dsp_arith.vhd", "core/shifter_seq.vhd", "decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j1_dsp_config.vhd"}},
+	{"j4", "direct", ""}: {"cpu_synth_j4", []string{"decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_j4_config.vhd"}},
+	{"j4", "rom", ""}:    {"cpu_synth_j4_rom", []string{"decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j4_rom_config.vhd"}},
+}
+
+// cpuVariantExtraFiles filters a variant's variants.toml extra_files down to
+// the subset CPUSynthConfig should append to its post-decode_core fragment.
+// core/tlb.vhd is excluded: jcore-soc's filelist.sh already carries it in the
+// static base array (ahead of cpu.vhd, for every model), so re-emitting it
+// here would analyze it twice.
+func cpuVariantExtraFiles(v cpuVariant) []string {
+	var out []string
+	for _, f := range v.ExtraFiles {
+		if f == "core/tlb.vhd" {
+			continue
+		}
+		out = append(out, f)
+	}
+	return out
 }
 
 // CPUSynthConfig returns the cpu_synth configuration name, the generic map to
 // bind it with, and extra filelist sources for a (model, decode, mult) triple.
 // mult is "" for the model's native multiplier, or "dsp" for mult(ice40dsp).
+// The generics and any architectural extra files come from
+// components/cpu/variants.toml (the submodule's single authoritative variant
+// table); the config name and decode/mult-specific files come from the
+// soc-side cpuSynth table above.
 func CPUSynthConfig(model, decode, mult string) (string, map[string]string, []string, error) {
 	e, ok := cpuSynth[[3]string{model, decode, mult}]
 	if !ok {
 		return "", nil, nil, fmt.Errorf("unsupported cpu model/decode/mult combination %q/%q/%q", model, decode, mult)
 	}
-	return e.cfg, e.generics, e.files, nil
+	v, err := variantFor(model)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	files := append(cpuVariantExtraFiles(v), e.files...)
+	return e.cfg, v.Generics, files, nil
 }
 
 // cpuSynthFPGAOpt maps (model, decode, mult) to the FPGA-optimised cpu_synth
@@ -58,23 +92,27 @@ func CPUSynthConfig(model, decode, mult string) (string, map[string]string, []st
 // files are the ebr regfile arch + the *_ebr synth config; the shared decode
 // tables come from the standard config's files (analyzed once).
 var cpuSynthFPGAOpt = map[[3]string]struct {
-	cfg      string
-	generics map[string]string
-	files    []string
+	cfg   string
+	files []string
 }{
 	{"j4", "rom", ""}: {"cpu_synth_j4_rom_ebr",
-		map[string]string{"PRIV_ARCH": "true", "MMU_ARCH": "true"},
 		[]string{"core/register_file_ebr.vhd", "synth/cpu_synth_j4_rom_ebr_config.vhd"}},
 }
 
 // CPUSynthConfigFPGAOpt returns the FPGA-optimised cpu_synth config for a
 // (model, decode, mult) triple, or an error if no FPGA-optimised variant exists.
+// Generics come from components/cpu/variants.toml, same as CPUSynthConfig.
 func CPUSynthConfigFPGAOpt(model, decode, mult string) (string, map[string]string, []string, error) {
 	e, ok := cpuSynthFPGAOpt[[3]string{model, decode, mult}]
 	if !ok {
 		return "", nil, nil, fmt.Errorf("no FPGA-optimised cpu variant for model/decode/mult %q/%q/%q", model, decode, mult)
 	}
-	return e.cfg, e.generics, e.files, nil
+	v, err := variantFor(model)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	files := append(cpuVariantExtraFiles(v), e.files...)
+	return e.cfg, v.Generics, files, nil
 }
 
 var ramMux = map[[2]any]struct {
