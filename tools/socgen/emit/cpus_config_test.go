@@ -36,8 +36,11 @@ func TestCPUsConfigJ4Rom(t *testing.T) {
 	if strings.Contains(src, "MMU_ARCH") {
 		t.Errorf("MMU_ARCH must be gone: PRIV_ARCH implies MMU:\n%s", src)
 	}
+	// decode_table_rom.vhd comes from gen/j4/decode/ (the sh4-overlay
+	// out-of-tree regeneration), not the committed base decode/ tree -- see
+	// elaborate/cpumap.go's cpuSynth table and its comment.
 	for _, want := range []string{
-		"synth/cpu_synth_j4_rom_config.vhd", "decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd",
+		"synth/cpu_synth_j4_rom_config.vhd", "gen/j4/decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd",
 	} {
 		found := false
 		for _, f := range files {
