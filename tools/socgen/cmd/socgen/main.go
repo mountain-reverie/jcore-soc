@@ -41,6 +41,7 @@ func run(args []string) error {
 		return errors.New("expected exactly one board name")
 	}
 	name := fs.Arg(0)
+	elaborate.SetRoot(*root)
 	if *watch {
 		return runWatch(*root, name, *outDir, *variant)
 	}

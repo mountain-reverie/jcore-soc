@@ -27,12 +27,14 @@ func TestCPUsConfigJ4Rom(t *testing.T) {
 		"use configuration work.cpu_synth_j4_rom",
 		"generic map (",
 		"PRIV_ARCH => true",
-		"MMU_ARCH => true",
 		"end configuration;",
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("generated config missing %q:\n%s", want, src)
 		}
+	}
+	if strings.Contains(src, "MMU_ARCH") {
+		t.Errorf("MMU_ARCH must be gone: PRIV_ARCH implies MMU:\n%s", src)
 	}
 	for _, want := range []string{
 		"synth/cpu_synth_j4_rom_config.vhd", "decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd",

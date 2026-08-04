@@ -32,7 +32,7 @@ use work.cpu_core_pack.all;
 -- Task 6 PHASE C: cpus_config.vhd's soc_cpus_config configuration (which
 -- threads u_cpu's required decode_type/reset_vector generics down via
 -- `for one_cpu_m0 ... u_cpu: cpu use configuration work.cpu_synth_j4
--- generic map (MMU_ARCH => true, PRIV_ARCH => true)`) only has a
+-- generic map (PRIV_ARCH => true)`) only has a
 -- `for one_cpu_m0` clause -- it does not, and structurally cannot without
 -- editing the shared base file, apply to this architecture's different
 -- name (`one_cpu_m0_gf180`). Every existing flow that successfully
@@ -53,7 +53,6 @@ configuration cpu_core_j4mmu_gf180 of cpu_core is
     for u_cpu : cpu
       use configuration work.cpu_synth_j4
         generic map (
-          MMU_ARCH => true,
           PRIV_ARCH => true
         );
     end for;

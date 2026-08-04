@@ -80,6 +80,38 @@ func TestCPUSynthConfigDSP(t *testing.T) {
 	}
 }
 
+func TestJ4GenericsComeFromVariantsTOML(t *testing.T) {
+	cfg, generics, files, err := CPUSynthConfig("j4", "direct", "")
+	if err != nil {
+		t.Fatalf("CPUSynthConfig: %v", err)
+	}
+	if cfg != "cpu_synth_j4" {
+		t.Errorf("cfg = %q, want cpu_synth_j4", cfg)
+	}
+	if generics["PRIV_ARCH"] != "true" {
+		t.Errorf("PRIV_ARCH = %q, want true", generics["PRIV_ARCH"])
+	}
+	if _, bad := generics["MMU_ARCH"]; bad {
+		t.Error("MMU_ARCH must be gone: PRIV_ARCH implies MMU")
+	}
+	// NOTE: pointing j4 at the sh4-overlay-generated decode table (instead of
+	// the committed base decode_table_direct.vhd) is Task 10's Step 4, deferred
+	// to a later task: it needs filelist.sh/board-build wiring to resolve a
+	// generated-path marker, which is out of scope for socgen alone. Today
+	// CPUSynthConfig still returns the base table for j4 -- see task-10-report.md.
+	_ = files
+}
+
+func TestJ2Unchanged(t *testing.T) {
+	cfg, generics, _, err := CPUSynthConfig("j2", "direct", "")
+	if err != nil {
+		t.Fatalf("CPUSynthConfig: %v", err)
+	}
+	if cfg != "cpu_synth_direct" || len(generics) != 0 {
+		t.Errorf("j2 = %q/%v, want cpu_synth_direct/empty", cfg, generics)
+	}
+}
+
 func TestRAMMuxConfig(t *testing.T) {
 	cfg, _, err := RAMMuxConfig(1, "id")
 	if err != nil || cfg != "ddr_ram_mux_one_cpu_idcache_fpga" {

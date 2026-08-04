@@ -74,7 +74,7 @@ ghdl -r --std=93 -fexplicit -fsynopsys --syn-binding --workdir="$WORK" gf180_j4m
 # 5. MMU cosim guard (--mmu only): the J4 MMU-enable sequence (AT enables, a
 # present-page translated access relocates -- see BOOT-J4-MMU.md) is
 # cosim-verified per-PR in jcore-cpu via components/cpu/sim/mmu_sim.sh, which
-# builds the J4-OVERLAY decoder with CONFIG_MMU_ARCH=1 (the base decoder omits
+# builds the J4-OVERLAY decoder with CONFIG_PRIV_ARCH=1 (the base decoder omits
 # LDTLB/PTEH/... so MMU instrs must come from the overlay) and runs the
 # mmu*/priv-arch functional guards against THIS repo's checked-out
 # components/cpu RTL (JCORE_SOC=$ROOT). It restores the committed base decoder
@@ -104,7 +104,7 @@ if [ "${1:-}" = "--mmu" ]; then
   first=1
   for g in "${MMU_GUARDS[@]}"; do
     if [ "$first" = 1 ]; then
-      # first call builds the CONFIG_MMU_ARCH=1 cosim, then runs guard $g
+      # first call builds the CONFIG_PRIV_ARCH=1 cosim, then runs guard $g
       JCORE_SOC="$ROOT" "$ROOT/components/cpu/sim/mmu_sim.sh" "$g"
       first=0
     else
