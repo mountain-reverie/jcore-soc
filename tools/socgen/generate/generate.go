@@ -130,7 +130,11 @@ func Build(b *board.Board, res *elaborate.Resolution) ([]File, error) {
 		files = append(files, File{Name: b.Name + ".pcf", Content: pcf, InBuildMK: false})
 	}
 
-	files = append(files, File{Name: "build.mk", Content: buildMK(files)})
+	cpuVariant := ""
+	if b.Design != nil && b.Design.CPU != nil {
+		cpuVariant = b.Design.CPU.Model
+	}
+	files = append(files, File{Name: "build.mk", Content: buildMK(files, cpuVariant)})
 	return files, errors.Join(errs...)
 }
 
