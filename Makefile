@@ -57,11 +57,55 @@ export ISE_VERSION
 include tools/mk_utils.mk
 
 #$(info VHDL_DIRS $(VHDL_DIRS))
+
+# VHDS_ASIC/VHDS_FPGA scan every VHDL_DIRS entry's build.mk (via mk_utils.mk),
+# including components/cpu/build.mk -- which pulls in components/cpu/
+# Makefile.inc, which $(eval)s the CPU_DECODE_GENERATED grouped-target RULE
+# (a real rule, with a recipe: "$(CPU_DECODE_GENERATED) &: ..."). GNU Make
+# does not allow safely $(eval)-ing new RULE definitions from inside a
+# recipe's own expansion (a documented gotcha: the makefile database changes,
+# but mid-recipe there is no well-defined point to fold a brand-new rule back
+# into the dependency graph, and it can outright mis-parse as "prerequisites
+# defined in a recipe"). This computation must therefore happen at ordinary
+# parse time (an immediate `:=`, evaluated once while make reads this file --
+# same as before this refactor), never lazily inside a target's recipe.
+#
+# CPU_VARIANT-per-board (the whole point of Task 12) is reconciled with that
+# constraint below: print-fpga-vhdl-list/print-asic-vhdl-list re-run THIS
+# computation, unchanged, in a brand-new `make CPU_VARIANT=<variant> ...`
+# process per board (see the $(BOARD_NAMES) recipe) -- a fresh top-level
+# parse is exactly the safe context $(eval) needs, and it naturally reuses
+# this same code with no duplication.
 VHDS_ASIC := $(foreach d,$(VHDL_DIRS),$(call include_asic_vhdl,$(d)))
 VHDS_ASIC := $(sort $(VHDS_ASIC))
 
 VHDS_FPGA := $(foreach d,$(VHDL_DIRS),$(call include_fpga_vhdl,$(d)))
 VHDS_FPGA := $(sort $(VHDS_FPGA))
+
+print-fpga-vhdl-list:
+	@echo $(VHDS_FPGA)
+
+print-asic-vhdl-list:
+	@echo $(VHDS_ASIC)
+
+# Per-variant decode generation: components/cpu's Makefile.inc regenerates the
+# six cpugen decode sources (decode_pkg/decode/decode_body/decode_table_
+# {simple,direct,rom}.vhd) out-of-tree, under DECODE_GEN_DIR (default
+# $(CPU_INC_DIR)gen/$(CPU_VARIANT) -- see components/cpu/Makefile.inc), so a
+# J4 board gets its own sh4-overlay decoder (LDTLB reachable) instead of the
+# committed BASE (J2) decoder. This list mirrors components/cpu/Makefile.inc's
+# CPU_DECODE_GEN_NAMES; kept here (not sourced) because the generation must be
+# triggered explicitly below (see the $(BOARD_NAMES) recipe) -- these files are
+# NOT built as a side effect of merely listing them in VHDL_FILES, since the
+# per-board dispatch below spawns `make -C output/<board>` as a brand-new make
+# process that never scans components/cpu at all.
+CPU_DECODE_GEN_NAMES := decode_pkg.vhd decode.vhd decode_body.vhd \
+                        decode_table_simple.vhd decode_table_direct.vhd \
+                        decode_table_rom.vhd
+
+define board_decode_gen_files
+$(addprefix components/cpu/gen/$(1)/decode/,$(CPU_DECODE_GEN_NAMES))
+endef
 
 ################################################################################
 # Running Tests
@@ -121,10 +165,66 @@ $(BOARD_NAMES): BOARD_NAME = $@
 $(BOARD_NAMES): BOARD_DIR = $(abspath targets/boards/$@)
 $(BOARD_NAMES): TOP_DIR := $(abspath .)
 $(BOARD_NAMES): TOOLS_DIR := $(abspath tools)
-$(BOARD_NAMES): VHDL_FILES := $(VHDS_FPGA)
-$(BOARD_NAMES): VHDL_FILES_ASIC := $(VHDS_ASIC)
+
+# CPU_VARIANT comes from the board's soc_gen-generated build.mk (from
+# design.yaml's `model:`).
+#
+# PATH: the generated build.mk is targets/boards/<board>/build.mk -- NOT
+# targets/boards/<board>/generated/build.mk. (generated/ holds cpus_config.vhd,
+# cpu_synth_files.list and friends, but not build.mk.) Reading the wrong path
+# yields an empty result and silently defaults every board to j2.
+#
+# ABSENCE IS NORMAL, NOT AN ERROR: only boards with a `cpu:` block in design.yaml
+# get a CPU_VARIANT line. Today ulx3s (j2), icesugar (j1) and gf180_j4mmu (j4)
+# have one; microboard, mimas_v2 and turtle_1v0 legitimately do not. So a missing
+# CPU_VARIANT must NOT warn on every build -- half the boards would emit it every
+# time and the warning would be trained into background noise. Default silently
+# to j2 (the historical behaviour, which is what the union list gave them) and
+# reserve loud output for a board that HAS a cpu block whose variant is unknown
+# (handled by components/cpu/Makefile.inc's own $(error) on an unrecognized
+# CPU_VARIANT, triggered when the per-board VHDL_FILES/decode-gen below runs).
+define board_cpu_variant
+$(strip $(or \
+  $(shell sed -n 's/^CPU_VARIANT *:= *//p' targets/boards/$(1)/build.mk 2>/dev/null), \
+  j2))
+endef
+
+# CPU_VARIANT itself (just a string) IS safe as an ordinary target-specific
+# variable -- it never triggers an eval of new rules by itself.
+$(BOARD_NAMES): CPU_VARIANT = $(call board_cpu_variant,$@)
 
 $(BOARD_NAMES): tools
+# Per-board VHDL_FILES/VHDL_FILES_ASIC: re-invoke this same make with
+# CPU_VARIANT overridden on the command line (see the VHDS_ASIC/VHDS_FPGA
+# comment above for why this can't just be a lazily-expanded recipe variable).
+# Also regenerate this board's decode sources here, in a separate recursive
+# invocation of components/cpu/build.mk directly (VHDLS=... satisfies the
+# mk_utils.mk indirect-append idiom build_core.mk requires): the final
+# dispatch below spawns `make -C output/$@ ...`, a brand-new make process
+# that never scans components/cpu (it only sees the already-expanded
+# VHDL_FILES TEXT written into output/$@/Makefile), so it cannot build files
+# whose rule lives solely in components/cpu/Makefile.inc. The grouped-target
+# rule Makefile.inc defines is keyed on variants.toml/spec/cpugen-source
+# timestamps, not on CPU_VARIANT's value, so DECODE_GEN_DIR's default
+# per-variant subdirectory (gen/$(CPU_VARIANT)) is what keeps two boards on
+# different variants from stepping on (or silently reusing) each other's
+# decoder.
+	$(MAKE) -f components/cpu/build.mk VHDLS=CPU_DECODE_BUILD_TMP CPU_VARIANT=$(CPU_VARIANT) $(call board_decode_gen_files,$(CPU_VARIANT))
+# MAKEFLAGS= / MFLAGS= : $(shell $(MAKE) ...) is a plain string substitution,
+# not GNU Make's special recursive-make recipe handling, so it does not get a
+# fresh jobserver -- it just inherits whatever MAKEFLAGS is already in this
+# process's environment (e.g. a jobserver --jobserver-auth=R,W fd pair from an
+# ANCESTOR make). That's fine for an ordinary recursive `$(MAKE) target`
+# recipe line, but here we're capturing this sub-make's STDOUT as a string;
+# when this whole chain is itself invoked from inside another make's recipe
+# (e.g. soc_gen's Go tool shelling back out to `make ... TARGET=vhdl_list.txt`,
+# which is exactly board.Files()'s path in tools/socgen/board/board.go),
+# the inherited jobserver fds are not valid in that new process tree and GNU
+# Make chokes ("multiple target patterns" is one observed symptom). Clearing
+# MAKEFLAGS/MFLAGS for just this sub-invocation avoids inheriting a jobserver
+# handle that doesn't apply here.
+	$(eval VHDL_FILES := $(shell MAKEFLAGS= MFLAGS= $(MAKE) -s CPU_VARIANT=$(CPU_VARIANT) print-fpga-vhdl-list))
+	$(eval VHDL_FILES_ASIC := $(shell MAKEFLAGS= MFLAGS= $(MAKE) -s CPU_VARIANT=$(CPU_VARIANT) print-asic-vhdl-list))
 	mkdir -p "$(REL_OUTPUT_DIR)"
 	echo "REVISION:=$(REVISION)" >> "$(REL_OUTPUT_DIR)/Makefile.tmp"
 	echo "ISE_VERSION:=$(ISE_VERSION)" >> "$(REL_OUTPUT_DIR)/Makefile.tmp"

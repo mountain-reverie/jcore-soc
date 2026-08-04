@@ -44,8 +44,23 @@ var cpuSynth = map[[3]string]struct {
 	// Must be analyzed here even though it is unused hardware for J2/J4/other
 	// J1 variants (their datapath keeps DSP_ALU=false -> the arith_unit LUT fn).
 	{"j1", "rom", "dsp"}: {"cpu_synth_j1_dsp", []string{"core/register_file_ebr.vhd", "core/mult_ice40dsp.vhd", "core/dsp_arith.vhd", "core/shifter_seq.vhd", "decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j1_dsp_config.vhd"}},
-	{"j4", "direct", ""}: {"cpu_synth_j4", []string{"decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_j4_config.vhd"}},
-	{"j4", "rom", ""}:    {"cpu_synth_j4_rom", []string{"decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j4_rom_config.vhd"}},
+	// j4's decode_table_{direct,rom}.vhd come from gen/j4/decode/ -- the
+	// out-of-tree sh4-overlay regeneration (components/cpu/Makefile.inc's
+	// CPU_DECODE_GENERATED, DECODE_GEN_DIR default $(CPU_INC_DIR)gen/$(CPU_VARIANT)) --
+	// NOT the committed decode/ tree. The committed decode/decode_table_*.vhd
+	// are the BASE (j2, no-overlay) generation: LDTLB and the PTEH/PTEL/ASIDR
+	// LDC/STC family decode as General Illegal there. j4 boards previously
+	// built PRIV_ARCH RTL (TLB, MMU CSRs, banked regfile) against that base
+	// decoder, so the MMU was present but unreachable from software. The
+	// consumer (filelist.sh) prefixes every entry with $CPU/, so this yields
+	// $CPU/gen/j4/decode/decode_table_direct.vhd, matching where
+	// `make -C components/cpu ... CPU_VARIANT=j4` (or an equivalent direct
+	// cpugen -overlay spec/sh4 invocation) actually writes it.
+	// decode_table_*_config.vhd (the CONFIGURATION wrapper that binds the
+	// table architecture by name) is NOT cpugen-generated -- same file for
+	// every variant -- so it still points at the committed decode/ tree.
+	{"j4", "direct", ""}: {"cpu_synth_j4", []string{"gen/j4/decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_j4_config.vhd"}},
+	{"j4", "rom", ""}:    {"cpu_synth_j4_rom", []string{"gen/j4/decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j4_rom_config.vhd"}},
 }
 
 // cpuVariantExtraFiles filters a variant's variants.toml extra_files down to

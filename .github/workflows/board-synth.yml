@@ -215,6 +215,23 @@ jobs:
         # inside synth_gf180.sh on missing generated VHDL.
         run: targets/asic/gf180_j4mmu/prep_sources.sh
 
+      - name: J4 boards must build the sh4-overlay decoder
+        # Regression guard for the bug this refactor fixed: a J4 board once
+        # compiled PRIV_ARCH RTL (TLB, MMU CSRs, banked regfile) against the
+        # committed BASE decoder, so LDTLB and the PTEH/PTEL/ASIDR LDC/STC
+        # family decoded as General Illegal -- the MMU was present but
+        # unreachable from software. `make gf180_j4mmu TARGET=soc_gen` drives
+        # the per-board VHDL_FILES gather (jcore-soc's Makefile), which
+        # regenerates this board's decoder out-of-tree under
+        # components/cpu/gen/j4/decode/ (components/cpu/Makefile.inc's
+        # DECODE_GEN_DIR default, keyed by CPU_VARIANT).
+        run: |
+          make gf180_j4mmu TARGET=soc_gen
+          d=components/cpu/gen/j4/decode/decode_body.vhd
+          test -f "$d" || { echo "ERROR: $d not generated" >&2; exit 1; }
+          grep -qi ldtlb "$d" || { echo "ERROR: J4 decoder lacks LDTLB" >&2; exit 1; }
+          echo "OK: J4 decoder includes the sh4 overlay"
+
       - name: Per-macro GF180 synth-only stats
         run: |
           export GF180_LIB="$(find "$HOME/.ciel" -name 'gf180mcu_fd_sc_mcu7t5v0__tt_025C_5v00.lib' | head -1)"
