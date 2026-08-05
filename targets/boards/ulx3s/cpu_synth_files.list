@@ -1,3 +1,6 @@
-decode/decode_table_direct.vhd
+gen/j2/decode/decode_pkg.vhd
+gen/j2/decode/decode.vhd
+gen/j2/decode/decode_body.vhd
+gen/j2/decode/decode_table_direct.vhd
 decode/decode_table_direct_config.vhd
 synth/cpu_synth_config.vhd

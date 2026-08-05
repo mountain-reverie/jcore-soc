@@ -103,8 +103,18 @@ CPU_DECODE_GEN_NAMES := decode_pkg.vhd decode.vhd decode_body.vhd \
                         decode_table_simple.vhd decode_table_direct.vhd \
                         decode_table_rom.vhd
 
+# Default must match components/cpu/Makefile.inc's CPU_ROM_WIDTH default.
+# CPU_ROM_WIDTH is not part of DECODE_GEN_DIR's directory name (only
+# CPU_VARIANT is) -- Makefile.inc keys it with a per-width STAMP file inside
+# the same per-variant directory instead (see its own comment), so this
+# board_decode_gen_files list must also request that stamp as an explicit
+# build goal: requesting only the six .vhd targets would let make consider
+# the (grouped) rule satisfied by an existing directory built for a
+# DIFFERENT width, silently reusing a decoder with the wrong ROM geometry.
+CPU_ROM_WIDTH ?= 72
+
 define board_decode_gen_files
-$(addprefix components/cpu/gen/$(1)/decode/,$(CPU_DECODE_GEN_NAMES))
+$(addprefix components/cpu/gen/$(1)/decode/,$(CPU_DECODE_GEN_NAMES)) components/cpu/gen/$(1)/decode/.rom_width_$(CPU_ROM_WIDTH)
 endef
 
 ################################################################################
@@ -209,7 +219,7 @@ $(BOARD_NAMES): tools
 # per-variant subdirectory (gen/$(CPU_VARIANT)) is what keeps two boards on
 # different variants from stepping on (or silently reusing) each other's
 # decoder.
-	$(MAKE) -f components/cpu/build.mk VHDLS=CPU_DECODE_BUILD_TMP CPU_VARIANT=$(CPU_VARIANT) $(call board_decode_gen_files,$(CPU_VARIANT))
+	$(MAKE) -f components/cpu/build.mk VHDLS=CPU_DECODE_BUILD_TMP CPU_VARIANT=$(CPU_VARIANT) CPU_ROM_WIDTH=$(CPU_ROM_WIDTH) $(call board_decode_gen_files,$(CPU_VARIANT))
 # MAKEFLAGS= / MFLAGS= : $(shell $(MAKE) ...) is a plain string substitution,
 # not GNU Make's special recursive-make recipe handling, so it does not get a
 # fresh jobserver -- it just inherits whatever MAKEFLAGS is already in this

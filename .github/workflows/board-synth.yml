@@ -220,17 +220,30 @@ jobs:
         # compiled PRIV_ARCH RTL (TLB, MMU CSRs, banked regfile) against the
         # committed BASE decoder, so LDTLB and the PTEH/PTEL/ASIDR LDC/STC
         # family decoded as General Illegal -- the MMU was present but
-        # unreachable from software. `make gf180_j4mmu TARGET=soc_gen` drives
-        # the per-board VHDL_FILES gather (jcore-soc's Makefile), which
-        # regenerates this board's decoder out-of-tree under
-        # components/cpu/gen/j4/decode/ (components/cpu/Makefile.inc's
-        # DECODE_GEN_DIR default, keyed by CPU_VARIANT).
+        # unreachable from software.
+        #
+        # A PRIOR version of this guard called its own
+        # `make gf180_j4mmu TARGET=soc_gen` and checked
+        # components/cpu/gen/j4/decode/decode_body.vhd directly -- a file
+        # that existed only because of a WHOLLY SEPARATE mechanism (the
+        # top-level Makefile's VHDL_FILES gather), not because filelist.sh /
+        # synth_gf180.sh (the step right after this one) ever read it:
+        # filelist.sh hardcoded the committed BASE decode_table_direct.vhd
+        # and never consumed cpu_synth_files.list at all, so that guard
+        # passed while synth's ACTUAL input was still the base (no-MMU-
+        # instructions) decoder -- a guard that is green while the thing it
+        # guards is broken. Fixed on both sides: filelist.sh now reads all
+        # four model-varying cpugen outputs (decode_pkg/decode/decode_body +
+        # the selected table) from cpu_synth_files.list, and THIS guard
+        # resolves the ACTUAL file filelist.sh names for
+        # synth_gf180.sh/gen_synth_sources.sh to analyze (prep_sources.sh,
+        # run just above, is what regenerates it) instead of assuming a path.
         run: |
-          make gf180_j4mmu TARGET=soc_gen
-          d=components/cpu/gen/j4/decode/decode_body.vhd
-          test -f "$d" || { echo "ERROR: $d not generated" >&2; exit 1; }
-          grep -qi ldtlb "$d" || { echo "ERROR: J4 decoder lacks LDTLB" >&2; exit 1; }
-          echo "OK: J4 decoder includes the sh4 overlay"
+          d="$(bash targets/asic/gf180_j4mmu/filelist.sh | grep 'decode_body\.vhd$')"
+          test -n "$d" || { echo "ERROR: filelist.sh has no decode_body.vhd entry" >&2; exit 1; }
+          test -f "$d" || { echo "ERROR: $d (named by filelist.sh) does not exist -- prep_sources.sh should have built it" >&2; exit 1; }
+          grep -qi ldtlb "$d" || { echo "ERROR: filelist.sh's decode_body.vhd ($d) lacks LDTLB -- synth would build the base (no-MMU) decoder" >&2; exit 1; }
+          echo "OK: filelist.sh's decode_body.vhd ($d) includes the sh4 overlay (LDTLB present)"
 
       - name: Per-macro GF180 synth-only stats
         run: |

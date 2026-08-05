@@ -69,8 +69,31 @@ perl tools/genbootpkg \
     4096 \
     > targets/boards/ulx3s/boot_image_pkg.vhd
 
-# 3. generated sources: cpu (decode generate + v2p), uartlite, cache/bus cores
-make -C components/cpu/decode generate
+# 3. decoder: regenerate THIS VARIANT'S decoder out-of-tree, via the same
+# components/cpu/Makefile.inc mechanism the top-level Makefile's board
+# dispatch uses -- NOT `make -C components/cpu/decode generate` (which always
+# writes the BASE, no-overlay generation into the committed decode/ tree,
+# regardless of VARIANT). j4-rom/j4-dual need the sh4-overlay decoder (LDTLB
+# reachable); using the base generation here left filelist.sh's
+# cpu_synth_files.list-sourced decode_table_rom.vhd (from gen/j4/decode/)
+# paired with a stale/wrong decode_pkg/decode/decode_body -- an internally
+# inconsistent decoder (mismatched DEC_ADDR_BITS/ROM geometry). CPU_VARIANT
+# is read from the build.mk step 1's soc_gen just (re)wrote, the same way
+# the top-level Makefile's board dispatch reads it.
+_CPU_VARIANT="$(sed -n 's/^CPU_VARIANT *:= *//p' "$BD/build.mk" 2>/dev/null)"
+_CPU_VARIANT="${_CPU_VARIANT:-j2}"
+make -f components/cpu/build.mk VHDLS=CPU_DECODE_BUILD_TMP CPU_VARIANT="$_CPU_VARIANT" \
+  "components/cpu/gen/$_CPU_VARIANT/decode/decode_pkg.vhd" \
+  "components/cpu/gen/$_CPU_VARIANT/decode/decode.vhd" \
+  "components/cpu/gen/$_CPU_VARIANT/decode/decode_body.vhd" \
+  "components/cpu/gen/$_CPU_VARIANT/decode/decode_table_simple.vhd" \
+  "components/cpu/gen/$_CPU_VARIANT/decode/decode_table_direct.vhd" \
+  "components/cpu/gen/$_CPU_VARIANT/decode/decode_table_rom.vhd" \
+  "components/cpu/gen/$_CPU_VARIANT/decode/.rom_width_72"
+
+# generated sources shared across variants: uartlite, cache/bus cores, cpu
+# mult/datapath/decode_core v2p. decode_core.vhd is v2p'd (NOT
+# cpugen-generated, unlike the six above), so it stays in-tree.
 ( cd components/cpu && for f in core/mult core/datapath decode/decode_core; do
     LD_LIBRARY_PATH='' perl ../../tools/v2p < "$f.vhm" > "$f.vhd"; done )
 LD_LIBRARY_PATH='' perl tools/v2p < components/uartlite/uart.vhm > components/uartlite/uart.vhd

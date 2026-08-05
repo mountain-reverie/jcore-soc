@@ -1,3 +1,6 @@
+gen/j4/decode/decode_pkg.vhd
+gen/j4/decode/decode.vhd
+gen/j4/decode/decode_body.vhd
 gen/j4/decode/decode_table_direct.vhd
 decode/decode_table_direct_config.vhd
 synth/cpu_synth_j4_config.vhd
