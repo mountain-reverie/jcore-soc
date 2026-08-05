@@ -33,12 +33,23 @@ const CPUsConfigName = "soc_cpus_config"
 // base FILES), not in this post-decode_core fragment. filelist.sh carries it
 // in the base array unconditionally; CPUSynthConfig deliberately does not
 // re-emit it here (see cpuVariantExtraFiles below).
+// defaultCPUROMWidth MUST match components/cpu/Makefile.inc's own
+// CPU_ROM_WIDTH default (currently 72; not surfaced anywhere in
+// design.yaml/socgen today, so there is only ever one value in practice).
+// It is part of decodeGenDir's path because Makefile.inc's DECODE_GEN_DIR
+// is keyed by CPU_VARIANT AND CPU_ROM_WIDTH together (gen/<variant>-w<width>/) --
+// two consumers of one variant at different widths must not share a
+// directory, the same staleness class the per-variant key exists to
+// prevent one level up. If components/cpu/Makefile.inc's default ever
+// changes, this must change with it.
+const defaultCPUROMWidth = "72"
+
 // decodeGenDir returns this model's out-of-tree cpugen output directory,
 // cpu-submodule-relative: components/cpu/Makefile.inc's DECODE_GEN_DIR
-// default is $(CPU_INC_DIR)gen/$(CPU_VARIANT), so from the submodule root
-// that is gen/<model>/decode/.
+// default is $(CPU_INC_DIR)gen/$(CPU_VARIANT)-w$(CPU_ROM_WIDTH), so from the
+// submodule root that is gen/<model>-w<width>/decode/.
 func decodeGenDir(model string) string {
-	return "gen/" + model + "/decode"
+	return "gen/" + model + "-w" + defaultCPUROMWidth + "/decode"
 }
 
 // decodeGenFiles returns the THREE model-invariant cpugen outputs --

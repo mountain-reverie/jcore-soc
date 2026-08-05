@@ -19,18 +19,18 @@ func TestCPUSynthConfig(t *testing.T) {
 		// committed base (Task 5), but the PATH must still be uniform so no
 		// consumer can accidentally mix a gen/ table with a base decode_pkg.
 		{"j2", "direct", "cpu_synth_direct", false, []string{
-			"gen/j2/decode/decode_pkg.vhd", "gen/j2/decode/decode.vhd", "gen/j2/decode/decode_body.vhd",
-			"gen/j2/decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_config.vhd"}},
+			"gen/j2-w72/decode/decode_pkg.vhd", "gen/j2-w72/decode/decode.vhd", "gen/j2-w72/decode/decode_body.vhd",
+			"gen/j2-w72/decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_config.vhd"}},
 		{"j1", "rom", "cpu_synth_j1", false, []string{
-			"gen/j1/decode/decode_pkg.vhd", "gen/j1/decode/decode.vhd", "gen/j1/decode/decode_body.vhd",
+			"gen/j1-w72/decode/decode_pkg.vhd", "gen/j1-w72/decode/decode.vhd", "gen/j1-w72/decode/decode_body.vhd",
 			"core/register_file_ebr.vhd", "core/mult_seq.vhd", "core/shifter_seq.vhd",
-			"gen/j1/decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j1_config.vhd"}},
+			"gen/j1-w72/decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j1_config.vhd"}},
 		{"j4", "direct", "cpu_synth_j4", true, []string{
-			"gen/j4/decode/decode_pkg.vhd", "gen/j4/decode/decode.vhd", "gen/j4/decode/decode_body.vhd",
-			"gen/j4/decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_j4_config.vhd"}},
+			"gen/j4-w72/decode/decode_pkg.vhd", "gen/j4-w72/decode/decode.vhd", "gen/j4-w72/decode/decode_body.vhd",
+			"gen/j4-w72/decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_j4_config.vhd"}},
 		{"j4", "rom", "cpu_synth_j4_rom", true, []string{
-			"gen/j4/decode/decode_pkg.vhd", "gen/j4/decode/decode.vhd", "gen/j4/decode/decode_body.vhd",
-			"gen/j4/decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j4_rom_config.vhd"}},
+			"gen/j4-w72/decode/decode_pkg.vhd", "gen/j4-w72/decode/decode.vhd", "gen/j4-w72/decode/decode_body.vhd",
+			"gen/j4-w72/decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j4_rom_config.vhd"}},
 	}
 	for _, c := range cases {
 		cfg, gen, files, err := CPUSynthConfig(c.model, c.decode, "")
@@ -106,14 +106,14 @@ func TestJ4GenericsComeFromVariantsTOML(t *testing.T) {
 		t.Error("MMU_ARCH must be gone: PRIV_ARCH implies MMU")
 	}
 	// Task 12 wired the deferred piece: j4 now points at the sh4-overlay
-	// out-of-tree regeneration (gen/j4/decode/...), not the committed base
+	// out-of-tree regeneration (gen/j4-w72/decode/...), not the committed base
 	// decode_table_direct.vhd. filelist.sh prefixes every entry with $CPU/,
-	// so this resolves to $CPU/gen/j4/decode/decode_table_direct.vhd -- the
+	// so this resolves to $CPU/gen/j4-w72/decode/decode_table_direct.vhd -- the
 	// directory components/cpu/Makefile.inc's CPU_DECODE_GENERATED rule
 	// (DECODE_GEN_DIR default $(CPU_INC_DIR)gen/$(CPU_VARIANT)) regenerates
 	// with the sh4 overlay applied (LDTLB decodes instead of General Illegal).
-	if !slices.Contains(files, "gen/j4/decode/decode_table_direct.vhd") {
-		t.Errorf("files missing gen/j4/decode/decode_table_direct.vhd (sh4-overlay decoder); got %v", files)
+	if !slices.Contains(files, "gen/j4-w72/decode/decode_table_direct.vhd") {
+		t.Errorf("files missing gen/j4-w72/decode/decode_table_direct.vhd (sh4-overlay decoder); got %v", files)
 	}
 	if slices.Contains(files, "decode/decode_table_direct.vhd") {
 		t.Errorf("files must not point at the committed BASE decode_table_direct.vhd; got %v", files)

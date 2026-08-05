@@ -20,17 +20,17 @@ perl tools/genbootpkg \
 # variant -- see sim.sh's identical step for the full rationale). This
 # script does not run soc_gen itself (CI/a prior step regenerates the
 # variant's build.mk/cpus_config.vhd before invoking this script), so
-# CPU_VARIANT is read from whatever build.mk is already on disk.
+# CPU_VARIANT is read from whatever build.mk is already on disk. Fails
+# loudly (does NOT default to j2) if unreadable -- see sim.sh's identical
+# step. `cpu-decode-gen` (components/cpu/Makefile.inc) collapses the six
+# generated filenames (and the since-removed width-stamp literal --
+# CPU_ROM_WIDTH is now folded into DECODE_GEN_DIR's name) into one name.
 _CPU_VARIANT="$(sed -n 's/^CPU_VARIANT *:= *//p' targets/boards/ulx3s/build.mk 2>/dev/null)"
-_CPU_VARIANT="${_CPU_VARIANT:-j2}"
-make -f components/cpu/build.mk VHDLS=CPU_DECODE_BUILD_TMP CPU_VARIANT="$_CPU_VARIANT" \
-  "components/cpu/gen/$_CPU_VARIANT/decode/decode_pkg.vhd" \
-  "components/cpu/gen/$_CPU_VARIANT/decode/decode.vhd" \
-  "components/cpu/gen/$_CPU_VARIANT/decode/decode_body.vhd" \
-  "components/cpu/gen/$_CPU_VARIANT/decode/decode_table_simple.vhd" \
-  "components/cpu/gen/$_CPU_VARIANT/decode/decode_table_direct.vhd" \
-  "components/cpu/gen/$_CPU_VARIANT/decode/decode_table_rom.vhd" \
-  "components/cpu/gen/$_CPU_VARIANT/decode/.rom_width_72"
+if [ -z "$_CPU_VARIANT" ]; then
+  echo "ERROR: could not read CPU_VARIANT from targets/boards/ulx3s/build.mk -- regenerate it first" >&2
+  exit 1
+fi
+make -f components/cpu/build.mk cpu-decode-gen VHDLS=CPU_DECODE_BUILD_TMP CPU_VARIANT="$_CPU_VARIANT"
 
 # generated sources shared across variants: uartlite uart.vhd and cpu
 # mult/datapath/decode_core v2p (decode_core.vhd is v2p'd, not

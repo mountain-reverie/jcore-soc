@@ -91,31 +91,23 @@ print-asic-vhdl-list:
 # Per-variant decode generation: components/cpu's Makefile.inc regenerates the
 # six cpugen decode sources (decode_pkg/decode/decode_body/decode_table_
 # {simple,direct,rom}.vhd) out-of-tree, under DECODE_GEN_DIR (default
-# $(CPU_INC_DIR)gen/$(CPU_VARIANT) -- see components/cpu/Makefile.inc), so a
-# J4 board gets its own sh4-overlay decoder (LDTLB reachable) instead of the
-# committed BASE (J2) decoder. This list mirrors components/cpu/Makefile.inc's
-# CPU_DECODE_GEN_NAMES; kept here (not sourced) because the generation must be
-# triggered explicitly below (see the $(BOARD_NAMES) recipe) -- these files are
-# NOT built as a side effect of merely listing them in VHDL_FILES, since the
-# per-board dispatch below spawns `make -C output/<board>` as a brand-new make
-# process that never scans components/cpu at all.
-CPU_DECODE_GEN_NAMES := decode_pkg.vhd decode.vhd decode_body.vhd \
-                        decode_table_simple.vhd decode_table_direct.vhd \
-                        decode_table_rom.vhd
-
-# Default must match components/cpu/Makefile.inc's CPU_ROM_WIDTH default.
-# CPU_ROM_WIDTH is not part of DECODE_GEN_DIR's directory name (only
-# CPU_VARIANT is) -- Makefile.inc keys it with a per-width STAMP file inside
-# the same per-variant directory instead (see its own comment), so this
-# board_decode_gen_files list must also request that stamp as an explicit
-# build goal: requesting only the six .vhd targets would let make consider
-# the (grouped) rule satisfied by an existing directory built for a
-# DIFFERENT width, silently reusing a decoder with the wrong ROM geometry.
+# $(CPU_INC_DIR)gen/$(CPU_VARIANT)-w$(CPU_ROM_WIDTH) -- see
+# components/cpu/Makefile.inc), so a J4 board gets its own sh4-overlay
+# decoder (LDTLB reachable) instead of the committed BASE (J2) decoder.
+# Triggered explicitly below (see the $(BOARD_NAMES) recipe) -- these files
+# are NOT built as a side effect of merely listing them in VHDL_FILES, since
+# the per-board dispatch below spawns `make -C output/<board>` as a
+# brand-new make process that never scans components/cpu at all.
+#
+# The six generated filenames themselves are NOT duplicated here (they used
+# to be, plus copy-pasted again into three board shell scripts -- the same
+# duplication disease this refactor exists to treat): Makefile.inc's own
+# `cpu-decode-gen` phony target is the one name every caller needs, so
+# CPU_ROM_WIDTH's default is the only thing that must still agree with
+# Makefile.inc's default (72) for `make <board>` without an explicit
+# override to behave the same as a direct `make -f components/cpu/build.mk
+# cpu-decode-gen` call.
 CPU_ROM_WIDTH ?= 72
-
-define board_decode_gen_files
-$(addprefix components/cpu/gen/$(1)/decode/,$(CPU_DECODE_GEN_NAMES)) components/cpu/gen/$(1)/decode/.rom_width_$(CPU_ROM_WIDTH)
-endef
 
 ################################################################################
 # Running Tests
@@ -215,11 +207,16 @@ $(BOARD_NAMES): tools
 # VHDL_FILES TEXT written into output/$@/Makefile), so it cannot build files
 # whose rule lives solely in components/cpu/Makefile.inc. The grouped-target
 # rule Makefile.inc defines is keyed on variants.toml/spec/cpugen-source
-# timestamps, not on CPU_VARIANT's value, so DECODE_GEN_DIR's default
-# per-variant subdirectory (gen/$(CPU_VARIANT)) is what keeps two boards on
-# different variants from stepping on (or silently reusing) each other's
-# decoder.
-	$(MAKE) -f components/cpu/build.mk VHDLS=CPU_DECODE_BUILD_TMP CPU_VARIANT=$(CPU_VARIANT) CPU_ROM_WIDTH=$(CPU_ROM_WIDTH) $(call board_decode_gen_files,$(CPU_VARIANT))
+# timestamps, not on CPU_VARIANT's or CPU_ROM_WIDTH's value, so
+# DECODE_GEN_DIR's default per-(variant, width) subdirectory
+# (gen/$(CPU_VARIANT)-w$(CPU_ROM_WIDTH)) is what keeps two boards on
+# different variants (or the same variant at different ROM widths) from
+# stepping on (or silently reusing) each other's decoder. `cpu-decode-gen`
+# is components/cpu/Makefile.inc's own phony target naming the six files
+# generated for whatever CPU_VARIANT/CPU_ROM_WIDTH are passed on this
+# command line -- the one name this Makefile needs to know, instead of
+# duplicating CPU_DECODE_GEN_NAMES' six literal filenames here too.
+	$(MAKE) -f components/cpu/build.mk VHDLS=CPU_DECODE_BUILD_TMP CPU_VARIANT=$(CPU_VARIANT) CPU_ROM_WIDTH=$(CPU_ROM_WIDTH) cpu-decode-gen
 # MAKEFLAGS= / MFLAGS= : $(shell $(MAKE) ...) is a plain string substitution,
 # not GNU Make's special recursive-make recipe handling, so it does not get a
 # fresh jobserver -- it just inherits whatever MAKEFLAGS is already in this

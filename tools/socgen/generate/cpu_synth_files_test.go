@@ -44,14 +44,14 @@ func TestBuildEmitsCPUSynthFilesList(t *testing.T) {
 		}
 	}
 	sort.Strings(lines)
-	// All six cpugen outputs come from the SAME gen/j2/decode/ directory
+	// All six cpugen outputs come from the SAME gen/j2-w72/decode/ directory
 	// (decode_pkg/decode/decode_body + the selected table) -- see
 	// elaborate/cpumap.go's decodeGenFiles comment.
 	want := []string{
-		"gen/j2/decode/decode_pkg.vhd",
-		"gen/j2/decode/decode.vhd",
-		"gen/j2/decode/decode_body.vhd",
-		"gen/j2/decode/decode_table_direct.vhd",
+		"gen/j2-w72/decode/decode_pkg.vhd",
+		"gen/j2-w72/decode/decode.vhd",
+		"gen/j2-w72/decode/decode_body.vhd",
+		"gen/j2-w72/decode/decode_table_direct.vhd",
 		"decode/decode_table_direct_config.vhd",
 		"synth/cpu_synth_config.vhd",
 	}

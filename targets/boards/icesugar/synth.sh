@@ -9,9 +9,19 @@ WORK="${WORK:-/tmp/icesynth}"
 OUT="${OUT:-$ROOT/targets/boards/icesugar/build}"
 cd "$ROOT"; rm -rf "$WORK" "$OUT"; mkdir -p "$WORK" "$OUT"
 
-# 1. generated cpu sources (decode generate + v2p) + v2p'd peripherals. Must
-#    precede soc_gen so the VHDL library it parses is complete.
-make -C components/cpu/decode generate
+# 1. decoder: regenerate THIS BOARD'S VARIANT decoder out-of-tree -- NOT
+# `make -C components/cpu/decode generate` (see sim.sh's identical step for
+# the full rationale: the base generation is model-independent and would
+# reinstate an inconsistent decoder for any variant with an overlay).
+_CPU_VARIANT="$(sed -n 's/^CPU_VARIANT *:= *//p' targets/boards/icesugar/build.mk 2>/dev/null)"
+if [ -z "$_CPU_VARIANT" ]; then
+  echo "ERROR: could not read CPU_VARIANT from targets/boards/icesugar/build.mk -- run 'make icesugar TARGET=soc_gen' first" >&2
+  exit 1
+fi
+make -f components/cpu/build.mk cpu-decode-gen VHDLS=CPU_DECODE_BUILD_TMP CPU_VARIANT="$_CPU_VARIANT"
+
+# generated cpu sources (v2p) + v2p'd peripherals. Must precede soc_gen so
+# the VHDL library it parses is complete.
 ( cd components/cpu && for f in core/mult core/datapath decode/decode_core; do
     LD_LIBRARY_PATH='' perl ../../tools/v2p < "$f.vhm" > "$f.vhd"; done )
 LD_LIBRARY_PATH='' perl tools/v2p < components/uartlite/uart.vhm > components/uartlite/uart.vhd

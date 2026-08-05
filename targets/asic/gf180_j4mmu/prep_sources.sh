@@ -54,20 +54,24 @@ make gf180_j4mmu TARGET=vhdl_list.txt
 # software, the exact bug this out-of-tree per-variant mechanism exists to
 # fix. CPU_VARIANT is read the same way the top-level Makefile's board
 # dispatch reads it (targets/boards/<board>/build.mk's soc_gen-written
-# CPU_VARIANT line, from step 1's `soc_gen` run above; default j2 if
-# absent, though this target always has j4). filelist.sh (via
-# cpu_synth_files.list) and this generation must agree on CPU_VARIANT, or
-# the decoder ends up split across two directories again.
+# CPU_VARIANT line, from step 1's `soc_gen` run above). Unlike the
+# top-level Makefile's OWN reader (where absence is normal for boards with
+# no `cpu:` block at all, and a silent j2 default is correct), THIS script
+# is for a target that is ALWAYS model:j4 -- an unreadable CPU_VARIANT here
+# means something is actually wrong (soc_gen didn't run, or build.mk
+# format changed), and silently defaulting to j2 would reinstate the exact
+# base-decoder bug this whole mechanism exists to fix. Fail loudly instead.
+# filelist.sh (via cpu_synth_files.list) and this generation must agree on
+# CPU_VARIANT, or the decoder ends up split across two directories again.
+# `cpu-decode-gen` (components/cpu/Makefile.inc) collapses the six
+# generated filenames (and the since-removed width-stamp literal --
+# CPU_ROM_WIDTH is now folded into DECODE_GEN_DIR's name) into one name.
 _CPU_VARIANT="$(sed -n 's/^CPU_VARIANT *:= *//p' targets/boards/gf180_j4mmu/build.mk 2>/dev/null)"
-_CPU_VARIANT="${_CPU_VARIANT:-j2}"
-make -f components/cpu/build.mk VHDLS=CPU_DECODE_BUILD_TMP CPU_VARIANT="$_CPU_VARIANT" \
-  "components/cpu/gen/$_CPU_VARIANT/decode/decode_pkg.vhd" \
-  "components/cpu/gen/$_CPU_VARIANT/decode/decode.vhd" \
-  "components/cpu/gen/$_CPU_VARIANT/decode/decode_body.vhd" \
-  "components/cpu/gen/$_CPU_VARIANT/decode/decode_table_simple.vhd" \
-  "components/cpu/gen/$_CPU_VARIANT/decode/decode_table_direct.vhd" \
-  "components/cpu/gen/$_CPU_VARIANT/decode/decode_table_rom.vhd" \
-  "components/cpu/gen/$_CPU_VARIANT/decode/.rom_width_72"
+if [ -z "$_CPU_VARIANT" ]; then
+  echo "ERROR: could not read CPU_VARIANT from targets/boards/gf180_j4mmu/build.mk (expected j4) -- did 'make gf180_j4mmu TARGET=soc_gen' above run/succeed?" >&2
+  exit 1
+fi
+make -f components/cpu/build.mk cpu-decode-gen VHDLS=CPU_DECODE_BUILD_TMP CPU_VARIANT="$_CPU_VARIANT"
 
 # 2b. generated sources shared with ulx3s: uartlite, cache/bus cores, cpu
 # mult/datapath/decode_core v2p (mirrors targets/boards/ulx3s/sim.sh step 3
