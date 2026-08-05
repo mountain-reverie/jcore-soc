@@ -76,6 +76,24 @@ func loadVariants() (map[string]cpuVariant, error) {
 			variantsErr = fmt.Errorf("read CPU variant table %s: %w", path, err)
 			return
 		}
+		// Mirror the submodule parser's validation (components/cpu/decode/
+		// gen-go/internal/variants/variants.go, package-internal so it can't
+		// be imported directly -- see the type-comment above). Both parsers
+		// must reject the same malformed variants.toml the same way, or
+		// this boundary can drift silently: cpugen fails loudly on a variant
+		// setting MMU_ARCH or missing config_file, while socgen's bare
+		// toml.DecodeFile would otherwise let either propagate straight
+		// into the SoC's generic map with no error at all.
+		for name, v := range parsed {
+			if _, bad := v.Generics["MMU_ARCH"]; bad {
+				variantsErr = fmt.Errorf("variants: %s sets MMU_ARCH; PRIV_ARCH implies MMU", name)
+				return
+			}
+			if v.ConfigFile == "" {
+				variantsErr = fmt.Errorf("variants: %s has no config_file", name)
+				return
+			}
+		}
 		variantsCache = parsed
 	})
 	return variantsCache, variantsErr

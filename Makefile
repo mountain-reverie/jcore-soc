@@ -162,6 +162,26 @@ BOARD_NAMES := $(notdir $(BOARD_NAMES))
 BOARD_NAMES := $(sort $(BOARD_NAMES))
 #$(info BOARD_NAMES: $(BOARD_NAMES))
 
+# Serialize the board goals themselves under `make -jN board1 board2 ...`.
+# Two hazards otherwise: (a) the $(eval VHDL_FILES := ...)/$(eval
+# VHDL_FILES_ASIC := ...) below assign GLOBAL variables, and GNU Make expands
+# recipe lines (including $(eval)s) in the parent process as each recipe is
+# issued -- under -jN, one board's issued recipe can overwrite VHDL_FILES
+# before another board's recipe has read it into its own output/<board>/
+# Makefile, corrupting that board's generated file list silently. (b) each
+# board recipe also invokes `$(MAKE) -f components/cpu/build.mk ...
+# cpu-decode-gen`, and two boards on the same CPU_VARIANT/CPU_ROM_WIDTH would
+# be two concurrent processes writing the same gen/<variant>-w<width>/decode/
+# files (racing Go's module cache too, which is not documented as N-way
+# safe). GNU Make 4.3 supports .NOTPARALLEL: with prerequisites: it only
+# serializes goals named here when given together on one command line (e.g.
+# `make -j4 ulx3s icesugar`), not the whole build -- a board's own internal
+# recipe steps and any OTHER concurrently-named goals are unaffected. No CI
+# job runs `make -jN <board> <board>` today (no `-j` in .github/workflows/ or
+# this Makefile), so this costs nothing currently and only prevents a build
+# nobody exercises yet from silently corrupting itself.
+.NOTPARALLEL: $(BOARD_NAMES)
+
 $(BOARD_NAMES): REL_OUTPUT_DIR=output/$@
 $(BOARD_NAMES): BOARD_NAME = $@
 $(BOARD_NAMES): BOARD_DIR = $(abspath targets/boards/$@)
