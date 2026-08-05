@@ -37,14 +37,14 @@ func TestCPUsConfigJ4Rom(t *testing.T) {
 		t.Errorf("MMU_ARCH must be gone: PRIV_ARCH implies MMU:\n%s", src)
 	}
 	// All six cpugen outputs (decode_pkg/decode/decode_body + decode_table_rom)
-	// come from the SAME gen/j4/decode/ directory (the sh4-overlay out-of-tree
+	// come from the SAME gen/j4-w72/decode/ directory (the sh4-overlay out-of-tree
 	// regeneration), not the committed base decode/ tree -- see
 	// elaborate/cpumap.go's decodeGenFiles comment for why mixing sources
 	// across the six is unsafe (DEC_ADDR_BITS/ROM-geometry mismatch).
 	for _, want := range []string{
 		"synth/cpu_synth_j4_rom_config.vhd",
-		"gen/j4/decode/decode_pkg.vhd", "gen/j4/decode/decode.vhd", "gen/j4/decode/decode_body.vhd",
-		"gen/j4/decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd",
+		"gen/j4-w72/decode/decode_pkg.vhd", "gen/j4-w72/decode/decode.vhd", "gen/j4-w72/decode/decode_body.vhd",
+		"gen/j4-w72/decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd",
 	} {
 		found := false
 		for _, f := range files {

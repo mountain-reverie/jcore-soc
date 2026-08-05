@@ -79,17 +79,21 @@ perl tools/genbootpkg \
 # paired with a stale/wrong decode_pkg/decode/decode_body -- an internally
 # inconsistent decoder (mismatched DEC_ADDR_BITS/ROM geometry). CPU_VARIANT
 # is read from the build.mk step 1's soc_gen just (re)wrote, the same way
-# the top-level Makefile's board dispatch reads it.
+# the top-level Makefile's board dispatch reads it. Fails loudly (does NOT
+# default to j2) if unreadable: a silent default would reinstate the exact
+# base-decoder bug this mechanism exists to prevent for a non-j2 VARIANT.
+# `cpu-decode-gen` is components/cpu/Makefile.inc's own phony target naming
+# the six generated files for whatever CPU_VARIANT (and CPU_ROM_WIDTH,
+# defaulted to Makefile.inc's own 72) are passed -- collapses what used to
+# be six hardcoded filenames (plus a since-removed width-stamp literal;
+# CPU_ROM_WIDTH is now folded into DECODE_GEN_DIR's name, so no caller needs
+# to know or request a stamp file) copy-pasted into this script.
 _CPU_VARIANT="$(sed -n 's/^CPU_VARIANT *:= *//p' "$BD/build.mk" 2>/dev/null)"
-_CPU_VARIANT="${_CPU_VARIANT:-j2}"
-make -f components/cpu/build.mk VHDLS=CPU_DECODE_BUILD_TMP CPU_VARIANT="$_CPU_VARIANT" \
-  "components/cpu/gen/$_CPU_VARIANT/decode/decode_pkg.vhd" \
-  "components/cpu/gen/$_CPU_VARIANT/decode/decode.vhd" \
-  "components/cpu/gen/$_CPU_VARIANT/decode/decode_body.vhd" \
-  "components/cpu/gen/$_CPU_VARIANT/decode/decode_table_simple.vhd" \
-  "components/cpu/gen/$_CPU_VARIANT/decode/decode_table_direct.vhd" \
-  "components/cpu/gen/$_CPU_VARIANT/decode/decode_table_rom.vhd" \
-  "components/cpu/gen/$_CPU_VARIANT/decode/.rom_width_72"
+if [ -z "$_CPU_VARIANT" ]; then
+  echo "ERROR: could not read CPU_VARIANT from $BD/build.mk -- run 'make ulx3s TARGET=soc_gen VARIANT=...' first" >&2
+  exit 1
+fi
+make -f components/cpu/build.mk cpu-decode-gen VHDLS=CPU_DECODE_BUILD_TMP CPU_VARIANT="$_CPU_VARIANT"
 
 # generated sources shared across variants: uartlite, cache/bus cores, cpu
 # mult/datapath/decode_core v2p. decode_core.vhd is v2p'd (NOT

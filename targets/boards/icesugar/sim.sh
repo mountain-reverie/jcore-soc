@@ -25,10 +25,27 @@ perl tools/genbootpkg \
     512 \
     > targets/boards/icesugar/boot_image_pkg.vhd
 
-# 1. generated cpu sources: decode tables (generate) + v2p of the templated
-#    cores, plus the v2p'd uart / gpio2 peripherals. Must precede soc_gen so the
-#    VHDL library it parses is complete (otherwise it emits a degenerate soc).
-make -C components/cpu/decode generate
+# 1. decoder: regenerate THIS BOARD'S VARIANT decoder out-of-tree -- NOT
+# `make -C components/cpu/decode generate` (which always writes the BASE,
+# no-overlay generation into the committed decode/ tree, regardless of
+# variant; icesugar is model:j1, which DOES have an sh4-independent overlay
+# of its own -- see variants.toml -- so using the base generation here would
+# silently reinstate an inconsistent decoder the same way it did for ulx3s
+# j4-rom). CPU_VARIANT is read from the committed build.mk (already tracked
+# with CPU_VARIANT := j1 -- this board has only ever had one variant, so a
+# stale committed value is not expected, but this still fails loudly rather
+# than silently defaulting if it's ever missing/misread).
+_CPU_VARIANT="$(sed -n 's/^CPU_VARIANT *:= *//p' targets/boards/icesugar/build.mk 2>/dev/null)"
+if [ -z "$_CPU_VARIANT" ]; then
+  echo "ERROR: could not read CPU_VARIANT from targets/boards/icesugar/build.mk -- run 'make icesugar TARGET=soc_gen' first" >&2
+  exit 1
+fi
+make -f components/cpu/build.mk cpu-decode-gen VHDLS=CPU_DECODE_BUILD_TMP CPU_VARIANT="$_CPU_VARIANT"
+
+# generated cpu sources: v2p of the templated cores, plus the v2p'd uart /
+# gpio2 peripherals. Must precede soc_gen so the VHDL library it parses is
+# complete (otherwise it emits a degenerate soc). decode_core.vhd is v2p'd
+# (NOT cpugen-generated, unlike the six above), so it stays in-tree.
 ( cd components/cpu && for f in core/mult core/datapath decode/decode_core; do
     LD_LIBRARY_PATH='' perl ../../tools/v2p < "$f.vhm" > "$f.vhd"; done )
 LD_LIBRARY_PATH='' perl tools/v2p < components/uartlite/uart.vhm > components/uartlite/uart.vhd

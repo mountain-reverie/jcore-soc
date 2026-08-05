@@ -6,10 +6,44 @@
 # cpus_config.vhd + cpu_synth_files.list + devices.vhd + soc.vhd.
 CPU=components/cpu
 BRD=targets/boards/icesugar
-# The J1 variant synth sources (EBR register file, sequential mult/shifter, ROM
-# decode table + config, cpu_synth_j1 config) are soc_gen-generated, one per
-# line, cpu-submodule-relative.
+# The J1 variant synth sources (decode_pkg/decode/decode_body + EBR register
+# file, sequential mult/shifter, ROM decode table + config, cpu_synth_j1
+# config) are soc_gen-generated, one per line, cpu-submodule-relative.
+#
+# ALL SIX cpugen outputs (decode_pkg.vhd, decode.vhd, decode_body.vhd, and
+# the three decode_table_*.vhd) are emitted by ONE cpugen invocation and
+# share layout constants (e.g. decode_pkg.vhd's DEC_ADDR_BITS must match the
+# selected decode_table_<kind>.vhd's ROM geometry) -- see
+# tools/socgen/elaborate/cpumap.go's decodeGenFiles comment. This file used
+# to hardcode decode_pkg.vhd/decode.vhd/decode_body.vhd to the committed
+# base decode/ tree AND blindly splice the whole cpu_synth_files.list (which
+# ALSO carries those same three names, from gen/j1-w72/decode/) -- so each of
+# the three was analyzed TWICE, from two different trees, and ghdl picked
+# whichever definition it saw last. Fixed the same way ulx3s's and
+# gf180_j4mmu's filelist.sh were: extract the three model-invariant names by
+# basename and place them at their required earlier positions (decode_pkg.vhd
+# before cpu.vhd, which `use`s its types; decode.vhd/decode_body.vhd after
+# cpu/mult/datapath but before the static decode_table.vhd/decode_core.vhd),
+# and splice only the REMAINING entries (the selected table + its config +
+# cpu_synth config + J1's EBR/DSP extra architectures) at the later position.
 [ -f "$BRD/cpu_synth_files.list" ] || { echo "ERROR: $BRD/cpu_synth_files.list missing — run make icesugar TARGET=soc_gen first" >&2; exit 1; }
+_CPU_SYNTH_DECODE_PKG=""
+_CPU_SYNTH_DECODE=""
+_CPU_SYNTH_DECODE_BODY=""
+_CPU_SYNTH_REMAINING=()
+while IFS= read -r _f; do
+  [ -n "$_f" ] || continue
+  case "$(basename "$_f")" in
+    decode_pkg.vhd)   _CPU_SYNTH_DECODE_PKG="$_f" ;;
+    decode.vhd)       _CPU_SYNTH_DECODE="$_f" ;;
+    decode_body.vhd)  _CPU_SYNTH_DECODE_BODY="$_f" ;;
+    *) _CPU_SYNTH_REMAINING+=("$_f") ;;
+  esac
+done < "$BRD/cpu_synth_files.list"
+if [ -z "$_CPU_SYNTH_DECODE_PKG" ] || [ -z "$_CPU_SYNTH_DECODE" ] || [ -z "$_CPU_SYNTH_DECODE_BODY" ]; then
+  echo "ERROR: $BRD/cpu_synth_files.list missing decode_pkg.vhd/decode.vhd/decode_body.vhd — regenerate with 'make icesugar TARGET=soc_gen'" >&2
+  exit 1
+fi
 FILES=(
   $CPU/cpu2j0_pkg.vhd
   $CPU/core/components_pkg.vhd
@@ -18,7 +52,7 @@ FILES=(
   $CPU/core/tlb.vhd
   $CPU/core/mult_pkg.vhd
   $CPU/core/divider_pkg.vhd
-  $CPU/decode/decode_pkg.vhd
+  $CPU/$_CPU_SYNTH_DECODE_PKG
   $CPU/core/datapath_pkg.vhd
   $CPU/core/cpu.vhd
   $CPU/core/mult.vhd
@@ -28,15 +62,16 @@ FILES=(
   $CPU/core/register_file.vhd
   $CPU/core/register_file_flops.vhd
   $CPU/core/register_file_two_bank.vhd
-  $CPU/decode/decode.vhd
-  $CPU/decode/decode_body.vhd
+  $CPU/$_CPU_SYNTH_DECODE
+  $CPU/$_CPU_SYNTH_DECODE_BODY
   $CPU/decode/decode_table.vhd
   $CPU/decode/decode_core.vhd
 )
-# Splice in the soc_gen-generated J1 synth sources, $CPU-prefixed.
-while IFS= read -r _f; do
-  [ -n "$_f" ] && FILES+=("$CPU/$_f")
-done < "$BRD/cpu_synth_files.list"
+# Splice in the REMAINING soc_gen-generated J1 synth sources, $CPU-prefixed.
+for _f in "${_CPU_SYNTH_REMAINING[@]}"; do
+  FILES+=("$CPU/$_f")
+done
+unset _CPU_SYNTH_DECODE_PKG _CPU_SYNTH_DECODE _CPU_SYNTH_DECODE_BODY _CPU_SYNTH_REMAINING _f
 FILES+=(
   lib/hwutils/attr_pkg.vhd
   components/misc/misc_pkg.vhd
