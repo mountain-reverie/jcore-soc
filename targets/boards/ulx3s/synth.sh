@@ -14,8 +14,27 @@ perl tools/genbootpkg \
     4096 \
     > targets/boards/ulx3s/boot_image_pkg.vhd
 
-# 2. generated sources: cpu (decode generate + v2p) and uartlite uart.vhd
-make -C components/cpu/decode generate
+# 2. decoder: regenerate THIS VARIANT'S decoder out-of-tree (NOT
+# `make -C components/cpu/decode generate`, which always writes the BASE,
+# no-overlay generation into the committed decode/ tree regardless of
+# variant -- see sim.sh's identical step for the full rationale). This
+# script does not run soc_gen itself (CI/a prior step regenerates the
+# variant's build.mk/cpus_config.vhd before invoking this script), so
+# CPU_VARIANT is read from whatever build.mk is already on disk.
+_CPU_VARIANT="$(sed -n 's/^CPU_VARIANT *:= *//p' targets/boards/ulx3s/build.mk 2>/dev/null)"
+_CPU_VARIANT="${_CPU_VARIANT:-j2}"
+make -f components/cpu/build.mk VHDLS=CPU_DECODE_BUILD_TMP CPU_VARIANT="$_CPU_VARIANT" \
+  "components/cpu/gen/$_CPU_VARIANT/decode/decode_pkg.vhd" \
+  "components/cpu/gen/$_CPU_VARIANT/decode/decode.vhd" \
+  "components/cpu/gen/$_CPU_VARIANT/decode/decode_body.vhd" \
+  "components/cpu/gen/$_CPU_VARIANT/decode/decode_table_simple.vhd" \
+  "components/cpu/gen/$_CPU_VARIANT/decode/decode_table_direct.vhd" \
+  "components/cpu/gen/$_CPU_VARIANT/decode/decode_table_rom.vhd" \
+  "components/cpu/gen/$_CPU_VARIANT/decode/.rom_width_72"
+
+# generated sources shared across variants: uartlite uart.vhd and cpu
+# mult/datapath/decode_core v2p (decode_core.vhd is v2p'd, not
+# cpugen-generated, so it stays in-tree).
 ( cd components/cpu && for f in core/mult core/datapath decode/decode_core; do
     LD_LIBRARY_PATH='' perl ../../tools/v2p < "$f.vhm" > "$f.vhd"; done )
 LD_LIBRARY_PATH='' perl tools/v2p < components/uartlite/uart.vhm > components/uartlite/uart.vhd

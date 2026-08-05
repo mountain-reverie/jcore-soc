@@ -12,13 +12,24 @@ func TestCPUSynthConfig(t *testing.T) {
 		priv                bool
 		wantFiles           []string // must all be present in files (subset check)
 	}{
+		// All six cpugen outputs must come from the SAME gen/<model>/decode/
+		// directory (decode_pkg/decode/decode_body + the selected table) --
+		// see decodeGenFiles' comment. True for every model, not just j4:
+		// j2/j1 have no overlay, so gen/<model>/decode/ byte-matches the
+		// committed base (Task 5), but the PATH must still be uniform so no
+		// consumer can accidentally mix a gen/ table with a base decode_pkg.
 		{"j2", "direct", "cpu_synth_direct", false, []string{
-			"decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_config.vhd"}},
+			"gen/j2/decode/decode_pkg.vhd", "gen/j2/decode/decode.vhd", "gen/j2/decode/decode_body.vhd",
+			"gen/j2/decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_config.vhd"}},
 		{"j1", "rom", "cpu_synth_j1", false, []string{
-			"core/register_file_ebr.vhd", "core/mult_seq.vhd", "core/shifter_seq.vhd", "decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j1_config.vhd"}},
+			"gen/j1/decode/decode_pkg.vhd", "gen/j1/decode/decode.vhd", "gen/j1/decode/decode_body.vhd",
+			"core/register_file_ebr.vhd", "core/mult_seq.vhd", "core/shifter_seq.vhd",
+			"gen/j1/decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j1_config.vhd"}},
 		{"j4", "direct", "cpu_synth_j4", true, []string{
+			"gen/j4/decode/decode_pkg.vhd", "gen/j4/decode/decode.vhd", "gen/j4/decode/decode_body.vhd",
 			"gen/j4/decode/decode_table_direct.vhd", "decode/decode_table_direct_config.vhd", "synth/cpu_synth_j4_config.vhd"}},
 		{"j4", "rom", "cpu_synth_j4_rom", true, []string{
+			"gen/j4/decode/decode_pkg.vhd", "gen/j4/decode/decode.vhd", "gen/j4/decode/decode_body.vhd",
 			"gen/j4/decode/decode_table_rom.vhd", "decode/decode_table_rom_config.vhd", "synth/cpu_synth_j4_rom_config.vhd"}},
 	}
 	for _, c := range cases {

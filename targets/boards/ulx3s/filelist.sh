@@ -4,13 +4,51 @@
 # generate` + v2p of mult/datapath/decode_core (done by sim.sh/synth.sh).
 CPU=components/cpu
 GEN=targets/boards/ulx3s/generated
-# Variant-specific synth sources (decode tables + cpu_synth config + j1/j4
-# alternate architectures) are soc_gen-generated into $GEN/cpu_synth_files.list
-# (cpu-submodule-relative, one per line; staged by gen_synth_sources.sh). They
-# replace the hardcoded j2-direct decode_table_direct/_config + cpu_synth_config
-# lines so j1/j4 analyze their own tables. Spliced in below right after
-# decode_core.vhd (the position those lines occupied).
+# Variant-specific synth sources (decode_pkg/decode/decode_body + the
+# selected decode table + its config + cpu_synth config + j1/j4 alternate
+# architectures) are soc_gen-generated into $GEN/cpu_synth_files.list
+# (cpu-submodule-relative, one per line; staged by gen_synth_sources.sh).
+#
+# ALL SIX cpugen outputs (decode_pkg.vhd, decode.vhd, decode_body.vhd, and
+# the three decode_table_*.vhd) are emitted by ONE cpugen invocation and
+# share layout constants (e.g. decode_pkg.vhd's DEC_ADDR_BITS must match the
+# selected decode_table_<kind>.vhd's ROM geometry) -- see
+# tools/socgen/elaborate/cpumap.go's decodeGenFiles comment. So
+# decode_pkg.vhd/decode.vhd/decode_body.vhd must ALSO come from
+# cpu_synth_files.list (the model's gen/<model>/decode/ directory), not be
+# hardcoded to the committed base decode/ tree here -- hardcoding them
+# was exactly the bug a prior round of review found: j4-rom's list pointed
+# decode_table_rom.vhd at gen/j4/decode/ while this file still hardcoded the
+# BASE decode_pkg/decode/decode_body, wiring two different table geometries
+# to the same decoder shell.
+#
+# decode_pkg.vhd must be analyzed before cpu.vhd (which `use`s its types);
+# decode.vhd/decode_body.vhd must be analyzed after cpu.vhd/mult.vhd/
+# datapath.vhd but before decode_table.vhd (NOT cpugen-generated, unlike the
+# other five -- see decode/Makefile's GENERATED list) and decode_core.vhd
+# (a C-preprocessor output, not cpugen either). So those three are extracted
+# by basename here and placed at their required earlier positions; only the
+# REMAINING lines (decode_table_<kind>.vhd + its _config.vhd + the
+# cpu_synth_*_config.vhd + any j1/j4 extra architecture files) are spliced at
+# the later position after decode_core.vhd, as before.
 [ -f "$GEN/cpu_synth_files.list" ] || { echo "ERROR: $GEN/cpu_synth_files.list missing — run gen_synth_sources.sh (soc_gen) first" >&2; exit 1; }
+_CPU_SYNTH_DECODE_PKG=""
+_CPU_SYNTH_DECODE=""
+_CPU_SYNTH_DECODE_BODY=""
+_CPU_SYNTH_REMAINING=()
+while IFS= read -r _f; do
+  [ -n "$_f" ] || continue
+  case "$(basename "$_f")" in
+    decode_pkg.vhd)   _CPU_SYNTH_DECODE_PKG="$_f" ;;
+    decode.vhd)       _CPU_SYNTH_DECODE="$_f" ;;
+    decode_body.vhd)  _CPU_SYNTH_DECODE_BODY="$_f" ;;
+    *) _CPU_SYNTH_REMAINING+=("$_f") ;;
+  esac
+done < "$GEN/cpu_synth_files.list"
+if [ -z "$_CPU_SYNTH_DECODE_PKG" ] || [ -z "$_CPU_SYNTH_DECODE" ] || [ -z "$_CPU_SYNTH_DECODE_BODY" ]; then
+  echo "ERROR: $GEN/cpu_synth_files.list missing decode_pkg.vhd/decode.vhd/decode_body.vhd — regenerate with soc_gen (make <board> TARGET=soc_gen)" >&2
+  exit 1
+fi
 FILES=(
   $CPU/cpu2j0_pkg.vhd
   $CPU/core/components_pkg.vhd
@@ -18,7 +56,7 @@ FILES=(
   # generate), so ghdl needs it analyzed before cpu.vhd for ALL variants.
   $CPU/core/tlb.vhd
   $CPU/core/mult_pkg.vhd
-  $CPU/decode/decode_pkg.vhd
+  $CPU/$_CPU_SYNTH_DECODE_PKG
   $CPU/core/datapath_pkg.vhd
   $CPU/core/cpu.vhd
   $CPU/core/mult.vhd
@@ -27,8 +65,8 @@ FILES=(
   $CPU/core/register_file.vhd
   $CPU/core/register_file_flops.vhd
   $CPU/core/register_file_two_bank.vhd
-  $CPU/decode/decode.vhd
-  $CPU/decode/decode_body.vhd
+  $CPU/$_CPU_SYNTH_DECODE
+  $CPU/$_CPU_SYNTH_DECODE_BODY
   $CPU/decode/decode_table.vhd
   $CPU/decode/decode_core.vhd
 )
@@ -65,10 +103,13 @@ for _f in "${FILES[@]}"; do
 done
 FILES=("${_fl_with_divider[@]}")
 unset _fl_with_divider _f
-# Splice in the soc_gen-generated variant synth sources, $CPU-prefixed.
-while IFS= read -r _f; do
-  [ -n "$_f" ] && FILES+=("$CPU/$_f")
-done < "$GEN/cpu_synth_files.list"
+# Splice in the REMAINING soc_gen-generated variant synth sources (decode
+# table + configs; decode_pkg/decode/decode_body were already placed above),
+# $CPU-prefixed.
+for _f in "${_CPU_SYNTH_REMAINING[@]}"; do
+  FILES+=("$CPU/$_f")
+done
+unset _CPU_SYNTH_DECODE_PKG _CPU_SYNTH_DECODE _CPU_SYNTH_DECODE_BODY _CPU_SYNTH_REMAINING _f
 FILES+=(
   lib/hwutils/attr_pkg.vhd
   components/misc/misc_pkg.vhd

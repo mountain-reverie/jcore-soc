@@ -44,10 +44,36 @@ fi
 make gf180_j4mmu TARGET=soc_gen
 make gf180_j4mmu TARGET=vhdl_list.txt
 
-# 2. generated sources shared with ulx3s: cpu (decode generate + v2p),
-# uartlite, cache/bus cores (mirrors targets/boards/ulx3s/sim.sh step 3 and
-# the former sim/rtl.sh step 3).
-make -C components/cpu/decode generate
+# 2. decoder: regenerate THIS BOARD'S VARIANT decoder out-of-tree, via the
+# same components/cpu/Makefile.inc mechanism the top-level Makefile's board
+# dispatch uses -- NOT `make -C components/cpu/decode generate` (which
+# writes the BASE, no-overlay generation into the committed decode/ tree).
+# This target is always model:j4 (see design.yaml), and the base decoder
+# has no LDTLB/PTEH/PTEL/ASIDR (General Illegal) -- using it here would
+# synthesize PRIV_ARCH RTL (TLB, MMU CSRs) with no way to reach it from
+# software, the exact bug this out-of-tree per-variant mechanism exists to
+# fix. CPU_VARIANT is read the same way the top-level Makefile's board
+# dispatch reads it (targets/boards/<board>/build.mk's soc_gen-written
+# CPU_VARIANT line, from step 1's `soc_gen` run above; default j2 if
+# absent, though this target always has j4). filelist.sh (via
+# cpu_synth_files.list) and this generation must agree on CPU_VARIANT, or
+# the decoder ends up split across two directories again.
+_CPU_VARIANT="$(sed -n 's/^CPU_VARIANT *:= *//p' targets/boards/gf180_j4mmu/build.mk 2>/dev/null)"
+_CPU_VARIANT="${_CPU_VARIANT:-j2}"
+make -f components/cpu/build.mk VHDLS=CPU_DECODE_BUILD_TMP CPU_VARIANT="$_CPU_VARIANT" \
+  "components/cpu/gen/$_CPU_VARIANT/decode/decode_pkg.vhd" \
+  "components/cpu/gen/$_CPU_VARIANT/decode/decode.vhd" \
+  "components/cpu/gen/$_CPU_VARIANT/decode/decode_body.vhd" \
+  "components/cpu/gen/$_CPU_VARIANT/decode/decode_table_simple.vhd" \
+  "components/cpu/gen/$_CPU_VARIANT/decode/decode_table_direct.vhd" \
+  "components/cpu/gen/$_CPU_VARIANT/decode/decode_table_rom.vhd" \
+  "components/cpu/gen/$_CPU_VARIANT/decode/.rom_width_72"
+
+# 2b. generated sources shared with ulx3s: uartlite, cache/bus cores, cpu
+# mult/datapath/decode_core v2p (mirrors targets/boards/ulx3s/sim.sh step 3
+# and the former sim/rtl.sh step 3). decode_core.vhd is v2p'd here (NOT
+# cpugen-generated, unlike the six above -- see decode/Makefile's GENERATED
+# list), so it stays in-tree at components/cpu/decode/decode_core.vhd.
 ( cd components/cpu && for f in core/mult core/datapath decode/decode_core; do
     LD_LIBRARY_PATH='' perl ../../tools/v2p < "$f.vhm" > "$f.vhd"; done )
 LD_LIBRARY_PATH='' perl tools/v2p < components/uartlite/uart.vhm > components/uartlite/uart.vhd
