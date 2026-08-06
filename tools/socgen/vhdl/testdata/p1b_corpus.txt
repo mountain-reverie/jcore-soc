@@ -26,7 +26,11 @@ components/cpu/cache/tests/ictest02h/icache_tb.vhd
 components/cpu/core/components_pkg.vhd
 components/cpu/core/cpu.vhd
 components/cpu/core/cpu_asic.vhd
-components/cpu/core/cpu_config.vhd
+components/cpu/core/cpu_config_common.vhd
+components/cpu/core/cpu_config_j1.vhd
+components/cpu/core/cpu_config_j2.vhd
+components/cpu/core/cpu_config_j4.vhd
+components/cpu/core/cpu_config_sim.vhd
 components/cpu/core/datapath_pkg.vhd
 components/cpu/core/mult_pkg.vhd
 components/cpu/core/register_file.vhd

@@ -35,8 +35,18 @@ jobs:
         # to `make mimas_v2` into the same output/mimas_v2 dir. Run in parallel (the
         # default), they race on Makefile.tmp ("mv: cannot stat ... Makefile.tmp").
         # Serializing test binaries with -p 1 matches the local Makefile test target.
+        #
+        # Budget: measured locally (JCORE_SOC_ROOT set, `go test ./... -count=1 -p 1`)
+        # at ~75s wall on this branch (emit 41.8s, generate 17.7s, elaborate 7.6s,
+        # remaining packages ~8s combined; ghdl-bound, not CPU-bound), after also
+        # adding the 4 split cpu_config_*.vhd corpus entries (negligible, corpus
+        # package is ~1s total). CI runners were observed to be 2-3x slower than
+        # this machine on this ghdl-bound work, so 150-225s was the realistic range
+        # -- the old 150s outer / 90s inner budget had ~0 headroom and was already
+        # marginal before this branch. Raised to give real slack above the 2-3x
+        # estimate rather than chase single-digit-second regressions.
         env:
           JCORE_SOC_ROOT: ${{ github.workspace }}
         run: |
           cd tools/socgen
-          timeout -s KILL 150 go test ./... -timeout 90s -count=1 -p 1
+          timeout -s KILL 300 go test ./... -timeout 270s -count=1 -p 1

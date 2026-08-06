@@ -650,7 +650,7 @@ package cache_pack is
 
   component icache is
     generic (
-      mmu_arch : boolean := false
+      priv_arch : boolean := false
     );
     port (
       clk125 : in    std_logic;
@@ -672,7 +672,7 @@ package cache_pack is
 
   component icache_ccl is
     generic (
-      mmu_arch : boolean := false
+      priv_arch : boolean := false
     );
     port (
       clk : in    std_logic;
@@ -755,7 +755,7 @@ package cache_pack is
 
   component dcache is
     generic (
-      mmu_arch : boolean := false
+      priv_arch : boolean := false
     );
     port (
       clk125 : in    std_logic;
@@ -782,7 +782,7 @@ package cache_pack is
 
   component dcache_ccl is
     generic (
-      mmu_arch : boolean := false
+      priv_arch : boolean := false
     );
     port (
       clk : in    std_logic;
