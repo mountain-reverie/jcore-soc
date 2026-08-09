@@ -1,4 +1,31 @@
-# GF180 integrated-top P&R (`macro=top`)
+# top — hierarchical glue netlist (RETIRED as a P&R flow)
+
+> **This flow was removed on 2026-08-09.** `top/config.json` and the
+> `run.sh macro=top` / `macro=pad_ring` branches are gone. What survives in
+> this directory is `soc.v` (the top-level interconnect glue) and
+> `soc_macros_bb.v` (blackbox stubs) — used ONLY as inputs to
+> `../chip_core/gen_chip_core.sh`, which flattens them with the six child
+> netlists into `chip_core.v`, the sole RTL input to `chip_top`.
+>
+> **Why it went.** `top/config.json` hand-placed each child macro at fixed
+> coordinates. The J4 sh4-overlay decoder (`a9df9bf`, 2026-08-04) grew `cpus`
+> to 1661×1688 µm, which overlapped `devices` by 344×715 µm and
+> `icache_adapter` by 1557×368 µm — breaking the PDN (`PSM-0069`) and
+> diverging global placement (`GPL-0305`). Absorbing the CPU would have meant
+> re-solving the placement by hand and growing the padded die to roughly
+> 25 mm², past KianV's 20.1 mm² line.
+>
+> `chip_top` (LibreLane `Chip` flow) instead hardens the whole SoC flat — only
+> the 17 vendor SRAMs placed, pads abutted as a ring — and routes the same
+> post-decoder design DRC-clean at **12.92 mm²** with no hand placement at
+> all. See `../chip_top/README.md`.
+>
+> The rest of this file is retained as historical background on the
+> hierarchical approach and the `cpus` cluster it introduced.
+
+---
+
+## Historical: GF180 integrated-top P&R (`macro=top`)
 
 `run.sh macro=top` hardens the whole flash-variant `soc` as a hierarchical
 black-box floorplan: the 7 hardened sub-blocks (**cpus**, icache_adapter,

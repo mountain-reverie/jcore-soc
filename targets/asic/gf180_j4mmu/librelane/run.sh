@@ -104,72 +104,16 @@ OL_SKIP="${OL_SKIP:-}"
 # macro's own librelane/<name>/ dir, where its config.json's
 # VERILOG_FILES: ["dir::<top>.v"] expects to find it.
 #
-# TOP-ONLY OVERRIDE (Task 6 CAPSTONE): macro=top does NOT go through this
-# shared flatten-everything netlist-gen at all. The whole point of Task 6 is
-# a HIERARCHY-PRESERVING netlist -- the 8 child macros (cpu/icache_adapter/
-# dcache_adapter/bootram_infer(boot_mem_gf180)/sdram_ctrl/devices/
-# qspi_flash_ctrl/mem_region_mux) blackboxed BEFORE `synth -flatten`, so
-# LibreLane places them as LEF macro abstracts instead of re-synthesizing
-# their logic (that's what keeps top-level memory bounded -- a flat
-# `-e soc; synth -top soc -flatten` with no blackbox step, which is what the
-# generic per-macro path below would do for macro=top, is exactly the
-# flatten-everything approach this task exists to avoid). It also needs the
-# flash-variant's vendor-SRAM rebind (Task 6 PHASE A: soc.vhd's `cpus`/
-# `ddr_ram_mux` bound to the gf180 architectures/configurations, not the
-# base/fpga ones) and a from-scratch soc_gen regen (never the committed
-# base-variant targets/asic/gf180_j4mmu/soc.vhd -- that stays byte-identical
-# always, see the save/restore discipline documented in sim/xip_sim.sh).
-# Additionally: this repo's HOST ghdl (6.0.0 "Dunoon") was found to crash
-# (`synth-vhdl_decls.adb:302`, an internal GHDL synth-backend assertion) on
-# a stale/contaminated analyze work library; a completely FRESH workdir +
-# gen_synth_sources.sh's synth-clean (soc_port_*-stripped) source set +
-# freshly-regenerated output/gf180_j4mmu/config/config.vhd resolved it --
-# no newer GHDL build or container was actually needed in the end. The
-# resulting netlist (targets/asic/gf180_j4mmu/librelane/top/soc.v, the
-# top-level interconnect glue only, ~760 cells) + blackbox module stubs
-# (soc_macros_bb.v, `(* blackbox *)`-marked empty declarations for the 8
-# macros + the 2 leaf vendor SRAM cell types, so LibreLane's own
-# Yosys.Synthesis hierarchy check resolves the instances without
-# re-deriving their bodies) are PRE-GENERATED and committed alongside
-# top/config.json (which points VERILOG_FILES at them via "dir::") --
-# regenerating them (only if the SoC RTL changes) uses the clean-analyze recipe in
-# top/README.md (bespoke to the top design's
-# multi-architecture-configuration binding chain in a way the shared
-# per-macro path below has no need to support for any other macro).
-if [ "$MACRO" = "pad_ring" ]; then
-  # pad_ring: FLAT chip integration -- the flash-variant `soc` (its 6 child
-  # macros black-boxed) plus the GF180 IO pad ring, in ONE routing domain (no
-  # soc-as-macro boundary). This is what shrinks the die to 17.5 mm^2 (vs
-  # 25.8 mm^2 soc-as-macro). Netlist + config are GENERATED (not committed --
-  # they reference the ciel PDK IO-cell LEFs by absolute path); run the two
-  # generators first (see pad_ring/README.md):
-  #   python3 pad_ring/gen_netlist.py     # -> pad_ring.v + pad_cells_bb.v
-  #   python3 pad_ring/gen_config.py      # -> config.json (consumes ../top/soc.v)
-  # LibreLane hardens through placement + CTS here; the final global+detailed
-  # route is finished by direct OpenROAD (pad_ring/route.tcl) because it needs
-  # `global_route -allow_congestion` to push past GRT-0118, which LibreLane's
-  # grt step errors on. route.tcl marks the *_PAD chip terminals + power/ground
-  # nets $setSpecial (they are strapped by pad abutment, not routed).
-  NETV="$MDIR/pad_ring.v"
-  if [ ! -f "$NETV" ] || [ ! -f "$MDIR/pad_cells_bb.v" ]; then
-    echo "ERROR: $MDIR/pad_ring.v and/or pad_cells_bb.v missing -- run" \
-         "pad_ring/gen_netlist.py first (see pad_ring/README.md)." >&2; exit 1
-  fi
-  echo "run.sh: macro=pad_ring uses the generated $NETV (flat soc+pads)." >&2
-  MERGED="$MDIR/config.merged.json"
-  jq -s '.[0] * .[1]' "$HERE/common.json" "$MCFG" > "$MERGED"
-  # Stop after CTS (the direct-OpenROAD route.tcl takes over); skip PDN/IR-drop
-  # signoff (IO power ring is strapped by pad abutment, not by the core PDN).
-  # FORCE it (not ${OL_TO:-...}) -- the generic path already defaulted OL_TO to
-  # Magic.WriteLEF above, so a `:-` fallback never fires and the flow would run
-  # all the way to global routing and trip the (expected) GRT-0118 congestion
-  # error that route.tcl exists to bypass with -allow_congestion.
-  OL_TO="OpenROAD.CTS"
-  if [ -z "$OL_SKIP" ]; then
-    OL_SKIP="OpenROAD.IRDropReport Checker.PowerGridViolations Checker.DisconnectedPins"
-  fi
-  goto_librelane=1
-fi
+# The hierarchical `top` flow (six child macros hand-placed from
+# top/config.json) and the flat `pad_ring` assembly it fed were REMOVED on
+# 2026-08-09. top/config.json placed each child at fixed coordinates; the J4
+# sh4-overlay decoder grew `cpus` to 1661x1688 um, overlapping `devices` by
+# 344x715 um and `icache_adapter` by 1557x368 um, which broke the PDN
+# (PSM-0069) and diverged global placement (GPL-0305). chip_top routes the
+# same design DRC-clean at 12.92 mm2 with no hand placement, so both paths
+# were retired rather than re-solved. top/soc.v and top/soc_macros_bb.v
+# survive ONLY as inputs to chip_core/gen_chip_core.sh's flatten -- see
+# top/README.md.
 if [ "$MACRO" = "chip_top" ]; then
   # Full-chip pad-ring assembly: the flat soc (chip_core.v) wrapped in a gf180
   # IO pad ring, hardened by LibreLane's built-in "Chip" flow (meta.flow:Chip
@@ -199,28 +143,6 @@ if [ "$MACRO" = "chip_core" ]; then
   echo "run.sh: macro=chip_core uses the generated flat-soc $NETV." >&2
   MERGED="$MDIR/config.merged.json"
   jq -s '.[0] * .[1]' "$HERE/common.json" "$MCFG" > "$MERGED"
-  if [ -z "$OL_SKIP" ]; then
-    OL_SKIP="OpenROAD.IRDropReport Checker.PowerGridViolations KLayout.Render"
-  fi
-  goto_librelane=1
-fi
-if [ "$MACRO" = "top" ]; then
-  NETV="$MDIR/soc.v"
-  if [ ! -f "$NETV" ] || [ ! -f "$MDIR/soc_macros_bb.v" ]; then
-    echo "ERROR: $MDIR/soc.v and/or soc_macros_bb.v missing -- macro=top needs the" \
-         "pre-generated hierarchy-preserving netlist committed alongside config.json" \
-         "(see top/README.md for the" \
-         "regeneration recipe)." >&2
-    exit 1
-  fi
-  echo "run.sh: macro=top uses the pre-generated $NETV (+ soc_macros_bb.v blackbox stubs)," \
-       "skipping the shared per-macro netlist-gen below." >&2
-  MERGED="$MDIR/config.merged.json"
-  jq -s '.[0] * .[1]' "$HERE/common.json" "$MCFG" > "$MERGED"
-  # Task 6's top run always needs the PDN-checker skip (8 macros with the
-  # same macro-PDN-strap gap as dcache/icache/boot_mem -- see the OL_SKIP
-  # comment further below) even though "top" isn't in that case's MACRO
-  # list; set it here unless the caller already did.
   if [ -z "$OL_SKIP" ]; then
     OL_SKIP="OpenROAD.IRDropReport Checker.PowerGridViolations KLayout.Render"
   fi
@@ -341,7 +263,7 @@ fi
 # LibreLane quit with "No macro instance <path> found". Rewrite the MERGED
 # config's SRAM instance keys to match THIS netlist's actual names, matched by
 # their semantic coordinates (tag/ram:N/col_gen:M/subword_gen:K). No-op for
-# macros without placed vendor SRAM (top/pad_ring/boot_mem). See
+# macros without placed vendor SRAM (boot_mem). See
 # tools/asic/fix_macro_paths.py.
 # chip_core places all 17 SRAMs by their exact names taken from the committed
 # flat netlist (frozen, like top/soc.v) -- no version drift, and the tag SRAMs'
