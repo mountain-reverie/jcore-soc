@@ -25,11 +25,13 @@ tools/fpga/to_gha_bench.py unchanged:
     {"target","board","commit","metrics":[{"name","unit","value","dir"},...]}
 
 Series emitted (unit mm2, dir=smaller-is-better):
-  gf180-padded-die-mm2          -- flat pad-ring COMPLETE chip die (with IO pad
-                                   ring); the headline number vs KianV's 20.1.
-                                   From --padded-die (pad_ring/runs/
-                                   padring_metrics.json, written by route.tcl).
-  gf180-padded-die-drc          -- flat pad-ring detailed-route DRC count (0)
+  gf180-padded-die-mm2          -- COMPLETE chip die (with IO pad ring); the
+                                   headline number vs KianV's 20.1. From
+                                   --chip-top (chip_top/runs/<tag>/final/
+                                   metrics.json, LibreLane Chip flow).
+                                   --padded-die is the superseded pad_ring
+                                   source for the same series.
+  gf180-padded-die-drc          -- that run's detailed-route DRC count (0)
   gf180-die-area-mm2            -- top, routed die area (soc-as-macro, core-only)
   gf180-core-area-mm2           -- top, routed core area
   gf180-placed-silicon-mm2      -- top, placed-instance area (silicon proxy)
@@ -82,13 +84,32 @@ def _mm2(um2):
 
 def build_die_doc(top_metrics, macro_metrics, commit,
                    target="gf180mcu-mcu7t5v0", board="gf180_j4mmu",
-                   padded_die=None):
+                   padded_die=None, chip_top=None):
     """top_metrics: path or None. macro_metrics: {macro: path}.
-    padded_die: path to pad_ring/runs/padring_metrics.json or None."""
+    padded_die: path to pad_ring/runs/padring_metrics.json or None.
+    chip_top: path to chip_top/runs/<tag>/final/metrics.json or None."""
     metrics = []
 
-    # Flat pad-ring padded chip (this work): the headline number, a COMPLETE
-    # die WITH a gf180mcu_fd_io pad ring, directly comparable to KianV's 20.1.
+    # chip_top (LibreLane Chip flow): the whole chip -- flat soc + abutted IO
+    # pad ring -- hardened in ONE run. This SUPERSEDES padded_die/pad_ring as
+    # the source of the headline number, and deliberately emits the SAME
+    # series names: it is the same measurement (a complete die with its pad
+    # ring), so the dashboard history stays continuous across the flow swap.
+    # Key difference from pad_ring's route.tcl output: LibreLane writes
+    # `route__drc_errors`, not `design__route__drc_errors`.
+    if chip_top is not None:
+        cm = json.loads(Path(chip_top).read_text())
+        if cm.get("design__die__area") is not None:
+            metrics.append({"name": "gf180-padded-die-mm2", "unit": "mm2",
+                             "value": _mm2(float(cm["design__die__area"])),
+                             "dir": "smaller"})
+        if cm.get("route__drc_errors") is not None:
+            metrics.append({"name": "gf180-padded-die-drc", "unit": "count",
+                             "value": int(cm["route__drc_errors"]),
+                             "dir": "smaller"})
+
+    # Flat pad-ring padded chip (superseded by chip_top above; retained only
+    # so an older run's padring_metrics.json still parses).
     if padded_die is not None:
         pm = json.loads(Path(padded_die).read_text())
         if pm.get("design__die__area") is not None:
@@ -145,7 +166,12 @@ def main(argv=None):
                           "j4_core=librelane/j4_core/runs/smoke/final/metrics.json")
     ap.add_argument("--padded-die", default=None,
                      help="path to pad_ring/runs/padring_metrics.json "
-                          "(flat pad-ring padded chip die area + DRC count)")
+                          "(flat pad-ring padded chip die area + DRC count; "
+                          "superseded by --chip-top)")
+    ap.add_argument("--chip-top", default=None,
+                     help="path to chip_top/runs/<tag>/final/metrics.json "
+                          "(whole chip: flat soc + abutted pad ring, one run). "
+                          "Feeds the same gf180-padded-die-* series.")
     ap.add_argument("--commit", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--target", default="gf180mcu-mcu7t5v0")
@@ -160,7 +186,7 @@ def main(argv=None):
         macro_metrics[macro] = path
 
     doc = build_die_doc(a.top, macro_metrics, a.commit, a.target, a.board,
-                         padded_die=a.padded_die)
+                         padded_die=a.padded_die, chip_top=a.chip_top)
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     with open(a.out, "w") as f:
         json.dump(doc, f, indent=2)

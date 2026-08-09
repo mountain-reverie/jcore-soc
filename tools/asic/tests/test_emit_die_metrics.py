@@ -91,6 +91,45 @@ SAMPLE_PADDED = {
 }
 
 
+# chip_top (LibreLane Chip flow) final/metrics.json: the whole chip -- flat soc
+# + abutted IO pad ring -- in ONE run. Note the DRC key is `route__drc_errors`,
+# NOT the `design__route__drc_errors` that pad_ring's route.tcl wrote.
+SAMPLE_CHIP_TOP = {
+    "design__die__area": 12916800.0,      # 2700 x 4784
+    "design__core__area": 7073120.0,
+    "route__drc_errors": 0,
+}
+
+
+def test_build_die_doc_chip_top_feeds_the_padded_die_series():
+    """chip_top replaces pad_ring as the source of the headline padded die.
+
+    It must land on the SAME series names so the dashboard history is
+    continuous -- it is the same measurement (a complete die with its pad
+    ring), produced by a flow that actually works.
+    """
+    with tempfile.TemporaryDirectory() as d:
+        ct = _write(d, "metrics.json", SAMPLE_CHIP_TOP)
+        doc = build_die_doc(top_metrics=None, macro_metrics={}, commit="beef",
+                            chip_top=ct)
+        by_name = {m["name"]: m for m in doc["metrics"]}
+        padded = by_name["gf180-padded-die-mm2"]
+        assert padded["value"] == round(12916800.0 / 1e6, 6)  # 12.9168
+        assert padded["value"] < KIANV_DIE_MM2
+        assert by_name["gf180-padded-die-drc"]["value"] == 0
+
+
+def test_build_die_doc_chip_top_reports_nonzero_drc():
+    """A dirty route must not be silently published as clean."""
+    with tempfile.TemporaryDirectory() as d:
+        ct = _write(d, "metrics.json", dict(SAMPLE_CHIP_TOP,
+                                            **{"route__drc_errors": 7}))
+        doc = build_die_doc(top_metrics=None, macro_metrics={}, commit="beef",
+                            chip_top=ct)
+        by_name = {m["name"]: m for m in doc["metrics"]}
+        assert by_name["gf180-padded-die-drc"]["value"] == 7
+
+
 def test_build_die_doc_emits_padded_die_below_kianv():
     with tempfile.TemporaryDirectory() as d:
         pad = _write(d, "padring_metrics.json", SAMPLE_PADDED)
