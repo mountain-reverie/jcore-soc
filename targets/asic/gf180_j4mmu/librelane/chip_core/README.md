@@ -13,33 +13,42 @@ the pad ring has one macro to abut.
 
 ## Regenerating `chip_core.v`
 
-`chip_core.v` is generated: the committed hierarchical netlists
-(`top/soc.v` glue + the 6 child `*.v` bodies) flattened into one module, with
-the SRAM cells kept as blackbox leaves. Host `yosys` (>=0.44) + the PDK SRAM
-blackbox models are all that is needed:
+`chip_core.v` is generated: the hierarchical netlists (`top/soc.v` glue + the 6
+child `*.v` bodies) flattened into one module, with the SRAM cells kept as
+blackbox leaves. Use the script — do not hand-run yosys:
 
 ```sh
-LB=.                                   # this librelane/ dir
-P=$(ls -d "$HOME"/.ciel/ciel/gf180mcu/versions/*/gf180mcuD/libs.ref | head -1)
-S=$P/gf180mcu_fd_ip_sram/verilog
-yosys -q -p "
-  read_verilog -lib \
-    $S/gf180mcu_fd_ip_sram__sram64x8m8wm1__blackbox.v \
-    $S/gf180mcu_fd_ip_sram__sram512x8m8wm1__blackbox.v;
-  read_verilog $LB/top/soc.v $LB/cpus/cpus.v \
-    $LB/icache_2k/icache_adapter.v $LB/dcache_2k/dcache_adapter.v \
-    $LB/smoke/sdram_ctrl.v $LB/soc_cluster.devices/devices.v \
-    $LB/qspi_flash/qspi_flash_ctrl.v;
-  hierarchy -top soc;
-  flatten;
-  opt_clean;
-  write_verilog -noattr $LB/chip_core/chip_core.v
-"
+./gen_chip_core.sh                      # child netlists already on disk
+REGEN_CHILDREN=1 ./gen_chip_core.sh     # rebuild them first (seconds each)
 ```
+
+`REGEN_CHILDREN` drives `../run.sh macro=<child> OL_NETLIST_ONLY=1`, which
+stops after `write_verilog` instead of hardening each child (a full `cpus`
+harden is ~90 min and places a macro nobody uses any more).
 
 Expected: one `soc` module, **17 SRAM instances** (7 icache + 10 dcache), the
 rest std cells. The tri-state warnings during read are the inout pad signals
 (`ice_spi_io`, gpio, sd_cmd) and are benign.
+
+### `proc` before `flatten` is mandatory
+
+The recipe in this README before 2026-08-09 omitted `proc`. Without it yosys
+warns
+
+```
+Warning: Ignoring module soc because it contains processes (run 'proc' command first).
+```
+
+and `write_verilog` emits raw RTLIL processes — measured **4118 `initial`
+blocks**. Nothing complains until the next `chip_top` run dies ~24 s in, at
+Generate JSON Header:
+
+```
+ERROR: Failed to get a constant init value for \aic_irq_gen.sync: \_000465_
+```
+
+`gen_chip_core.sh` asserts 1 module / 17 SRAMs / **0** `initial` blocks so a
+bad regeneration fails immediately and legibly instead of hours later.
 
 ## Hardening
 
