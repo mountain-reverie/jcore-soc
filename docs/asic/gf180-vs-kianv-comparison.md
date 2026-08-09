@@ -19,6 +19,49 @@ IO pad ring. Built on **LibreLane 3.0.5** (2.4.2 cannot reach this operating
 point — its explicit-corner path fails `DFFLEGALIZE`; see
 [the migration](librelane-3x-migration-plan.md)).
 
+## Update 2026-08-09 — re-measured on the J4 (sh4-overlay) decoder, still 12.92 mm²
+
+**The 12.92 mm² result below was measured on a stale netlist.**
+`chip_core.v` is a committed generated artifact; the version used for that
+measurement dated 2026-07-31 and predated the J4 decoder wiring fix
+(`a9df9bf`, 2026-08-04). `chip_top` was therefore hardening a **J2-decoder**
+CPU while every other flow built the sh4 overlay, and nothing said so — no CI
+job regenerated or checked that file.
+
+Re-measured on a correctly regenerated `chip_core.v` (107,523 → 159,211
+lines):
+
+| | value |
+|---|---|
+| die | 2700×4784 = **12.92 mm²** (unchanged) |
+| route DRC | **0** |
+| antenna violations | 0 |
+| instances | 75,661 (75,017 stdcell, 7,520 sequential, 17 SRAM macros) |
+| stdcell utilization | 61.2% |
+| runtime | 2h01m to detailed routing |
+
+**The area is unchanged because the die was not resized, not because the
+design did not grow.** The sh4-overlay decoder grew the CPU cluster's mapped
+cell area by 80% (569,780 → 1,027,605 µm²). The flat topology absorbed it
+without a floorplan change: P&R spreads std cells around the SRAM bands across
+the whole core, so there was no need to widen the gap between them.
+
+For contrast, the hierarchical `top` + `pad_ring` path could **not** absorb the
+same growth — its hand-placed `cpus` macro overlapped `devices` and
+`icache_adapter`, and fitting it without overlap would have needed roughly
+25 mm² padded, past KianV's line. That path was removed on 2026-08-09.
+
+### Honest caveats on this number
+
+- "0 DRC" here is **router** DRC from an `OL_TO=OpenROAD.DetailedRouting` run —
+  not Magic/KLayout signoff DRC, and not LVS.
+- **Timing is not closed** at the 33 ns / 30 MHz target: 9,626 max-slew,
+  16 max-fanout and 2 max-cap violations. Long-standing and orthogonal (see
+  `chip_top/README.md`); the bigger decoder will not have helped.
+- `Checker.PowerGridViolations` and `OpenROAD.IRDropReport` are skipped by
+  `run.sh`'s chip_top branch, so the PDN violation counter is not gating and
+  this run says nothing about IR drop.
+
 ## Update — real IO pad ring routes 0 DRC, down to 12.92 mm²
 
 The DRT-0073 caveat below is **resolved**. The flat-macro pad shortcut is
