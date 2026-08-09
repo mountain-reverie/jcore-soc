@@ -24,8 +24,22 @@
 #
 # Assumes the CALLER already did `ciel enable --pdk-family gf180mcu $PDK_PIN`.
 # Every leg is guarded: a partial build still publishes whatever was produced
-# (the kianv line is always emitted) -- so exit 0 at the end regardless.
+# (the kianv line is always emitted). The publish path therefore always runs to
+# completion -- but the script EXITS NON-ZERO at the end if nothing real was
+# built, so a broken flow cannot masquerade as a green nightly.
+#
+# WHY (2026-08-08): this script used to `exit 0` unconditionally, under a
+# `continue-on-error: true` workflow step. From the LibreLane 3.0.5 bump
+# (5c5e431, 2026-07-31) every macro leg failed at STA Pre-PnR and the job still
+# reported success for nine days -- no die area was ever produced, and the
+# post-J4-decoder design was never place-and-routed. Deferred-exit (rather than
+# `set -e`) keeps the partial-publish behaviour that motivated the original
+# exit 0, without the dishonesty.
 set -uo pipefail
+
+# Deferred failure flag -- see the header. Set by any leg that produced nothing
+# real; consumed by the exit at the very bottom, after all publishing is done.
+DIE_FAILED=0
 ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 cd "$ROOT"
 
@@ -67,6 +81,7 @@ for name in "${MACRO_ORDER[@]}"; do
     echo "  -> metrics: $m"; MACRO_ARGS+=(--macro "$name=$m")
   else
     echo "WARN: no metrics.json for macro=$dir -- omitting from die doc" >&2
+    DIE_FAILED=1
   fi
   docker system prune -f >/dev/null 2>&1 || true
 done
@@ -97,7 +112,12 @@ fi
 # --- 6. emit canonical die metrics ---------------------------------------
 echo "=== gf180_die.sh: emitting canonical die metrics ==="
 PADDED_ARG=()
-[ -f "$PADRING_JSON" ] && PADDED_ARG=(--padded-die "$PADRING_JSON")
+if [ -f "$PADRING_JSON" ]; then
+  PADDED_ARG=(--padded-die "$PADRING_JSON")
+else
+  echo "WARN: no $PADRING_JSON -- the padded die was never produced" >&2
+  DIE_FAILED=1
+fi
 python3 tools/asic/emit_die_metrics.py \
   "${PADDED_ARG[@]}" \
   "${MACRO_ARGS[@]}" \
@@ -106,4 +126,13 @@ python3 tools/asic/emit_die_metrics.py \
 
 echo "=== gf180_die.sh: done -- $OUT_DIR/metrics-die.json ==="
 cat "$OUT_DIR/metrics-die.json"
+
+# Everything above has published whatever was produced. NOW report the truth.
+if [ "$DIE_FAILED" -ne 0 ]; then
+  echo "ERROR: gf180_die.sh: the die flow did not complete -- see the WARN" \
+       "lines above for which macro legs and/or the padded die produced no" \
+       "metrics. The dashboard doc was still emitted so the series stays" \
+       "alive, but this run built nothing real." >&2
+  exit 1
+fi
 exit 0

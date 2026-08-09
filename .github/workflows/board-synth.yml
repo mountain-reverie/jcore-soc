@@ -383,7 +383,12 @@ jobs:
       - name: GF180 padded-die place & route (flat soc + pad ring)
         # Guarded so a partial build still leaves whatever metrics.json +
         # PNG were produced on disk for the next steps to publish, instead
-        # of failing the whole job. gf180_die.sh itself exits 0 regardless.
+        # of failing the whole job. gf180_die.sh now exits NON-ZERO when it
+        # built nothing real, and the "Gate" step at the end of this job turns
+        # that into a job failure -- AFTER the publish/upload steps below have
+        # run. Keeping continue-on-error here is what lets that ordering work;
+        # it is no longer what makes the job green.
+        id: die
         continue-on-error: true
         run: targets/asic/gf180_j4mmu/metrics/gf180_die.sh
 
@@ -414,6 +419,21 @@ jobs:
           name: gf180-padded-die-png
           path: metrics-die/gf180-padded-die.png
           if-no-files-found: warn
+
+      # Fail the job if the P&R produced nothing, now that everything above has
+      # published whatever WAS produced (the dashboard series stays alive either
+      # way). Without this the job reported success for nine days while every
+      # macro leg failed at STA Pre-PnR -- see gf180_die.sh's header.
+      - name: Gate on a real die build
+        if: always()
+        run: |
+          if [ "${{ steps.die.outcome }}" != "success" ]; then
+            echo "::error::gf180_die.sh did not complete -- no real die was" \
+                 "built this run. See the 'GF180 padded-die place & route'" \
+                 "step log for the failing macro legs."
+            exit 1
+          fi
+          echo "gf180_die.sh completed: a real die was built."
 
   benchmark:
     needs: [bitstream, bitstream-icesugar, gf180-synth-metrics, gf180-die-area]
