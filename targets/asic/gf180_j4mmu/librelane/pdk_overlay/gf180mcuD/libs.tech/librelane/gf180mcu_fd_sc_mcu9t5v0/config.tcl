@@ -9,15 +9,31 @@ set ::env(WELLTAP_CELL) "$::env(STD_CELL_LIBRARY)__filltie"
 set ::env(ENDCAP_CELL) "$::env(STD_CELL_LIBRARY)__endcap"
 
 # defaults (can be overridden by designs):
-set ::env(SYNTH_DRIVING_CELL) "$::env(STD_CELL_LIBRARY)__inv_1/ZN"
-# jcore-soc local compat shim: LibreLane 2.4.x's pdk_compat.migrate_old_config
-# unconditionally reads config['SYNTH_DRIVING_CELL_PIN'] to rebuild
-# SYNTH_CLK_DRIVING_CELL for any gf180mcu* PDK (config/pdk_compat.py "x2.
-# Invalid Variables (gf180mcu)" block), but this ciel pin's config.tcl never
-# defines a separate SYNTH_DRIVING_CELL_PIN (old combined "cell/pin" schema
-# throughout) -- raised a bare KeyError. Define it so the compat shim can run.
+# jcore-soc local compat shim: pdk_compat.migrate_old_config unconditionally
+# reads config['SYNTH_DRIVING_CELL_PIN'] for any gf180mcu* PDK (config/
+# pdk_compat.py "x2. Invalid Variables (gf180mcu)" block), but this ciel pin's
+# config.tcl never defines a separate SYNTH_DRIVING_CELL_PIN (old combined
+# "cell/pin" schema throughout) -- raised a bare KeyError. Define it so the
+# compat shim can run.
+#
+# LibreLane 3.0.5 CHANGED what the shim then does with it, and the 2.4.x-era
+# values below were silently wrong from the 3.0.5 bump (5c5e431) onward:
+#   - 3.0.5 APPENDS SYNTH_DRIVING_CELL_PIN to SYNTH_DRIVING_CELL, so a value
+#     that already carried "/ZN" resolved to "..._inv_1/ZN/ZN";
+#   - 3.0.5 does NOT rebuild SYNTH_CLK_DRIVING_CELL from it (2.4.x did), so a
+#     pinless "..._inv_4" stayed pinless.
+# base.sdc then does `-pin [lindex [split $::env(SYNTH_CLK_DRIVING_CELL) "/"] 1]`
+# -> empty -pin -> `set_driving_cell ... -pin "" [get_port clk]` -> OpenSTA
+# reports `port '' not found`, attributed to base.sdc:59 (where that command's
+# last argument sits). That killed STA Pre-PnR for every macro -- i.e. the whole
+# die-area flow -- while looking like a clock-port problem. See
+# docs/superpowers/specs/2026-08-08-gf180-die-ci-and-j4-core-metrics-design.md.
+#
+# So: give SYNTH_DRIVING_CELL the BARE cell (the shim appends the pin) and give
+# SYNTH_CLK_DRIVING_CELL its pin explicitly, matching the upstream schema.
+set ::env(SYNTH_DRIVING_CELL) "$::env(STD_CELL_LIBRARY)__inv_1"
 if { ![info exist ::env(SYNTH_DRIVING_CELL_PIN)] } { set ::env(SYNTH_DRIVING_CELL_PIN) "ZN" }
-set ::env(SYNTH_CLK_DRIVING_CELL) "$::env(STD_CELL_LIBRARY)__inv_4"
+set ::env(SYNTH_CLK_DRIVING_CELL) "$::env(STD_CELL_LIBRARY)__inv_4/ZN"
 
 # update these
 set ::env(OUTPUT_CAP_LOAD) "72.91" ; # femtofarad from pin I in liberty file
