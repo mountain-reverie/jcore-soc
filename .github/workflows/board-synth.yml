@@ -278,17 +278,22 @@ jobs:
           path: metrics-gf180/metrics-gf180.json
 
   gf180-die-area:
-    # Master-merge GF180 padded-die place & route (the ASIC-building benchmark):
-    # builds the COMPLETE chip -- the flash-variant soc (2 KB caches) wrapped in
-    # a KianV-style gf180mcu_fd_io pad ring, routed FLAT -- and publishes the
-    # padded die area (17.5 mm2, 0 DRC) vs. the KianV 20.1 mm2 reference line
-    # into the SAME benchmark/deploy-pages pipeline as gf180-synth-metrics
-    # above, plus the routed-die PNG as a build artifact. This flat flow
-    # replaced the earlier soc-as-macro top run (core-only, 21.2 mm2) and is
-    # faster. It is still real multi-hour place & route (orders of magnitude
-    # heavier than the synth-only job), so it must NEVER run on pull_request --
-    # push to the default branch (master merge) + schedule + manual dispatch
-    # only. See targets/asic/gf180_j4mmu/librelane/pad_ring/README.md.
+    # Master-merge GF180 whole-chip place & route (the ASIC-building benchmark):
+    # regenerates the flat soc netlist (chip_core.v, ~60s) and hardens the
+    # COMPLETE chip -- flat soc plus an abutted gf180mcu_fd_io pad ring --
+    # through LibreLane's Chip flow in ONE P&R, publishing the padded die area
+    # vs. the KianV 20.1 mm2 reference line into the SAME benchmark/
+    # deploy-pages pipeline as gf180-synth-metrics above, plus the layout
+    # render as a build artifact.
+    #
+    # Measured 2026-08-09: 12.92 mm2, 0 route DRC, 75,661 instances, ~2h.
+    # This replaced the six-macro harden + flat pad_ring assembly, whose
+    # hand-placed floorplan the J4 sh4-overlay decoder outgrew (macro overlap
+    # -> PSM-0069 -> GPL-0305). See librelane/chip_top/README.md.
+    #
+    # Still real multi-hour place & route (orders of magnitude heavier than the
+    # synth-only job), so it must NEVER run on pull_request -- push to the
+    # default branch (master merge) + schedule + manual dispatch only.
     if: >-
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
       || (github.event_name == 'push'
@@ -380,7 +385,7 @@ jobs:
       - name: Regenerate SoC + shared v2p'd sources
         run: targets/asic/gf180_j4mmu/prep_sources.sh
 
-      - name: GF180 padded-die place & route (flat soc + pad ring)
+      - name: GF180 whole-chip place & route (chip_top Chip flow)
         # Guarded so a partial build still leaves whatever metrics.json +
         # PNG were produced on disk for the next steps to publish, instead
         # of failing the whole job. gf180_die.sh now exits NON-ZERO when it
@@ -412,7 +417,9 @@ jobs:
           name: metrics-die
           path: metrics-die/metrics-die.json
 
-      - name: Upload padded-die visual (routed flat pad ring)
+      # gf180_die.sh copies chip_top's own KLayout.Render output to this fixed
+      # path, so the artifact name/path are unchanged by the flow swap.
+      - name: Upload padded-die visual (chip_top layout render)
         if: always()
         uses: actions/upload-artifact@v4
         with:
