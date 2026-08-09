@@ -42,6 +42,12 @@
 #              routing+signoff -- override to stop earlier, e.g.
 #              OpenROAD.DetailedPlacement, for a quicker area-only check).
 #   OL_TIMEOUT wall-clock cap in seconds (default 3600).
+#   OL_NETLIST_ONLY
+#              if non-empty, stop after writing (and sanitizing) the
+#              ghdl-yosys gate-level netlist -- no LibreLane run at all. Used
+#              by chip_core/gen_chip_core.sh to build the six child netlists
+#              that flatten into chip_core/chip_core.v, without paying for a
+#              full harden of each (the `cpus` child alone is ~90 min).
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -310,6 +316,14 @@ fi
 # Sanitize VHDL-record-flattened port names: \name[field]  ->  name_field
 perl -0pe 's/\\([A-Za-z_][A-Za-z0-9_]*)\[([A-Za-z0-9_]+)\]([ \t]|(?=\n))/${1}_${2}$3/g' \
   "$NETV" > "$NETV.tmp" && mv "$NETV.tmp" "$NETV"
+
+# Netlist-only escape hatch: everything above produced the sanitized
+# gate-level netlist, which is all chip_core/gen_chip_core.sh needs from a
+# child. Stop here rather than hardening a macro nobody places any more.
+if [ -n "${OL_NETLIST_ONLY:-}" ]; then
+  echo "run.sh: OL_NETLIST_ONLY set -- wrote $NETV, skipping LibreLane." >&2
+  exit 0
+fi
 
 # --- 2. Merge common.json (shared PDK/clock/util defaults) over the macro's
 # config.json (macro-specific DESIGN_NAME/VERILOG_FILES/clock override).
