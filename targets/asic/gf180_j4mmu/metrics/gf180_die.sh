@@ -48,6 +48,21 @@ PADRING_DIR="$LIBRELANE_DIR/pad_ring"
 OUT_DIR="${OUT_DIR:-metrics-die}"
 COMMIT="${COMMIT:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}"
 
+# Per-macro wall-clock cap handed to run.sh (its own default is 3600s).
+#
+# The J4 sh4-overlay decoder (soc a9df9bf / 7b9be7b) grew the `cpus` macro from
+# 569,780 to 1,027,605 um2 of mapped cells (+80%); every other macro here is
+# byte-identical. A full `cpus` harden through Magic.WriteLEF now takes ~87 min
+# on a developer workstation -- comfortably past run.sh's 3600s default, which
+# kills the container mid-flow and leaves no metrics.json. Measured
+# 2026-08-08: 5189s wall, 193,402 instances, 2.80 mm2 die, 0 DRC.
+#
+# 3h gives that ~87 min run roughly 2x headroom for a slower CI runner. NOTE
+# for hosted runners: GitHub's own 6h job limit is the real backstop, and with
+# six macro legs plus the pad ring this flow may no longer fit a hosted runner
+# -- see board-synth.yml's `runs-on: [self-hosted, gf180-pnr]` note.
+export OL_TIMEOUT="${OL_TIMEOUT:-10800}"
+
 # The 6 flat-integration child macros: run.sh <dir> -> die-series <name>.
 # (gen_config.py maps these dirs to the soc instance LEFs.)
 declare -A MACRO_DIR=(
