@@ -88,14 +88,27 @@ OL_TIMEOUT="${OL_TIMEOUT:-3600}"
 # completion (e.g. the sdram_ctrl smoke test, which closes timing cleanly).
 OL_TO="${OL_TO:-Magic.WriteLEF}"
 # OL_SKIP: comma/space-separated LibreLane step ids to skip outright (passed
-# as repeated `--skip`). Needed for macro-placement runs (dcache/icache):
-# OpenROAD.IRDropReport unconditionally hard-fails with [PSM-0069] "Check
-# connectivity failed on VDD/VSS" when a design has vendor SRAM macros whose
-# power pins the default PDN generation doesn't fully strap (observed even
-# with PDN_CONNECT_MACROS_TO_GRID's default of true) -- IR-drop/power
-# signoff is out of scope for this routed-area exercise (same rationale as
-# the OL_TO default above skipping the timing checkers), so skip it rather
-# than let it block reaching Magic.WriteLEF.
+# as repeated `--skip`). OpenROAD.IRDropReport hard-fails with [PSM-0069]
+# "Check connectivity failed on VDD/VSS", so it is skipped to reach
+# Magic.WriteLEF; IR-drop/power signoff is out of scope for a routed-area
+# exercise (same rationale as the OL_TO default above skipping the timing
+# checkers).
+#
+# CORRECTION (2026-08-09): this comment used to blame "vendor SRAM macros
+# whose power pins the default PDN generation doesn't fully strap". That is
+# NOT what PSM-0069 reports here, and the wrong attribution cost real
+# debugging time. Measured on chip_top's own VDD-grid-errors.rpt (the
+# untruncated report, not the 1000-message log tail):
+#   * ~20,000 dangling shapes, ALL on Metal1 (the std-cell rail layer);
+#   * 8,333 TAP_TAPCELL + 1,650 PHY_EDGE instances -- i.e. physical row cells;
+#   * ZERO vendor SRAM macros flagged.
+# Ruled out with evidence, so nobody repeats them: it is not macro strapping
+# (a Metal4->Metal3 macro connect, added in chip_top/pdn_cfg.tcl, leaves the
+# count unchanged); not stripe density (the surviving rails are full core
+# width, 1815.5 um, and already cross ~11 Metal4 stripes each); and not PDN
+# trimming (PDN_SKIPTRIM=true changes nothing). Next step needs the layout
+# looked at in KLayout, not more statistics -- see metrics/pdn_try.sh for a
+# ~10 min iteration loop over GeneratePDN alone.
 OL_SKIP="${OL_SKIP:-}"
 
 # --- 1. VHDL -> Verilog: ghdl-yosys elaborates+generic-synths the macro's
