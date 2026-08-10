@@ -143,6 +143,7 @@
   "PDN_MULTILAYER": true,
   "PDN_CORE_RING": true,
   "PDN_CORE_RING_CONNECT_TO_PADS": true,
+  "PDN_CFG": "dir::pdn_cfg.tcl",
   "GRT_ALLOW_CONGESTION": true,
   "IGNORE_DISCONNECTED_MODULES": [
     "gf180mcu_fd_io__bi_t",
