@@ -184,9 +184,38 @@ not depend on routing headroom either way.
 
 ## Per-block routed areas (GF180, standalone)
 
+> **Correction (2026-08-10): the `j4_core` row below has no MMU in it.**
+> Until 2026-08-10 `metrics/macros.list` elaborated the BARE `cpu_synth_j4`
+> configuration, which binds no generics — so `priv_arch` defaulted to
+> **false** and the series measured a J4 core with **no TLB and no privileged
+> datapath**, while being labelled "CPU + MMU/TLB". Any headline derived from
+> it understated the shipped core.
+>
+> Re-measured through the same synth flow with the shipped binding
+> (`cpu_synth_j4_priv`, `priv_arch => true` from `variants.toml`), GF180
+> 9T/3.3V tt:
+>
+> | | cells | area µm² | sequential |
+> |---|---|---|---|
+> | MMU off (what was published) | 14,003 | 440,746 | 31.9% |
+> | **MMU on (what we ship)** | **29,541** | **1,032,036** | **36.2%** |
+>
+> **The MMU more than doubles the core** (×2.34). The 1.22 mm² routed figure
+> in the table is a real P&R result but for the MMU-off core, and is retained
+> only as history — `j4_core` is no longer hardened standalone (the die flow
+> is `chip_top`), so there is no current routed replacement for it.
+>
+> Why it hid: a configuration that binds no generics is valid VHDL, and the
+> correct sh4-overlay decoder *was* being analysed — with `priv_arch=false`
+> nothing consumes the overlay's extra decode rows, so `synth -flatten`
+> prunes them and the area barely moved (+0.3%) when the J4 decoder fix
+> landed. `tools/socgen/elaborate/cpu_metrics_top_sync_test.go` now pins the
+> metrics binding to `variants.toml` across the two repositories.
+
+
 | Block | Routed die (mm²) | Notes |
 |---|---|---|
-| j4_core (CPU + MMU/TLB) | 1.22 | std-cell logic, no macro |
+| j4_core (CPU, **MMU/TLB OFF** — see below) | 1.22 | std-cell logic, no macro |
 | icache (8 KB, vendor SRAM) | 5.06 | 2×`sram256x8` tag + 16×`sram512x8` data |
 | dcache (8 KB, vendor SRAM) | 5.06 | 4×`sram256x8` tag + 16×`sram512x8` data |
 | boot_mem (logic-ROM vector, ROM-only, no scratchpad) | 0.02 | 0 SRAM macros; pure logic ROM |

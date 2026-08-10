@@ -17,17 +17,41 @@
 # (final-review I1 fix). synth_gf180.sh ignores this column (only reads
 # macro/elab_top/synth_top).
 #
-# j4_core: entity `cpu` (components/cpu/core/cpu.vhd) synthesizes standalone
-# and includes the MMU/TLB (work.tlb bound in the MMU_ARCH generate). `cpu`
-# itself elaborates (`ghdl -e cpu`) but decode_core's generics (decode_type,
-# reset_vector) are only bound by a configuration -- ghdl errors "no actual
-# for generic" without one. Elaborate the target's own variant configuration
-# (cpu_synth_j4, components/cpu/synth/cpu_synth_j4_config.vhd, the
-# same config filelist.sh/cpu_synth_files.list selects for this target's
-# j4-rom decode) instead of the bare entity; `synth -top cpu` still names the
-# underlying `cpu` module for the report. Carries the CPU regfile/TLB RAM
-# inference -> inflated.
-j4_core       cpu_synth_j4  cpu         inflated
+# j4_core: the CPU as this target actually SHIPS it -- entity `cpu`
+# (components/cpu/core/cpu.vhd) with the SH-4 privileged datapath and the TLB
+# (work.tlb, instantiated under `g_mmu : if PRIV_ARCH generate`).
+#
+# `cpu` cannot be elaborated bare: decode_core's generics (decode_type,
+# reset_vector) are only bound by a configuration, so `ghdl -e cpu` errors
+# "no actual for generic". It also cannot be elaborated through the BARE
+# `cpu_synth_j4` configuration, which is what this row named until
+# 2026-08-10: that binds no generics, so priv_arch defaulted to FALSE and the
+# published "J4 + MMU core" series measured a core with no TLB and no
+# privileged datapath. Measured on GF180 9T/3.3V: 440,746 um2 MMU-off vs
+# 1,029,476 um2 MMU-on -- the dashboard understated the shipped core by >2x.
+# It went unnoticed because a configuration binding no generics is valid VHDL,
+# and because the correct sh4-overlay decoder WAS being analyzed: with
+# priv_arch=false nothing consumes the overlay's extra decode rows, so
+# `synth -flatten` prunes them and the area barely moved (+0.3%) when the J4
+# decoder fix landed.
+#
+# So elaborate `cpu_synth_j4_priv` (top `cpu_j4_priv_top`), the wrapper the
+# CPU submodule already provides: the yosys ghdl plugin does not support
+# `ghdl -g`, so a generic override must come from a configuration binding,
+# which needs a component-instantiation context. No new generated file is
+# needed -- socgen already puts synth/cpu_synth_j4_config.vhd in
+# cpu_synth_files.list, so filelist.sh analyzes it for this target already.
+#
+# CROSS-REPO SYNC: that wrapper's generic map lives in jcore-cpu while the
+# SoC's own binding is generated from components/cpu/variants.toml. They are
+# two declarations of one intent in two repositories and have already
+# disagreed once (MMU_ARCH). tools/socgen/elaborate/cpu_metrics_top_sync_test.go
+# asserts they match, so a j4 generic added or changed in the submodule fails
+# at the bump rather than silently re-mismeasuring this series.
+#
+# The wrapper is a pure pass-through, so reporting on `cpu_j4_priv_top` is the
+# CPU. Carries the CPU regfile/TLB RAM inference -> inflated.
+j4_core       cpu_synth_j4_priv  cpu_j4_priv_top  inflated
 #
 # cache_ctrl: there is no single `cache` wrapper entity. The real id-cache
 # controller is two peer entities, icache + dcache (components/cpu/cache/),
