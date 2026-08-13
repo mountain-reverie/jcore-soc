@@ -16,7 +16,10 @@ void uart_puts(const char *s);
 /* 1 when a received byte is waiting, 0 otherwise. Never blocks. */
 int uart_rx_ready(void);
 
-/* Blocks until a byte arrives, then returns it. */
+/* On target: blocks until a byte arrives, then returns it.
+   On host (HOST_TEST): returns immediately if a byte is queued; aborts the
+   test (exit 1) if the queue is empty — this ensures detect under-supplies
+   of input (e.g., wait_for_go loops) rather than silently spinning on zeros. */
 char uart_getc(void);
 
 /* "0x" + exactly 8 lowercase hex digits, zero-padded. Fixed width so a host
