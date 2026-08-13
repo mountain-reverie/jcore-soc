@@ -20,10 +20,6 @@ entity devices is
         cpu0_periph_dbus_o : in cpu_data_o_t;
         cpu1_periph_dbus_i : out cpu_data_i_t;
         cpu1_periph_dbus_o : in cpu_data_o_t;
-        eth_clk : out std_logic;
-        eth_cs : out std_logic_vector(1 downto 0);
-        eth_miso : in std_logic;
-        eth_mosi : out std_logic;
         gpio_do : out std_logic_vector(2 downto 0);
         reset : in std_logic;
         uart0_rx : in std_logic;
@@ -32,7 +28,7 @@ entity devices is
 end;
 architecture impl of devices is
     signal gpio_di : std_logic_vector(2 downto 0);
-    type device_t is (NONE, DEV_CYCCNT, DEV_ETH, DEV_GPIO0, DEV_UART0);
+    type device_t is (NONE, DEV_CYCCNT, DEV_GPIO0, DEV_UART0);
     signal active_dev : device_t;
     type data_bus_i_t is array (device_t'left to device_t'right) of cpu_data_i_t;
     type data_bus_o_t is array (device_t'left to device_t'right) of cpu_data_o_t;
@@ -42,23 +38,18 @@ architecture impl of devices is
     begin
         -- Assumes addr(31 downto 28) = x"a".
         -- Address decoding closer to CPU checks those bits.
-        if addr(27 downto 13) = "101111001101000" then
-            if addr(12 downto 10) = "000" then
-                if addr(9) = '0' then
-                    if addr(8 downto 4) = "00000" then
-                        -- ABCD0000-ABCD000F
-                        return DEV_GPIO0;
-                    elsif addr(8 downto 4) = "10000" then
-                        -- ABCD0100-ABCD010F
-                        return DEV_UART0;
-                    end if;
-                elsif addr(9 downto 3) = "1000000" then
-                    -- ABCD0200-ABCD0207
-                    return DEV_CYCCNT;
+        if addr(27 downto 10) = "101111001101000000" then
+            if addr(9) = '0' then
+                if addr(8 downto 4) = "00000" then
+                    -- ABCD0000-ABCD000F
+                    return DEV_GPIO0;
+                elsif addr(8 downto 4) = "10000" then
+                    -- ABCD0100-ABCD010F
+                    return DEV_UART0;
                 end if;
-            elsif addr(12 downto 3) = "1000000000" then
-                -- ABCD1000-ABCD1007
-                return DEV_ETH;
+            elsif addr(9 downto 3) = "1000000" then
+                -- ABCD0200-ABCD0207
+                return DEV_CYCCNT;
             end if;
         end if;
         return NONE;
@@ -81,24 +72,6 @@ begin
             db_o => devs_bus_i(DEV_CYCCNT),
             rst => reset
         );
-    eth : entity work.spi2(arch)
-        generic map (
-            clk_freq => CFG_CLK_CPU_FREQ_HZ,
-            num_cs => 2
-        )
-        port map (
-            busy => open,
-            clk => clk_sys,
-            cpha => '0',
-            cpol => '0',
-            cs => eth_cs,
-            db_i => devs_bus_o(DEV_ETH),
-            db_o => devs_bus_i(DEV_ETH),
-            miso => eth_miso,
-            mosi => eth_mosi,
-            rst => reset,
-            spi_clk => eth_clk
-        );
     gpio0 : entity work.gpio2(arch)
         generic map (
             width => 3
@@ -116,7 +89,7 @@ begin
     uart0 : entity work.uartlitedb(arch)
         generic map (
             fclk => CFG_CLK_CPU_FREQ_HZ,
-            rx_enable => FALSE,
+            rx_enable => TRUE,
             rx_fifo_len => 1,
             tx_fifo_len => 1
         )

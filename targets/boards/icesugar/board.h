@@ -9,7 +9,6 @@
 
 // Memory mapped peripherals
 #define DEVICE_CYCCNT_ADDR 0xabcd0200
-#define DEVICE_ETH_ADDR    0xabcd1000
 #define DEVICE_GPIO0_ADDR  0xabcd0000
 #define DEVICE_UART0_ADDR  0xabcd0100
 
@@ -24,12 +23,6 @@ struct gpio2_regs {
   uint32_t toggle;
 };
 #define DEVICE_GPIO0 ((volatile struct gpio2_regs *) DEVICE_GPIO0_ADDR)
-
-struct spi_regs {
-  uint32_t ctrl; // only byte 3
-  uint32_t data; // only byte 3
-};
-#define DEVICE_ETH ((volatile struct spi_regs *) DEVICE_ETH_ADDR)
 
 struct uartlite_regs {
   uint32_t rx; // only byte 3

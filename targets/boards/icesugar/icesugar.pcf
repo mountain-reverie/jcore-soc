@@ -8,7 +8,3 @@ set_io pin_spi_cs_pin 16
 set_io pin_spi_miso_pin 17
 set_io pin_spi_mosi_pin 14
 set_io pin_spi_sck_pin 15
-set_io pin_w5500_cs 38
-set_io pin_w5500_miso 42
-set_io pin_w5500_mosi 36
-set_io pin_w5500_sclk 37

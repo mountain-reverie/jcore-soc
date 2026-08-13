@@ -23,20 +23,12 @@ entity pad_ring is
         pin_spi_cs_pin : out std_logic;
         pin_spi_miso_pin : out std_logic;
         pin_spi_mosi_pin : out std_logic;
-        pin_spi_sck_pin : out std_logic;
-        pin_w5500_cs : out std_logic;
-        pin_w5500_miso : in std_logic;
-        pin_w5500_mosi : out std_logic;
-        pin_w5500_sclk : out std_logic
+        pin_spi_sck_pin : out std_logic
     );
 end;
 architecture impl of pad_ring is
     signal clk : std_logic;
     signal clk_sys : std_logic;
-    signal eth_clk : std_logic;
-    signal eth_cs : std_logic_vector(1 downto 0);
-    signal eth_miso : std_logic;
-    signal eth_mosi : std_logic;
     signal fl_cs_n : std_logic;
     signal fl_miso : std_logic;
     signal fl_mosi : std_logic;
@@ -53,10 +45,6 @@ begin
     soc : entity work.soc(impl)
         port map (
             clk_sys => clk_sys,
-            eth_clk => eth_clk,
-            eth_cs => eth_cs,
-            eth_miso => eth_miso,
-            eth_mosi => eth_mosi,
             fl_cs_n => fl_cs_n,
             fl_miso => fl_miso,
             fl_mosi => fl_mosi,
@@ -94,8 +82,4 @@ begin
     pin_spi_miso_pin <= spi_miso_pin;
     pin_spi_mosi_pin <= spi_mosi_pin;
     pin_spi_sck_pin <= spi_sck_pin;
-    pin_w5500_cs <= eth_cs(0);
-    eth_miso <= pin_w5500_miso;
-    pin_w5500_mosi <= eth_mosi;
-    pin_w5500_sclk <= eth_clk;
 end;
