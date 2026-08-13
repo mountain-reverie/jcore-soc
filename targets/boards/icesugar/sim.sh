@@ -78,14 +78,14 @@ source targets/boards/icesugar/filelist.sh   # defines FILES=( ... )
 # onto pad_ring's pin_i2c_scl/pin_i2c_sda in the testbench below. Neither is
 # in the synth filelist -- synthesis maps SB_IO to the real cell and there is
 # no DS3231 model to synthesize.
-FILES=( components/cpu/core/sb_mac16_sim.vhd components/memory/sb_spram256ka_sim.vhd components/emac/sb_pll40_2_pad_sim.vhd components/emac/sb_io_sim.vhd components/emac/w5500_model.vhd components/misc/ds3231_model.vhd "${FILES[@]}" )
+FILES=( components/cpu/core/sb_mac16_sim.vhd components/memory/sb_spram256ka_sim.vhd components/emac/sb_pll40_2_pad_sim.vhd components/emac/sb_io_sim.vhd components/misc/ds3231_model.vhd "${FILES[@]}" )
 ghdl -a --std=93 -fexplicit -fsynopsys -C --workdir="$WORK" "${FILES[@]}"
 ghdl -e --std=93 -fexplicit -fsynopsys -C --syn-binding --workdir="$WORK" pad_ring
 echo "pad_ring elaborated OK"
 
 if [ "$MODE" = "coremark" ]; then
-  # 5. Task 8b cosim payload: build cosim.bin (crt0 + core_portme + eth_report
-  #    + cosim_main only -- NOT the CoreMark vendor sources), then generate
+  # 5. Task 8b cosim payload: build cosim.bin (crt0 + core_portme + uart_report
+  #    + uart_io + cosim_main only -- NOT the CoreMark vendor sources), then generate
   #    the flash-slave model's byte-array package from it, sized to exactly
   #    match cpus_coremark.vhd's fixed PAYLOAD_WORDS=8192 (32 KiB) so the
   #    flash model has a byte to serve for the whole Fast-Read stream.
