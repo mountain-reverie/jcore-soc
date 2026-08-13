@@ -5,16 +5,23 @@
 # (post-route) timing. The timing check keeps the LAST verdict per clock, so an
 # intermediate nextpnr estimate cannot false-positive (same rule as ulx3s).
 #
-# Baseline (Task 12, cpus_coremark arch — base J1 + cycle_counter +
-# flash_boot_reader + ice_spi_io + W5500 SPI eth; no XIP page cache, no AIC),
+# Baseline (cpus_coremark arch — base J1 + cycle_counter + flash_boot_reader +
+# ice_spi_io + bidirectional uart0; no SPI eth, no XIP page cache, no AIC),
 # WITH the config-flash MISO pad direction fix (synth.sh step 2b: soc_gen
 # infers pin_spi_miso_pin as an output since ice_spi_io's pin_* ports are
 # uniformly `inout`; corrected to `in` post-regen):
-# ICESTORM_LC 5093/5280 (96%, 187 LC margin), ICESTORM_RAM 17/30,
+# ICESTORM_LC 5105/5280 (97%, 175 LC margin), ICESTORM_RAM 17/30,
 # ICESTORM_DSP 8/8 (SB_MAC16, J1 DSP multiplier), ICESTORM_SPRAM 4/4
-# (SB_SPRAM256KA, spram_128k), clk_sys Fmax 14.05 MHz (PASS at 12.00 MHz
+# (SB_SPRAM256KA, spram_128k), clk_sys Fmax 13.24 MHz (PASS at 12.00 MHz
 # constraint). Any regression pushing ICESTORM_LC over budget or missing
 # 12 MHz timing fails this gate.
+#
+# Measured, not predicted: dropping the W5500 spi2 master and enabling the
+# uart0 receiver moved LC 5093 -> 5105 (+12) and Fmax 14.05 -> 13.24. The
+# removed SPI master was worth roughly 116 LC and the RX FIFO/shifter/baud
+# logic costs roughly 128, so the exchange is very slightly net negative --
+# the opposite of the expectation going in. Recorded here so the next person
+# sizing a change against this budget starts from the real number.
 # Usage: fit_gate.sh <nextpnr.log> <bitstream-file>
 set -uo pipefail
 LOG="${1:?usage: fit_gate.sh <nextpnr.log> <bitstream-file>}"

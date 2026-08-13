@@ -13,12 +13,13 @@ use work.flash_image_pkg.all;
 -- over uart0, which this tb deserializes and checks.
 --
 -- Instantiates entity work.soc(impl) directly (NOT pad_ring): soc(impl)'s
--- fl_miso/eth_miso ports have correct (in) direction; pad_ring's
--- soc_gen-generated pin_spi_miso_pin/pin_w5500_miso passthrough for the
--- config-flash pins is mis-directioned as `out` (a soc_gen bug -- see
--- task-8b-report.md), which would make it impossible for a tb to drive flash
--- data back into the design through pad_ring's boundary. soc(impl) avoids
--- that entirely and is otherwise the same instance pad_ring wraps.
+-- fl_miso port has the correct (in) direction, while pad_ring's
+-- soc_gen-generated pin_spi_miso_pin passthrough for the config-flash pins is
+-- mis-directioned as `out` (soc_gen infers a direction from ice_spi_io's
+-- uniformly `inout` pin_* ports; synth.sh step 2b patches it post-regen).
+-- That would make it impossible for a tb to drive flash data back into the
+-- design through pad_ring's boundary. soc(impl) avoids the problem entirely
+-- and is otherwise the same instance pad_ring wraps.
 --
 -- The flash-slave behavioral model (Fast-Read 0x0B: cmd+3-byte addr+8 dummy
 -- clocks, then auto-incrementing MSB-first streaming while CS stays low) is
