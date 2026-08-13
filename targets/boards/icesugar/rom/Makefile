@@ -7,11 +7,18 @@ CROSS_COMPILE ?= sh2-elf-
 CC      := $(CROSS_COMPILE)gcc
 OBJCOPY := $(CROSS_COMPILE)objcopy
 
-CFLAGS  := -m2 -mb -Os -ffreestanding -fno-builtin -nostdlib -Wall
+CFLAGS  := -m2 -mb -Os -ffreestanding -fno-builtin -nostdlib -Wall -I. -I..
 LDSCRIPT := icesugar.ld
 
-boot.elf: start.S banner.c $(LDSCRIPT)
-	$(CC) $(CFLAGS) -T $(LDSCRIPT) -o $@ start.S banner.c
+# start.S cannot #include "board.h" itself (the assembler only runs the
+# preprocessor, not a C parser, and board.h's struct declarations are plain
+# C -- see start.S). Derive the one macro it needs from the generated
+# board.h instead, so device presence still has a single source of truth.
+ASFLAGS := $(CFLAGS) $(shell grep -q '^#define DEVICE_AIC0_ADDR' ../board.h && echo -DDEVICE_AIC0_ADDR=1)
+
+boot.elf: start.S banner.c $(LDSCRIPT) ../board.h
+	$(CC) $(ASFLAGS) -c start.S -o start.o
+	$(CC) $(CFLAGS) -T $(LDSCRIPT) -o $@ start.o banner.c
 
 boot.bin: boot.elf
 	$(OBJCOPY) -O binary $< $@
@@ -19,4 +26,4 @@ boot.bin: boot.elf
 all: boot.bin
 
 clean:
-	rm -f boot.elf boot.bin
+	rm -f boot.elf boot.bin start.o

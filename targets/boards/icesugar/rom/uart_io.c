@@ -43,28 +43,32 @@ char uart_getc(void)
 
 #else /* target */
 
-#define UART_DATA   (*(volatile unsigned int *)0xABCD0100u)  /* a(3)=0 */
-#define UART_STATUS (*(volatile unsigned int *)0xABCD0108u)  /* a(3)=1 */
+#include "board.h"
+
 #define TX_FULL     (1u << 3)
 #define RX_VALID    (1u << 0)
 
+/* uartlitedb decodes on a(3): rx/tx (+0x0/+0x4) both select the data
+   register and status/ctrl (+0x8/+0xc) both select the status register --
+   a byte store would land in d(31:24) on the big-endian SH-2, so all
+   accesses are 32-bit. */
 void uart_putc(char c)
 {
-	while (UART_STATUS & TX_FULL)
+	while (DEVICE_UART0->status & TX_FULL)
 		;
-	UART_DATA = (unsigned int)(unsigned char)c;
+	DEVICE_UART0->tx = (unsigned int)(unsigned char)c;
 }
 
 int uart_rx_ready(void)
 {
-	return (UART_STATUS & RX_VALID) ? 1 : 0;
+	return (DEVICE_UART0->status & RX_VALID) ? 1 : 0;
 }
 
 char uart_getc(void)
 {
-	while (!(UART_STATUS & RX_VALID))
+	while (!(DEVICE_UART0->status & RX_VALID))
 		;
-	return (char)(UART_DATA & 0xFFu);
+	return (char)(DEVICE_UART0->rx & 0xFFu);
 }
 
 #endif /* HOST_TEST */

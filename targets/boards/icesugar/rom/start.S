@@ -1,5 +1,11 @@
 	! SH-2 reset: word 0 = initial PC, word 1 = initial SP. All memory is
 	! on-chip EBR (2 KiB) at 0x0; the stack starts at the top of it.
+! DEVICE_AIC0_ADDR is passed on the command line (see rom/Makefile), derived
+! from ../board.h, rather than #include "board.h" directly: board.h's struct
+! declarations are plain C and the assembler (unlike the C compiler) does not
+! parse C syntax at all, only run the preprocessor -- #including the whole
+! header here would dump raw C struct text into the .s output.
+
 	.section .vectors, "ax"
 	.global _vectors
 _vectors:
@@ -29,7 +35,11 @@ _vectors:
 ! SQW tick) is a live source, so index 0 IS the tick ISR. The remaining entries
 ! are a harmless rte stub, kept only so an errant read near VBR lands safely.
 _int_vector_table:
+#ifdef DEVICE_AIC0_ADDR
 	.long _aic_isr         ! 0: the single interrupt entry point (VBR+0)
+#else
+	.long _spurious_isr    ! 0: no aic0 on this SoC -- nothing ever vectors here
+#endif
 	.irp idx, 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
 	.long _spurious_isr
 	.endr
@@ -75,6 +85,7 @@ _spurious_isr:
 ! corrupts whatever was running (this was the original interrupt-hang bug). The
 ! AIC edge-detect latch is cleared automatically by the CPU's event_i.ack
 ! handshake during interrupt entry -- no explicit aic write needed to re-arm.
+#ifdef DEVICE_AIC0_ADDR
 	.align 2
 	.global _aic_isr
 _aic_isr:
@@ -110,3 +121,4 @@ _enable_interrupts:
 	.align 2
 vbr_table_addr: .long _int_vector_table
 sr_imask_clear: .long 0xffffff0f
+#endif /* DEVICE_AIC0_ADDR */
