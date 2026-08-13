@@ -33,6 +33,19 @@ volatile unsigned int irq_tick_count;
 extern void enable_interrupts(void);
 #endif /* DEVICE_AIC0_ADDR */
 
+#if defined(DEVICE_AIC0_ADDR) || defined(DEVICE_I2C_ADDR)
+static void puthex4(unsigned int v)
+{
+	uart_putc("0123456789ABCDEF"[v & 0xFu]);
+}
+
+static void puthex8(unsigned char v)
+{
+	puthex4(v >> 4);
+	puthex4(v);
+}
+#endif
+
 #ifdef DEVICE_I2C_ADDR
 /* i2c @ 0xABCD0300 (DEVICE_I2C_ADDR in board.h): 2-bit tristate gpio2 driving
    a DS3231 RTC open-drain over SCL(bit0)/SDA(bit1) (jcore,gpio2 'i2c'
@@ -234,19 +247,6 @@ static void ds3231_init(void)
 	uart_puts(match ? " DS3231 PASS\r\n" : " DS3231 FAIL\r\n");
 }
 #endif /* DEVICE_I2C_ADDR */
-
-#if defined(DEVICE_AIC0_ADDR) || defined(DEVICE_I2C_ADDR)
-static void puthex4(unsigned int v)
-{
-	uart_putc("0123456789ABCDEF"[v & 0xFu]);
-}
-
-static void puthex8(unsigned char v)
-{
-	puthex4(v >> 4);
-	puthex4(v);
-}
-#endif
 
 #define SPRAM_BASE  0x10000000u
 #define SPRAM_WORDS (128u*1024u/4u)   /* 32768 words */

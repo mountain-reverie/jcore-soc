@@ -69,9 +69,12 @@ func main() {
 		if strings.Contains(line, "CMK DONE") {
 			r, perr := ParseRecord(record)
 			if perr != nil {
+				// The board runs CoreMark exactly once per reset (see
+				// vendor/core_main.c) and does not re-arm, so there is no
+				// second "CMK READY" coming on this connection -- waiting
+				// out the deadline here would just be a slow way to fail.
 				fmt.Fprintln(os.Stderr, "malformed record:", perr)
-				armed = false // re-arm for the board's next attempt
-				continue
+				os.Exit(1)
 			}
 			if verr := validate(r, uint16(*expectCRC)); verr != nil {
 				// A well-formed result with the wrong CRC is a definite

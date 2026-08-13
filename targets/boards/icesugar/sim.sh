@@ -74,11 +74,12 @@ source targets/boards/icesugar/filelist.sh   # defines FILES=( ... )
 # touches this file.
 # sb_io_sim.vhd: sim-only iCE40 SB_IO model (tristate/open-drain), needed to
 # bind ice_i2c_io's unbound SB_IO instances for the bit-banged DS3231 I2C.
-# ds3231_model.vhd: sim-only behavioral I2C slave (the DS3231 RTC) hooked
-# onto pad_ring's pin_i2c_scl/pin_i2c_sda in the testbench below. Neither is
-# in the synth filelist -- synthesis maps SB_IO to the real cell and there is
-# no DS3231 model to synthesize.
-FILES=( components/cpu/core/sb_mac16_sim.vhd components/memory/sb_spram256ka_sim.vhd components/emac/sb_pll40_2_pad_sim.vhd components/emac/sb_io_sim.vhd components/misc/ds3231_model.vhd "${FILES[@]}" )
+# It is not in the synth filelist -- synthesis maps SB_IO to the real cell.
+# ds3231_model.vhd (the sim-only behavioral I2C slave for the DS3231 RTC) is
+# NOT analysed here: this board has no I2C device/testbench wiring it up
+# (the testbench that once hooked it onto pin_i2c_scl/pin_i2c_sda is gone).
+# The model file itself is left in the tree.
+FILES=( components/cpu/core/sb_mac16_sim.vhd components/memory/sb_spram256ka_sim.vhd components/emac/sb_pll40_2_pad_sim.vhd components/emac/sb_io_sim.vhd "${FILES[@]}" )
 ghdl -a --std=93 -fexplicit -fsynopsys -C --workdir="$WORK" "${FILES[@]}"
 ghdl -e --std=93 -fexplicit -fsynopsys -C --syn-binding --workdir="$WORK" pad_ring
 echo "pad_ring elaborated OK"

@@ -24,8 +24,11 @@ Original Author: Shay Gal-on
 /* jcore: uart handshake --- BEGIN
    Declares wait_for_go(), gated on the host's 'g' trigger byte, so this
    board's coremark.elf follows the same run-on-command handshake as
-   cosim_main.c (see core_portme.c:portme_finish() / report_result()). */
-#include "uart_io.h"
+   cosim_main.c (see core_portme.c:portme_finish() / report_result()).
+   wait_for_go() is declared in coremark_result.h, not uart_io.h -- it is a
+   CoreMark-level protocol symbol defined in uart_report.c, which this
+   image links (unlike e.g. rom/banner.c, which links uart_io.c alone). */
+#include "coremark_result.h"
 /* jcore: uart handshake --- END */
 
 /* Function: iterate
