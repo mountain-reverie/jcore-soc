@@ -3,11 +3,7 @@
    runs from on-chip inferred EBR. Kept tiny to fit the up5k EBR budget. */
 
 #include "board.h"
-
-/* uartlitedb: DEVICE_UART0->tx/->status. a(3) decodes data (+0x0/+0x4) vs
-   status/ctrl (+0x8/+0xc); byte stores would land in d(31:24) on the
-   big-endian SH-2, so all UART writes are 32-bit. */
-#define TX_FULL     (1u << 3)
+#include "uart_io.h"
 
 /* gpio2: DEVICE_GPIO0->value / ->toggle drive the LEDs (jcore,gpio2). */
 
@@ -36,98 +32,6 @@ volatile unsigned int irq_tick_count;
    C name "enable_interrupts" is start.S's asm label "_enable_interrupts".) */
 extern void enable_interrupts(void);
 #endif /* DEVICE_AIC0_ADDR */
-
-static void putc_uart(char c)
-{
-	while (DEVICE_UART0->status & TX_FULL)
-		;
-	DEVICE_UART0->tx = (unsigned int)(unsigned char)c;   /* 32-bit store, see above */
-}
-
-static void puts_uart(const char *p)
-{
-	while (*p)
-		putc_uart(*p++);
-}
-
-/* eth @ 0xABCD1000 (DEVICE_ETH_ADDR in board.h): spi2 master driving a
-   W5500 (WIZ850io PMOD) over SPI. spi2 register semantics (confirmed
-   against components/misc/spi2.vhd):
-     ETH_CTRL (+0x0), write: bit0 = cs(0) (idle high=1; write 0 to assert
-       CS), bit1 = start_txn (write 1 to begin a byte transfer),
-       bit2 = cs(1) (unused, W5500 is cs(0) only).
-     ETH_CTRL (+0x0), read: bit0 = cs(0), bit1 = busy (1 while a byte
-       transfer is in progress).
-     ETH_DATA (+0x4), write: bits[7:0] = byte to shift out next transfer.
-     ETH_DATA (+0x4), read: bits[7:0] = byte shifted in during the last
-       transfer. */
-#define ETH_BASE   0xABCD1000u
-#define ETH_CTRL   (*(volatile unsigned int *)(ETH_BASE + 0x0u))
-#define ETH_DATA   (*(volatile unsigned int *)(ETH_BASE + 0x4u))
-#define ETH_CTRL_CS0    0x1u
-#define ETH_CTRL_START  0x2u
-#define ETH_CTRL_BUSY   0x2u
-
-static void spi_assert(void)
-{
-	ETH_CTRL = 0u;                 /* cs(0) = 0: assert CS (idle high) */
-}
-
-static void spi_deassert(void)
-{
-	ETH_CTRL = ETH_CTRL_CS0;       /* cs(0) = 1: deassert CS */
-}
-
-/* One SPI byte transfer; CS must already be asserted. */
-static unsigned char spi_byte(unsigned char txval)
-{
-	ETH_DATA = txval;
-	ETH_CTRL = ETH_CTRL_START;     /* cs(0)=0, start_txn=1 */
-	while (ETH_CTRL & ETH_CTRL_BUSY)
-		;
-	return (unsigned char)ETH_DATA;
-}
-
-/* W5500 common-block (BSB=0) register write, VDM (variable data length)
-   mode: 3-byte header (addr_hi, addr_lo, control) then n data bytes, all
-   under one CS assertion. control = 0x04 for a common-block write. */
-static void w5500_write(unsigned int addr, const unsigned char *buf, int n)
-{
-	int i;
-	spi_assert();
-	spi_byte((unsigned char)(addr >> 8));
-	spi_byte((unsigned char)(addr & 0xffu));
-	spi_byte(0x04u);
-	for (i = 0; i < n; i++)
-		spi_byte(buf[i]);
-	spi_deassert();
-}
-
-static void w5500_write8(unsigned int addr, unsigned char val)
-{
-	w5500_write(addr, &val, 1);
-}
-
-/* Reset the W5500 and program MAC/IP/subnet/gateway. Once these are set
-   (and MR.PB, the ping-block bit, is left 0) the chip auto-answers ARP and
-   ICMP echo entirely in hardware -- no CPU socket code needed. */
-static void w5500_init_ping(void)
-{
-	static const unsigned char shar[6] = { 0x02, 0x00, 0x00, 0x00, 0x00, 0x01 };
-	static const unsigned char sipr[4] = { 192, 168, 1, 10 };
-	static const unsigned char subr[4] = { 255, 255, 255, 0 };
-	static const unsigned char gar[4]  = { 192, 168, 1, 1 };
-	volatile unsigned int d;
-
-	w5500_write8(0x0000u, 0x80u);   /* MR.RST: software reset */
-	for (d = 0; d < 2000u; d++)
-		;                        /* let RST self-clear (datasheet: fast) */
-
-	w5500_write(0x0009u, shar, 6);  /* SHAR: source MAC */
-	w5500_write(0x000Fu, sipr, 4);  /* SIPR: source IP */
-	w5500_write(0x0005u, subr, 4);  /* SUBR: subnet mask */
-	w5500_write(0x0001u, gar, 4);   /* GAR: gateway */
-}
 
 #ifdef DEVICE_I2C_ADDR
 /* i2c @ 0xABCD0300 (DEVICE_I2C_ADDR in board.h): 2-bit tristate gpio2 driving
@@ -300,7 +204,7 @@ struct ds3231_time g_rtc_time;
 
 /* Program a known time (2024-01-02 03:04:05, BCD), read it back, and print
    a distinct PASS/FAIL line the testbench can look for -- the same pattern
-   banner.c already uses for the SPRAM memtest / W5500 programming. */
+   banner.c already uses for the SPRAM memtest. */
 static void ds3231_init(void)
 {
 	struct ds3231_time set;
@@ -323,18 +227,18 @@ static void ds3231_init(void)
 	         g_rtc_time.hour == set.hour && g_rtc_time.date == set.date &&
 	         g_rtc_time.month == set.month && g_rtc_time.year == set.year);
 
-	puts_uart("DS3231 time=");
+	uart_puts("DS3231 time=");
 	puthex8(g_rtc_time.year); puthex8(g_rtc_time.month);
 	puthex8(g_rtc_time.date); puthex8(g_rtc_time.hour);
 	puthex8(g_rtc_time.min); puthex8(g_rtc_time.sec);
-	puts_uart(match ? " DS3231 PASS\r\n" : " DS3231 FAIL\r\n");
+	uart_puts(match ? " DS3231 PASS\r\n" : " DS3231 FAIL\r\n");
 }
 #endif /* DEVICE_I2C_ADDR */
 
 #if defined(DEVICE_AIC0_ADDR) || defined(DEVICE_I2C_ADDR)
 static void puthex4(unsigned int v)
 {
-	putc_uart("0123456789ABCDEF"[v & 0xFu]);
+	uart_putc("0123456789ABCDEF"[v & 0xFu]);
 }
 
 static void puthex8(unsigned char v)
@@ -353,7 +257,7 @@ extern unsigned int _spram_load[], _spram_start[], _spram_end[];
 static void __attribute__((section(".spram"), noinline))
 spram_routine(void)
 {
-	puts_uart("FROM SPRAM\r\n");
+	uart_puts("FROM SPRAM\r\n");
 }
 
 /* Write a marching pattern across all 128 KB and read it back. Bounded so the
@@ -364,14 +268,14 @@ static void spram_memtest(void)
 	unsigned int i, bad = 0u;
 	for (i = 0u; i < SPRAM_WORDS; i++) p[i] = i * 2654435761u;   /* Knuth hash */
 	for (i = 0u; i < SPRAM_WORDS; i++) if (p[i] != i * 2654435761u) bad++;
-	puts_uart(bad ? "SPRAM MEMTEST FAIL\r\n" : "SPRAM MEMTEST OK\r\n");
+	uart_puts(bad ? "SPRAM MEMTEST FAIL\r\n" : "SPRAM MEMTEST OK\r\n");
 }
 
 void main(void)
 {
-	puts_uart("J1 on iCESugar: hello\r\n");
+	uart_puts("J1 on iCESugar: hello\r\n");
 	DEVICE_GPIO0->value = 0x01u;  /* light LED via gpio2 d_o(0) */
-	puts_uart("GPIO\r\n");
+	uart_puts("GPIO\r\n");
 
 	/* copy the .spram routine (LMA in EBR) up to SPRAM, then execute it there */
 	{
@@ -395,9 +299,9 @@ void main(void)
 	AIC0_ILEVELS = AIC0_ILEVEL1_MAX;  /* ilevel(1)=0xF: enable+prioritize irq_i(1) */
 	enable_interrupts();              /* VBR -> vector table, SR I-mask -> 0 */
 	{ volatile unsigned int d; for (d = 0; d < 4000u; d++) ; }  /* let SQW ticks fire */
-	puts_uart("AIC tick_count=");
+	uart_puts("AIC tick_count=");
 	puthex8((unsigned char)irq_tick_count);
-	puts_uart(irq_tick_count > 0u ? " AIC PASS\r\n" : " AIC FAIL\r\n");
+	uart_puts(irq_tick_count > 0u ? " AIC PASS\r\n" : " AIC FAIL\r\n");
 	/* The one-shot delivery test is done; disable irq_i(1) again so the sim
 	   model's artificially-fast SQW (10 us half-period, vs the DS3231's real
 	   1 Hz) does not storm the CPU with interrupts through the slow 128 KB
@@ -408,12 +312,7 @@ void main(void)
 
 	spram_memtest();     /* proves all 128 KB read/write */
 
-	w5500_init_ping();   /* reset + program MAC/IP/subnet/gateway; the W5500
-	                        then auto-answers ARP/ICMP entirely in hardware */
-	puts_uart("W5500 INIT OK\r\n");
-
-	/* visible heartbeat; nothing else to poll now the W5500 handles ARP/ICMP
-	   on its own once MAC/IP are programmed. */
+	/* visible heartbeat */
 	{
 		unsigned int hb = 0u;
 		for (;;) {
