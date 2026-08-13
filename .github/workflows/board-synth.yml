@@ -18,6 +18,37 @@ on:
     - cron: '17 3 * * *'
 
 jobs:
+  # Committed generated files must match what soc_gen produces from design.yaml.
+  # Every other job regenerates before it builds, so none of them ever compares
+  # against what is checked in -- which let targets/boards/icesugar/pad_ring.vhd
+  # keep declaring pin_i2c_pad0/pin_rtc_sqw for commits after 81313cb removed the
+  # padring entity and pin rules that produced them. The stale ports went
+  # unnoticed until a testbench that mapped them stopped elaborating. This job
+  # catches that drift at the commit that causes it.
+  socgen-drift:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # soc_gen reads the CPU sources to emit cpu_synth_files.list, so the
+          # cpu submodule has to be present for the regeneration to match.
+          submodules: recursive
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+      - name: Regenerate every board's SoC
+        run: make soc_gen
+      - name: Committed output must match design.yaml
+        run: |
+          if ! git diff --quiet -- targets/; then
+            echo "::error::Generated SoC files are stale -- they do not match design.yaml."
+            echo "Run 'make soc_gen' and commit the result. Drift below:"
+            git diff --stat -- targets/
+            git diff -- targets/
+            exit 1
+          fi
+          echo "Generated SoC files are up to date with design.yaml."
+
   metrics-tests:
     runs-on: ubuntu-24.04
     steps:
