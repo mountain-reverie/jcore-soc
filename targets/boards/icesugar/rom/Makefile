@@ -16,9 +16,9 @@ LDSCRIPT := icesugar.ld
 # board.h instead, so device presence still has a single source of truth.
 ASFLAGS := $(CFLAGS) $(shell grep -q '^#define DEVICE_AIC0_ADDR' ../board.h && echo -DDEVICE_AIC0_ADDR=1)
 
-boot.elf: start.S banner.c $(LDSCRIPT) ../board.h
+boot.elf: start.S banner.c uart_io.c uart_io.h $(LDSCRIPT) ../board.h
 	$(CC) $(ASFLAGS) -c start.S -o start.o
-	$(CC) $(CFLAGS) -T $(LDSCRIPT) -o $@ start.o banner.c
+	$(CC) $(CFLAGS) -T $(LDSCRIPT) -o $@ start.o banner.c uart_io.c -lgcc
 
 boot.bin: boot.elf
 	$(OBJCOPY) -O binary $< $@
