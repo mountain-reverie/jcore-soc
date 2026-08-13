@@ -1,15 +1,23 @@
 #!/usr/bin/env bash
-# Build the EBR boot image, analyze the iCESugar EBR-only J1 design under ghdl,
-# and run the top-level banner testbench (drive 12 MHz, decode ser_tx, assert
-# the boot banner). Full nextpnr synthesis is synth.sh.
+# Analyze the iCESugar J1 design under ghdl and run the end-to-end cosim.
+# Full nextpnr synthesis is synth.sh.
 #
-# Usage: sim.sh [banner|coremark]  (default: banner, the pre-existing flow)
-#   banner:   the flow below (icesugar_top_tb, EBR-boot banner/blink image).
-#   coremark: Task 8b end-to-end cosim -- build cosim.bin, generate the
-#             flash-slave model's payload package, analyze + run
-#             coremark_cosim_tb (flash-boot -> SPRAM -> CPU -> W5500 SEND).
+# Usage: sim.sh [coremark]   (coremark is the only mode, and the default)
+#   coremark: end-to-end cosim -- build cosim.bin, generate the flash-slave
+#             model's payload package, analyze + run coremark_cosim_tb
+#             (flash-boot -> SPRAM -> CPU execution -> UART result record).
+#
+# The former "banner" mode (icesugar_top_tb) was retired: it simulated an
+# EBR-only boot that this board no longer performs. design.yaml now selects
+# cpus_coremark, whose core0_rst is held until flash_boot_reader signals
+# boot_done (cpus_coremark.vhd), and that testbench connected no flash pins
+# and instantiated no flash model -- so core0 stayed in reset forever and the
+# testbench could never observe anything. It went unnoticed because its
+# ghdl --stop-time sat BELOW its own watchdog, so the run always ended
+# cleanly before the watchdog could assert. coremark_cosim_tb covers the real
+# boot path (flash -> SPRAM -> CPU -> UART) with an actual flash model.
 set -euo pipefail
-MODE="${1:-banner}"
+MODE="${1:-coremark}"
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 WORK="${WORK:-/tmp/icework}"
 cd "$ROOT"
@@ -93,14 +101,11 @@ if [ "$MODE" = "coremark" ]; then
       targets/boards/icesugar/tb/coremark_cosim_tb.vhd
   ghdl -e --std=93 -fexplicit -fsynopsys -C --syn-binding --workdir="$WORK" coremark_cosim_tb
   ghdl -r --std=93 -fexplicit -fsynopsys -C --syn-binding --workdir="$WORK" coremark_cosim_tb \
-      --stop-time=100ms --assert-level=error
+      --stop-time=200ms --assert-level=error
   exit 0
 fi
 
-# 4. top-level banner testbench: drive 12 MHz, decode ser_tx, assert the banner.
-echo "=== icesugar_top_tb ==="
-ghdl -a --std=93 -fexplicit -fsynopsys -C --workdir="$WORK" \
-    targets/boards/icesugar/tb/icesugar_top_tb.vhd
-ghdl -e --std=93 -fexplicit -fsynopsys -C --syn-binding --workdir="$WORK" icesugar_top_tb
-ghdl -r --std=93 -fexplicit -fsynopsys -C --syn-binding --workdir="$WORK" icesugar_top_tb \
-    --stop-time=210ms --assert-level=error
+# 4. No further testbench: the coremark cosim above is the end-to-end gate and
+# it exits directly. Reaching here means an unknown MODE was requested.
+echo "sim.sh: unknown mode '$MODE' (only 'coremark' is supported)" >&2
+exit 2
