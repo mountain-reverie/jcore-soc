@@ -1,4 +1,6 @@
-/* coremark_result.h -- shared board<->collector contract. Little-endian wire. */
+/* coremark_result.h -- internal result contract between core_portme.c's
+   portme_finish() and uart_report.c's emitter. The host-facing contract is
+   the "CMK key=value" text uart_report.c prints, not this struct. */
 #ifndef COREMARK_RESULT_H
 #define COREMARK_RESULT_H
 #include <stdint.h>
@@ -7,17 +9,6 @@
 #define CMK_FLASH_BASE    0x00100000u
 #define CMK_SPRAM_BASE    0x10000000u
 #define CMK_CLK_HZ        12000000u
-#define CMK_COLLECTOR_PORT 47000u
-
-/* Board network identity, reused verbatim from banner.c's hardware-tested
-   W5500 config (targets/boards/icesugar/rom/banner.c w5500_init_ping()) so
-   the board keeps a single network identity across banner and coremark
-   payloads. */
-#define CMK_BOARD_MAC     {0x02,0x00,0x00,0x00,0x00,0x01}
-#define CMK_BOARD_IP      {192,168,1,10}
-#define CMK_SUBNET        {255,255,255,0}
-#define CMK_GATEWAY       {192,168,1,1}
-#define CMK_COLLECTOR_IP  {192,168,1,1}   /* runner host = gateway; adjust here only */
 
 struct coremark_result {
   uint32_t magic;
