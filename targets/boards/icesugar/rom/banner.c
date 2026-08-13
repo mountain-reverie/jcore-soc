@@ -2,18 +2,16 @@
    blink the RGB LED via gpio2 d_o(0). No SDRAM, no interrupts -- everything
    runs from on-chip inferred EBR. Kept tiny to fit the up5k EBR budget. */
 
-/* uartlitedb @ 0xABCD0100: a(3)=0 selects data, a(3)=1 selects status.
-   (Matches the ULX3S banner: byte stores would land in d(31:24) on the
-   big-endian SH-2, so all UART writes are 32-bit.) */
-#define UART_DATA   (*(volatile unsigned int *)0xABCD0100u)  /* a(3)=0 */
-#define UART_STATUS (*(volatile unsigned int *)0xABCD0108u)  /* a(3)=1 */
+#include "board.h"
+
+/* uartlitedb: DEVICE_UART0->tx/->status. a(3) decodes data (+0x0/+0x4) vs
+   status/ctrl (+0x8/+0xc); byte stores would land in d(31:24) on the
+   big-endian SH-2, so all UART writes are 32-bit. */
 #define TX_FULL     (1u << 3)
 
-/* gpio2 @ 0xABCD0000: d_o -> LEDs (jcore,gpio2). */
-#define GPIO_BASE   0xABCD0000u
-#define GPIO_DATA   (*(volatile unsigned int *)(GPIO_BASE + 0x00u)) /* wr d_o */
-#define GPIO_TOGGLE (*(volatile unsigned int *)(GPIO_BASE + 0x08u)) /* XOR d_o */
+/* gpio2: DEVICE_GPIO0->value / ->toggle drive the LEDs (jcore,gpio2). */
 
+#ifdef DEVICE_AIC0_ADDR
 /* aic0 @ 0xABCD0200 (DEVICE_AIC0_ADDR in board.h): +0x08 is the "ilevels"
    register -- 8 x 4-bit interrupt-priority fields packed one per irq_i
    line, ilevel(7)[31:28] .. ilevel(0)[3:0] (see components/misc/aic.vhd's
@@ -37,12 +35,13 @@ volatile unsigned int irq_tick_count;
    (sh2-elf-gcc prefixes C symbols with an extra leading underscore, so this
    C name "enable_interrupts" is start.S's asm label "_enable_interrupts".) */
 extern void enable_interrupts(void);
+#endif /* DEVICE_AIC0_ADDR */
 
 static void putc_uart(char c)
 {
-	while (UART_STATUS & TX_FULL)
+	while (DEVICE_UART0->status & TX_FULL)
 		;
-	UART_DATA = (unsigned int)(unsigned char)c;   /* 32-bit store, see above */
+	DEVICE_UART0->tx = (unsigned int)(unsigned char)c;   /* 32-bit store, see above */
 }
 
 static void puts_uart(const char *p)
@@ -130,6 +129,7 @@ static void w5500_init_ping(void)
 	w5500_write(0x0001u, gar, 4);   /* GAR: gateway */
 }
 
+#ifdef DEVICE_I2C_ADDR
 /* i2c @ 0xABCD0300 (DEVICE_I2C_ADDR in board.h): 2-bit tristate gpio2 driving
    a DS3231 RTC open-drain over SCL(bit0)/SDA(bit1) (jcore,gpio2 'i2c'
    device; see components/misc/ice_i2c_io.vhd). No hardware I2C master --
@@ -298,17 +298,6 @@ static void ds3231_read_time(struct ds3231_time *t)
    here for inspection (e.g. by a debugger or a future SQW/AIC consumer). */
 struct ds3231_time g_rtc_time;
 
-static void puthex4(unsigned int v)
-{
-	putc_uart("0123456789ABCDEF"[v & 0xFu]);
-}
-
-static void puthex8(unsigned char v)
-{
-	puthex4(v >> 4);
-	puthex4(v);
-}
-
 /* Program a known time (2024-01-02 03:04:05, BCD), read it back, and print
    a distinct PASS/FAIL line the testbench can look for -- the same pattern
    banner.c already uses for the SPRAM memtest / W5500 programming. */
@@ -340,6 +329,20 @@ static void ds3231_init(void)
 	puthex8(g_rtc_time.min); puthex8(g_rtc_time.sec);
 	puts_uart(match ? " DS3231 PASS\r\n" : " DS3231 FAIL\r\n");
 }
+#endif /* DEVICE_I2C_ADDR */
+
+#if defined(DEVICE_AIC0_ADDR) || defined(DEVICE_I2C_ADDR)
+static void puthex4(unsigned int v)
+{
+	putc_uart("0123456789ABCDEF"[v & 0xFu]);
+}
+
+static void puthex8(unsigned char v)
+{
+	puthex4(v >> 4);
+	puthex4(v);
+}
+#endif
 
 #define SPRAM_BASE  0x10000000u
 #define SPRAM_WORDS (128u*1024u/4u)   /* 32768 words */
@@ -367,7 +370,7 @@ static void spram_memtest(void)
 void main(void)
 {
 	puts_uart("J1 on iCESugar: hello\r\n");
-	GPIO_DATA = 0x01u;            /* light LED via gpio2 d_o(0) */
+	DEVICE_GPIO0->value = 0x01u;  /* light LED via gpio2 d_o(0) */
 	puts_uart("GPIO\r\n");
 
 	/* copy the .spram routine (LMA in EBR) up to SPRAM, then execute it there */
@@ -377,9 +380,12 @@ void main(void)
 	}
 	spram_routine();     /* executes out of SPRAM -> prints "FROM SPRAM" */
 
+#ifdef DEVICE_I2C_ADDR
 	ds3231_init();       /* bit-banged I2C round trip to the DS3231 RTC (early:
 	                        keeps its sim assertion ahead of the slow memtest) */
+#endif
 
+#ifdef DEVICE_AIC0_ADDR
 	/* AIC interrupt test: enable aic0 irq_i(1) (the DS3231 SQW tick), install the
 	   vector table + unmask interrupts, let a few SQW edges fire, then report
 	   whether the ISR actually ran. Proves the AIC delivers an interrupt and
@@ -398,6 +404,7 @@ void main(void)
 	   memtest below. On real hardware the 1 Hz tick would simply be left
 	   enabled as the system time base. */
 	AIC0_ILEVELS = 0u;                 /* ilevel(1)=0: disable irq_i(1) */
+#endif
 
 	spram_memtest();     /* proves all 128 KB read/write */
 
@@ -413,7 +420,7 @@ void main(void)
 			volatile unsigned int d;
 			if (++hb >= 400u) {   /* ~0.5 s heartbeat at this spin length */
 				hb = 0u;
-				GPIO_TOGGLE = 0x01u;
+				DEVICE_GPIO0->toggle = 0x01u;
 			}
 			for (d = 0; d < 1500u; d++)
 				;
