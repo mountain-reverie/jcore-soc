@@ -1,122 +1,148 @@
 package main
 
 import (
-	"net"
+	"strings"
 	"testing"
-	"time"
 )
 
-func TestParseGolden(t *testing.T) {
-	b := make([]byte, 24)
-	// magic 'J','C','M','K'
-	copy(b, []byte{0x4A, 0x43, 0x4D, 0x4B})
-	b[16], b[17], b[18], b[19] = 0x10, 0x00, 0x00, 0x00 // cycles = 16
-	r, err := ParseResult(b)
+func TestParseRecordGolden(t *testing.T) {
+	lines := []string{
+		"CMK MAGIC=0x4b4d434a",
+		"CMK GITREV=0x01020304",
+		"CMK CRC=0x0000d340",
+		"CMK ITERATIONS=1000",
+		"CMK CYCLES=6629",
+		"CMK CLKHZ=12000000",
+	}
+	r, err := ParseRecord(lines)
 	if err != nil {
-		t.Fatalf("parse: %v", err)
+		t.Fatalf("ParseRecord: %v", err)
 	}
 	if r.Magic != Magic {
-		t.Fatalf("magic %#x", r.Magic)
+		t.Errorf("Magic: got %#x, want %#x", r.Magic, Magic)
 	}
-	if r.Cycles != 16 {
-		t.Fatalf("cycles %d", r.Cycles)
+	if r.GitRev != 0x01020304 {
+		t.Errorf("GitRev: got %#x, want %#x", r.GitRev, 0x01020304)
 	}
-}
-
-func TestParseShort(t *testing.T) {
-	if _, err := ParseResult(make([]byte, 10)); err == nil {
-		t.Fatal("expected short-packet error")
+	if r.CRC != 0xd340 {
+		t.Errorf("CRC: got %#x, want %#x", r.CRC, 0xd340)
 	}
-}
-
-func TestParseBadMagic(t *testing.T) {
-	if _, err := ParseResult(make([]byte, 24)); err == nil {
-		t.Fatal("expected bad-magic error")
+	if r.Iterations != 1000 {
+		t.Errorf("Iterations: got %d, want %d", r.Iterations, 1000)
 	}
-}
-
-func TestListenerReceivesGolden(t *testing.T) {
-	// Bind listener on ephemeral port
-	addr := net.UDPAddr{Port: 0, IP: net.IPv4(127, 0, 0, 1)}
-	listener, err := net.ListenUDP("udp", &addr)
-	if err != nil {
-		t.Fatalf("listen: %v", err)
+	if r.Cycles != 6629 {
+		t.Errorf("Cycles: got %d, want %d", r.Cycles, 6629)
 	}
-	defer listener.Close()
-
-	// Set a 1-second read deadline
-	listener.SetReadDeadline(time.Now().Add(1 * time.Second))
-
-	// Create a golden packet
-	goldenPacket := make([]byte, 24)
-	copy(goldenPacket, []byte{0x4A, 0x43, 0x4D, 0x4B})                      // magic
-	goldenPacket[4], goldenPacket[5], goldenPacket[6], goldenPacket[7] = 0xAB, 0xCD, 0xEF, 0x00 // GitRev
-	goldenPacket[8], goldenPacket[9] = 0x12, 0x34                            // CRC
-	goldenPacket[12], goldenPacket[13], goldenPacket[14], goldenPacket[15] = 0x78, 0x56, 0x34, 0x12 // Iterations
-	goldenPacket[16], goldenPacket[17], goldenPacket[18], goldenPacket[19] = 0x10, 0x00, 0x00, 0x00 // Cycles = 16
-	goldenPacket[20], goldenPacket[21], goldenPacket[22], goldenPacket[23] = 0x00, 0xE1, 0xF5, 0x05 // ClkHz = 100MHz
-
-	// Send packet from another UDP socket
-	sender, err := net.DialUDP("udp", nil, listener.LocalAddr().(*net.UDPAddr))
-	if err != nil {
-		t.Fatalf("dial: %v", err)
-	}
-	defer sender.Close()
-
-	_, err = sender.Write(goldenPacket)
-	if err != nil {
-		t.Fatalf("write: %v", err)
-	}
-
-	// Read from listener
-	buf := make([]byte, 64)
-	n, _, err := listener.ReadFromUDP(buf)
-	if err != nil {
-		t.Fatalf("read: %v", err)
-	}
-
-	// Parse the received packet
-	r, err := ParseResult(buf[:n])
-	if err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-
-	// Verify parsed result
-	if r.Magic != Magic {
-		t.Errorf("magic: got %#x, want %#x", r.Magic, Magic)
-	}
-	if r.GitRev != 0x00EFCDAB {
-		t.Errorf("GitRev: got %#x, want %#x", r.GitRev, 0x00EFCDAB)
-	}
-	if r.CRC != 0x3412 {
-		t.Errorf("CRC: got %#x, want %#x", r.CRC, 0x3412)
-	}
-	if r.Iterations != 0x12345678 {
-		t.Errorf("Iterations: got %#x, want %#x", r.Iterations, 0x12345678)
-	}
-	if r.Cycles != 16 {
-		t.Errorf("Cycles: got %d, want %d", r.Cycles, 16)
-	}
-	if r.ClkHz != 0x05f5e100 {
-		t.Errorf("ClkHz: got %#x, want %#x", r.ClkHz, 0x05f5e100)
+	if r.ClkHz != 12000000 {
+		t.Errorf("ClkHz: got %d, want %d", r.ClkHz, 12000000)
 	}
 }
 
-func TestParseZeroCycle(t *testing.T) {
-	// Test that ParseResult successfully parses a packet with Cycles=0
-	// (it parses fine, but main.go guards against accepting it as a valid result)
-	b := make([]byte, 24)
-	copy(b, []byte{0x4A, 0x43, 0x4D, 0x4B})
-	b[16], b[17], b[18], b[19] = 0x00, 0x00, 0x00, 0x00 // cycles = 0
-	r, err := ParseResult(b)
+func TestParseRecordCRCNotTruncated(t *testing.T) {
+	// CMK CRC=0x0000d340 must parse to exactly 0xd340, not truncated
+	// (e.g. by taking only the low byte) and not sign-extended.
+	lines := []string{
+		"CMK MAGIC=0x4b4d434a",
+		"CMK GITREV=0x01020304",
+		"CMK CRC=0x0000d340",
+		"CMK ITERATIONS=1000",
+		"CMK CYCLES=6629",
+		"CMK CLKHZ=12000000",
+	}
+	r, err := ParseRecord(lines)
 	if err != nil {
-		t.Fatalf("parse: %v", err)
+		t.Fatalf("ParseRecord: %v", err)
 	}
-	if r.Cycles != 0 {
-		t.Fatalf("expected Cycles=0, got %d", r.Cycles)
+	if r.CRC != 0xd340 {
+		t.Fatalf("CRC: got %#04x, want %#04x", r.CRC, 0xd340)
 	}
-	// Verify that the result would be invalid (division by zero protection in main.go guard)
-	// The collector's main() function checks if r.Cycles == 0 and continues to ignore the packet
+}
+
+func TestParseRecordMissingField(t *testing.T) {
+	lines := []string{
+		"CMK MAGIC=0x4b4d434a",
+		"CMK GITREV=0x01020304",
+		// CRC missing
+		"CMK ITERATIONS=1000",
+		"CMK CYCLES=6629",
+		"CMK CLKHZ=12000000",
+	}
+	_, err := ParseRecord(lines)
+	if err == nil {
+		t.Fatal("expected error for missing CRC field")
+	}
+	if !strings.Contains(strings.ToUpper(err.Error()), "CRC") {
+		t.Errorf("error should name the missing field CRC, got: %v", err)
+	}
+}
+
+func TestParseRecordMalformedHex(t *testing.T) {
+	lines := []string{
+		"CMK MAGIC=0x4b4d434a",
+		"CMK GITREV=0x01020304",
+		"CMK CRC=0xZZZZ",
+		"CMK ITERATIONS=1000",
+		"CMK CYCLES=6629",
+		"CMK CLKHZ=12000000",
+	}
+	if _, err := ParseRecord(lines); err == nil {
+		t.Fatal("expected error for malformed hex value")
+	}
+}
+
+func TestParseRecordUnknownFieldIgnored(t *testing.T) {
+	lines := []string{
+		"CMK MAGIC=0x4b4d434a",
+		"CMK GITREV=0x01020304",
+		"CMK CRC=0x0000d340",
+		"CMK FOO=1",
+		"CMK ITERATIONS=1000",
+		"CMK CYCLES=6629",
+		"CMK CLKHZ=12000000",
+	}
+	r, err := ParseRecord(lines)
+	if err != nil {
+		t.Fatalf("ParseRecord: %v", err)
+	}
+	if r.Cycles != 6629 {
+		t.Errorf("Cycles: got %d, want %d", r.Cycles, 6629)
+	}
+}
+
+func TestParseRecordInterleavedNoise(t *testing.T) {
+	lines := []string{
+		"boot: hello world",
+		"CMK MAGIC=0x4b4d434a",
+		"some debug noise here",
+		"CMK GITREV=0x01020304",
+		"CMK CRC=0x0000d340",
+		"CMK ITERATIONS=1000",
+		"more noise",
+		"CMK CYCLES=6629",
+		"CMK CLKHZ=12000000",
+		"CMK DONE",
+	}
+	r, err := ParseRecord(lines)
+	if err != nil {
+		t.Fatalf("ParseRecord: %v", err)
+	}
+	if r.Cycles != 6629 {
+		t.Errorf("Cycles: got %d, want %d", r.Cycles, 6629)
+	}
+}
+
+func TestParseRecordZeroCyclesRejected(t *testing.T) {
+	lines := []string{
+		"CMK MAGIC=0x4b4d434a",
+		"CMK GITREV=0x01020304",
+		"CMK CRC=0x0000d340",
+		"CMK ITERATIONS=1000",
+		"CMK CYCLES=0",
+		"CMK CLKHZ=12000000",
+	}
+	if _, err := ParseRecord(lines); err == nil {
+		t.Fatal("expected error for Cycles=0")
+	}
 }
 
 func TestValidateCRCMismatchRejected(t *testing.T) {
