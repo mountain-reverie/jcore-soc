@@ -97,8 +97,6 @@ FILES+=(
   components/misc/bus_mux_pkg.vhd
   components/misc/multi_master_bus_mux.vhd
   components/misc/gpio2.vhd
-  # W5500 Ethernet over SPI (spi device class).
-  components/misc/spi2.vhd
   # Free-running 32-bit read-only cycle counter (cycle_counter device class).
   components/misc/cycle_counter.vhd
   # Second, hand-maintained cpus architecture kept analyzable alongside the
