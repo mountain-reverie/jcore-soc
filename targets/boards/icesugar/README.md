@@ -141,7 +141,9 @@ docker run --rm \
 The board has no Ethernet. The iCELink USB interface exposes a serial port that
 stays connected while the bitstream is flashed over the same cable, so one
 bidirectional UART carries both the human-facing console and the machine-facing
-result channel — no PMOD, no network identity, no collector process.
+result channel — no PMOD or network identity to manage, unlike the earlier
+W5500/UDP path; `tools/coremark-collector` still exists to speak this
+protocol, it just reads a serial port instead of a socket.
 
 **Device**: `uartlite` (`class: uartlite`, name `uart0`) at `0xABCD0100`,
 115200 8N1 from the 12 MHz `clk_sys`, with `rx_enable: true` and 1-deep FIFOs
@@ -162,15 +164,18 @@ board -> host : "CMK MAGIC=0x..."  one key=value line per field
                 "CMK ITERATIONS=..."
                 "CMK CYCLES=..."
                 "CMK CLKHZ=..."
-                "CMK DONE"         end of record; board returns to CMK READY
+                "CMK DONE"         end of record; board parks (reset for another run)
 ```
 
 Lines are CRLF-terminated. Hex fields are `0x` + 8 zero-padded lowercase
 digits (fixed width, so a parser never guesses); decimal fields are unpadded.
 `CMK DONE` terminates the record, so a host reads until it sees that line —
 there is no resend loop. Non-`g` bytes are discarded, so terminal noise cannot
-spuriously start a run, and the board re-arms after every record, so a script
-can trigger repeated runs without re-flashing.
+spuriously start a run. The board performs exactly **one run per reset**
+(matching `vendor/core_main.c`'s control flow: `wait_for_go()` runs once,
+then CoreMark's `main()` returns and the program parks) — it does not
+re-arm, so a further run needs a board reset (re-flash or power cycle), not
+a second trigger byte over the same connection.
 
 The CRC to check is CoreMark's **crcfinal** (`0xd340`), not `crclist`
 (`0xe714`).

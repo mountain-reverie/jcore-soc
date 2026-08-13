@@ -29,10 +29,6 @@ void uart_put_hex32(unsigned int v);
 /* Shortest decimal form, no padding; "0" for zero. */
 void uart_put_dec32(unsigned int v);
 
-/* Print "CMK READY" and block until the host sends 'g'; other bytes are
-   discarded. Defined in rom/coremark/uart_report.c. */
-void wait_for_go(void);
-
 #ifdef HOST_TEST
 /* Host-test capture/injection state (defined in uart_io.c under HOST_TEST). */
 extern char uart_host_tx[4096];

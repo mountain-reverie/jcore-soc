@@ -135,6 +135,9 @@ func parseDecimal(fields map[string]string, key string) (uint32, error) {
 // (or the wrong firmware/build parameters were flashed) -- this is the
 // board's primary purpose, so it must be a hard failure, not a skip.
 func validate(r Result, expectedCRC uint16) error {
+	if r.Magic != Magic {
+		return fmt.Errorf("MAGIC MISMATCH: got %#08x want %#08x", r.Magic, uint32(Magic))
+	}
 	if r.CRC != expectedCRC {
 		return fmt.Errorf("CRC MISMATCH: got %#04x want %#04x — candidate gcc miscompiled", r.CRC, expectedCRC)
 	}

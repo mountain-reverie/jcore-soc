@@ -148,6 +148,9 @@ begin
 
       if contains(buf, n, "CMK READY") and not ready_seen then
         report "diag: CMK READY seen at " & time'image(now) severity note;
+        assert not contains(buf, n, "CMK MAGIC")
+          report "Test Failed: result record appeared before the 'g' trigger was sent"
+          severity error;
         ready_seen <= true;
       end if;
 

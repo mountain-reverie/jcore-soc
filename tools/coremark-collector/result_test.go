@@ -162,6 +162,22 @@ func TestValidateCRCMismatchRejected(t *testing.T) {
 	}
 }
 
+func TestValidateMagicMismatchRejected(t *testing.T) {
+	// A well-formed, correct-CRC record with the wrong magic must still be
+	// rejected -- the magic is part of the contract, not decoration.
+	r := Result{
+		Magic:      0xdeadbeef, // deliberately wrong
+		GitRev:     0x1,
+		CRC:        ExpectedCRC,
+		Iterations: 1000,
+		Cycles:     16,
+		ClkHz:      100000000,
+	}
+	if err := validate(r, ExpectedCRC); err == nil {
+		t.Fatal("expected magic mismatch to be rejected, got nil error")
+	}
+}
+
 func TestValidateCRCMatchAccepted(t *testing.T) {
 	r := Result{
 		Magic:      Magic,

@@ -16,19 +16,29 @@ extern CORE_TICKS get_time(void);
 extern void portme_finish(unsigned short crc, unsigned int iterations,
                            CORE_TICKS cycles);
 
+/* 0xD340 stands in for CoreMark's crcfinal -- the cosim proves the plumbing
+   (wait_for_go -> timing -> portme_finish -> uart_report.c's emitter), not
+   the CRC; only coremark.bin computes the real value. */
+#define COSIM_FAKE_CRC 0xD340u
+
 int
 main(void)
 {
 	volatile unsigned int busy;
 
-	for (;;) {
-		wait_for_go();
+	/* One run per reset, matching vendor/core_main.c's shipping control
+	   flow: wait_for_go() runs exactly once, then the program parks. A
+	   for(;;) loop here would exercise a control-flow shape the real
+	   firmware never takes, so this gate wouldn't catch the divergence. */
+	wait_for_go();
 
-		start_time();
-		for (busy = 0; busy < 300; busy++)
-			;
-		stop_time();
+	start_time();
+	for (busy = 0; busy < 300; busy++)
+		;
+	stop_time();
 
-		portme_finish(0xD340, 1000, get_time());
-	}
+	portme_finish(COSIM_FAKE_CRC, 1000, get_time());
+
+	for (;;)
+		;
 }

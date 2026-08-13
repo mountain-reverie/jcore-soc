@@ -21,4 +21,12 @@ struct coremark_result {
 } __attribute__((packed));
 
 _Static_assert(sizeof(struct coremark_result) == 24, "result must be 24 bytes");
+
+/* Print "CMK READY" and block until the host sends 'g'; other bytes are
+   discarded. Defined in rom/coremark/uart_report.c -- declared here (not in
+   uart_io.h) because it is a CoreMark-level protocol symbol, only linked
+   into images that pull in the rom/coremark tree, not every uart_io.c consumer
+   (e.g. rom/banner.c links uart_io.c without uart_report.c). */
+void wait_for_go(void);
+
 #endif
