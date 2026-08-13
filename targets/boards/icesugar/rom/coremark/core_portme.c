@@ -144,8 +144,8 @@ abort(void)
    authoritative: crcfinal (results[0].crc, the CRC CoreMark's own
    correctness check is based on), the iteration count actually run, and
    the elapsed cycle count for the timed region. Packs the wire-format
-   struct coremark_result and hands it to report_result(); Task 6 replaces
-   the weak no-op below with the real W5500 emitter. */
+   struct coremark_result and hands it to report_result(); uart_report.c
+   replaces the weak no-op below with the real UART text emitter. */
 void
 portme_finish(ee_u16 crc, ee_u32 iterations, CORE_TICKS cycles)
 {
@@ -162,7 +162,7 @@ portme_finish(ee_u16 crc, ee_u32 iterations, CORE_TICKS cycles)
     report_result(&r);
 }
 
-/* weak: overridden by the eth_report.c emitter landing in Task 6 */
+/* weak: overridden by uart_report.c's UART text emitter */
 __attribute__((weak)) void
 report_result(struct coremark_result *r)
 {
