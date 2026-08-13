@@ -9,8 +9,8 @@ use work.flash_image_pkg.all;
 -- flash_boot_reader streams the payload into SPRAM -> cpus_coremark
 -- releases core0 from reset once the stream completes -> the CPU executes
 -- cosim_main.c's main() (start_time/busy-wait/stop_time/portme_finish) out
--- of SPRAM -> eth_report.c's report_result() drives the spi2 'eth' master
--- to program a W5500-model socket 0 and SEND a 24-byte result struct.
+-- of SPRAM -> uart_report.c's report_result() prints the CMK result record
+-- over uart0, which this tb deserializes and checks.
 --
 -- Instantiates entity work.soc(impl) directly (NOT pad_ring): soc(impl)'s
 -- fl_miso/eth_miso ports have correct (in) direction; pad_ring's
@@ -31,6 +31,8 @@ entity coremark_cosim_tb is end entity;
 architecture sim of coremark_cosim_tb is
   constant CLK_PER    : time := 1 sec / 12_000_000;  -- 12 MHz oscillator
   constant FLASH_BASE : std_logic_vector(23 downto 0) := x"100000";
+  constant BIT_PER    : time := 1 sec / 115200;   -- 8N1 @115200 from 12 MHz clk
+  constant CR         : character := character'val(13);
 
   signal clk   : std_logic := '0';
   signal reset : std_logic := '1';
@@ -39,40 +41,10 @@ architecture sim of coremark_cosim_tb is
   signal fl_cs_n, fl_sck, fl_mosi : std_logic;
   signal fl_miso : std_logic := '0';
 
-  signal eth_clk  : std_logic;
-  signal eth_cs   : std_logic_vector(1 downto 0);
-  signal eth_mosi : std_logic;
-  signal eth_miso : std_logic := '0';
-
   signal gpio_do  : std_logic_vector(2 downto 0);
   signal uart0_tx : std_logic;
-
-  signal shar_out : std_logic_vector(47 downto 0);
-  signal sipr_out : std_logic_vector(31 downto 0);
-  signal sock0_tx_bytes : std_logic_vector(191 downto 0);
-  signal sent : std_logic;
-
-  -- Expected wire-format 24-byte result struct (coremark_result.h /
-  -- eth_report.c's send_once, little-endian per field):
-  --   magic=CMK_MAGIC (0x4B4D434A), git_rev=build's GIT_REV (verified
-  --   separately, not byte-compared -- it's the git short hash, not a fixed
-  --   constant), crc=0xABCD, _pad=0, iterations=1000, cycles=(observed, not
-  --   fixed -- cyccnt delta of the busy-wait loop), clk_hz=CMK_CLK_HZ
-  --   (12000000 = 0x00B71B00).
-  constant EXP_MAGIC : std_logic_vector(31 downto 0) := x"4A434D4B"; -- LE(0x4B4D434A)
-  constant EXP_CRC   : std_logic_vector(15 downto 0) := x"CDAB";     -- LE(0xABCD)
-  constant EXP_PAD   : std_logic_vector(15 downto 0) := x"0000";
-  constant EXP_ITER  : std_logic_vector(31 downto 0) := x"E8030000"; -- LE(1000)
-  -- clk_hz field bytes in send order are LE(12000000) = 00,1B,B7,00; read as
-  -- the sock0_tx_bytes(31 downto 0) slice (byte20 in the MSB position) that is
-  -- 0x001BB700.
-  constant EXP_CLKHZ : std_logic_vector(31 downto 0) := x"001BB700";
-
-  -- byte k of sock0_tx_bytes (0 = first byte sent) is bits (191-8k downto 184-8k)
-  function byte_at(v : std_logic_vector(191 downto 0); k : integer) return std_logic_vector is
-  begin
-    return v(191 - k*8 downto 184 - k*8);
-  end function;
+  signal uart0_rx : std_logic := '1';
+  signal ready_seen : boolean := false;
 
   -- shared Fast-Read (0x0B) SPI-flash slave model, adapted from
   -- cpus_coremark_boot_tb.vhd's flash_slave to stream flash_image_pkg bytes.
@@ -109,21 +81,30 @@ architecture sim of coremark_cosim_tb is
     end loop;
   end procedure;
 
+  -- true when needle appears in haystack(1 to n)
+  function contains(haystack : string; n : integer; needle : string)
+    return boolean is
+  begin
+    if n < needle'length then return false; end if;
+    for i in 1 to n - needle'length + 1 loop
+      if haystack(i to i + needle'length - 1) = needle then
+        return true;
+      end if;
+    end loop;
+    return false;
+  end function;
+
 begin
   uut : entity work.soc(impl)
     port map (
       clk_sys  => clk,
-      eth_clk  => eth_clk,
-      eth_cs   => eth_cs,
-      eth_miso => eth_miso,
-      eth_mosi => eth_mosi,
       fl_cs_n  => fl_cs_n,
       fl_miso  => fl_miso,
       fl_mosi  => fl_mosi,
       fl_sck   => fl_sck,
       gpio_do  => gpio_do,
       reset    => reset,
-      uart0_rx => '1',
+      uart0_rx => uart0_rx,
       uart0_tx => uart0_tx
     );
 
@@ -135,19 +116,6 @@ begin
     wait;
   end process;
 
-  w5500 : entity work.w5500_model(sim)
-    port map (
-      clk            => clk,
-      spi_sclk       => eth_clk,
-      spi_mosi       => eth_mosi,
-      spi_miso       => eth_miso,
-      spi_cs         => eth_cs(0),
-      shar_out       => shar_out,
-      sipr_out       => sipr_out,
-      sock0_tx_bytes => sock0_tx_bytes,
-      sent           => sent
-    );
-
   stim : process begin
     reset <= '1';
     wait for CLK_PER * 4;
@@ -156,82 +124,106 @@ begin
     wait;
   end process;
 
-  -- Wait for the W5500 model's SEND pulse, then check the captured 24 bytes
-  -- against the fields we can predict at build time (magic/crc/_pad/
-  -- iterations/clk_hz). git_rev and cycles are runtime-dependent (git_rev is
-  -- the build's short hash baked in by the Makefile; cycles is the observed
-  -- cyccnt delta of the busy-wait loop) so those are reported, not
-  -- byte-compared against a fixed constant.
-  check : process
-    variable ok : boolean := true;
+  -- UART receiver: decode uart0_tx into a string, sampling at the bit centre,
+  -- LSB first, 8N1. Raises ready_seen for the stimulus process and checks the
+  -- result record once "CMK DONE" terminates it.
+  rx_mon : process
+    variable buf : string(1 to 2048) := (others => ' ');
+    variable n   : integer := 0;
+    variable b   : std_logic_vector(7 downto 0);
   begin
-    wait until sent = '1';
+    loop
+      wait until uart0_tx = '0';        -- start bit
+      wait for BIT_PER/2;
+      for k in 0 to 7 loop
+        wait for BIT_PER;
+        b(k) := uart0_tx;               -- LSB first
+      end loop;
+      wait for BIT_PER;                 -- stop bit
+      if n < buf'length then
+        n := n + 1;
+        buf(n) := character'val(to_integer(unsigned(b)));
+      end if;
 
-    report "coremark_cosim_tb: captured bytes 0..23:" severity note;
-    for k in 0 to 23 loop
-      report "  byte(" & integer'image(k) & ") = " &
-             integer'image(to_integer(unsigned(byte_at(sock0_tx_bytes, k))))
-        severity note;
+      if contains(buf, n, "CMK READY") and not ready_seen then
+        report "diag: CMK READY seen at " & time'image(now) severity note;
+        ready_seen <= true;
+      end if;
+
+      if contains(buf, n, "CMK DONE") then
+        report "coremark_cosim_tb: received text:" severity note;
+        report buf(1 to n) severity note;
+
+        assert contains(buf, n, "CMK MAGIC=0x4b4d434a")
+          report "Test Failed: magic line missing/incorrect" severity error;
+        -- 0xd340 is CoreMark's crcfinal -- NOT crclist (0xe714).
+        assert contains(buf, n, "CMK CRC=0x0000d340")
+          report "Test Failed: crc line missing/incorrect" severity error;
+        assert contains(buf, n, "CMK ITERATIONS=1000")
+          report "Test Failed: iterations line missing/incorrect" severity error;
+        assert contains(buf, n, "CMK CLKHZ=12000000")
+          report "Test Failed: clk_hz line missing/incorrect" severity error;
+        assert not contains(buf, n, "CMK CYCLES=0" & CR)
+          report "Test Failed: cycles field is zero (cycle counter not working)"
+          severity error;
+
+        report "Test Passed" severity note;
+        done <= true;
+        wait;
+      end if;
     end loop;
+  end process;
 
-    if sock0_tx_bytes(191 downto 160) /= EXP_MAGIC then
-      ok := false;
-      report "Test Failed: magic mismatch" severity error;
+  -- Stimulus: once the board announces readiness, shift the 'g' trigger byte
+  -- out on uart0_rx (8N1, LSB first) to start the run.
+  tx_stim : process
+    constant GO : std_logic_vector(7 downto 0) := x"67";  -- 'g'
+  begin
+    if not ready_seen then
+      wait until ready_seen;
     end if;
-    if sock0_tx_bytes(127 downto 112) /= EXP_CRC then
-      ok := false;
-      report "Test Failed: crc mismatch" severity error;
-    end if;
-    if sock0_tx_bytes(111 downto 96) /= EXP_PAD then
-      ok := false;
-      report "Test Failed: _pad mismatch" severity error;
-    end if;
-    if sock0_tx_bytes(95 downto 64) /= EXP_ITER then
-      ok := false;
-      report "Test Failed: iterations mismatch" severity error;
-    end if;
-    if sock0_tx_bytes(31 downto 0) /= EXP_CLKHZ then
-      ok := false;
-      report "Test Failed: clk_hz mismatch" severity error;
-    end if;
-    if unsigned(sock0_tx_bytes(63 downto 32)) = 0 then
-      ok := false;
-      report "Test Failed: cycles field is zero (cycle counter not working)" severity error;
-    end if;
-
-    if ok then
-      report "Test Passed" severity note;
-    else
-      assert false report "Test Failed" severity failure;
-    end if;
-    done <= true;
+    wait for BIT_PER;
+    uart0_rx <= '0';                    -- start bit
+    wait for BIT_PER;
+    for k in 0 to 7 loop
+      uart0_rx <= GO(k);                -- LSB first
+      wait for BIT_PER;
+    end loop;
+    uart0_rx <= '1';                    -- stop bit
+    report "diag: sent 'g' trigger at " & time'image(now) severity note;
     wait;
   end process;
 
   -- Diagnostics: observe flash-boot completion (fl_cs_n rising after the
-  -- streaming burst) and count W5500 SPI chip-selects so a timeout report can
-  -- distinguish "CPU never booted" from "CPU booted but never drove the eth".
+  -- streaming burst) and count UART tx start-bits so a timeout report can
+  -- distinguish "CPU never booted" from "CPU booted but never emitted UART".
   diag_boot : process begin
     wait until fl_cs_n = '1' and now > 1 us;
     report "diag: flash-boot burst complete (fl_cs_n rose) at " & time'image(now) severity note;
     wait;
   end process;
 
-  diag_eth : process
-    variable eth_frames : natural := 0;
+  diag_uart : process
+    variable chars : natural := 0;
   begin
     loop
-      wait until falling_edge(eth_cs(0));
-      eth_frames := eth_frames + 1;
-      if eth_frames <= 6 or (eth_frames mod 20) = 0 then
-        report "diag: eth SPI frame #" & integer'image(eth_frames) & " at " & time'image(now) severity note;
+      wait until uart0_tx = '0';
+      chars := chars + 1;
+      if chars <= 6 or (chars mod 40) = 0 then
+        report "diag: uart tx char #" & integer'image(chars) & " at " & time'image(now) severity note;
       end if;
+      wait for BIT_PER * 9;
     end loop;
   end process;
 
+  -- Watchdog is deliberately strictly below sim.sh's --stop-time=200ms (150ms
+  -- here) so the watchdog assertion always fires before GHDL's stop-time ends
+  -- the run cleanly. A watchdog >= stop-time makes the gate vacuous (GHDL
+  -- exits 0 before the assertion can ever trigger) -- that exact defect hid a
+  -- broken testbench on this board for months.
   watchdog : process begin
-    wait for 100 ms;
-    assert done report "Test Failed: TIMEOUT waiting for W5500 SEND" severity failure;
+    wait for 150 ms;
+    assert done report "Test Failed: TIMEOUT waiting for CMK DONE" severity failure;
     wait;
   end process;
 
