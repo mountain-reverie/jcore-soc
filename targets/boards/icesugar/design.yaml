@@ -44,11 +44,12 @@ devices:
     name: uart0
     base-addr: 0xabcd0100
     ports: { rx: uart0_rx, tx: uart0_tx }
-    # rx_enable=false: iCESugar's rom/banner.c only ever writes the UART
-    # (UART_DATA + TX_FULL poll) and its irq is unconnected (irq => open in
-    # devices.vhd) -- the RX FIFO/shifter/baud-rx and RX/timeout interrupt
-    # logic are dead weight here, so drop them to reclaim LCs on the up5k.
-    generics: { rx_fifo_len: 1, tx_fifo_len: 1, rx_enable: false }
+    # RX is enabled: the host handshake (rom/coremark/uart_report.c's
+    # wait_for_go) polls the RX register for the 'g' trigger byte, and the
+    # same UART carries the result record back. FIFOs stay 1 deep -- the
+    # protocol is one trigger byte in, one framed record out, so depth buys
+    # nothing and LCs are scarce on the up5k.
+    generics: { rx_fifo_len: 1, tx_fifo_len: 1, rx_enable: true }
   - class: gpio2
     name: gpio0
     base-addr: 0xabcd0000
@@ -58,14 +59,6 @@ devices:
     # register/mux/toggle/set/clear datapath lanes to reclaim LCs on the up5k.
     generics: { width: 3 }
     ports: { d_o: gpio_do, d_i: gpio_di }
-  # W5500 Ethernet controller (WIZ850io PMOD) driven over SPI. Replaces the
-  # PHY-less 10BASE-T eth: the W5500 does PHY+MAC+TCP/IP in silicon; the J1
-  # drives its registers via this spi master. num_cs=1 (single W5500).
-  - class: spi
-    name: eth
-    base-addr: 0xabcd1000
-    # spi2 requires NUM_CS in 2..5; the W5500 uses only cs(0), cs(1) is unused.
-    generics: { num_cs: 2 }
   - class: cycle_counter
     name: cyccnt
     base-addr: 0xabcd0200
@@ -89,11 +82,6 @@ pins:
     - { match: ledr_n, out: { name: "gpio_do(0)", invert: true } }
     - { match: ledg_n, out: { name: "gpio_do(1)", invert: true } }
     - { match: ledb_n, out: { name: "gpio_do(2)", invert: true } }
-    # W5500 SPI (WIZ850io PMOD) -- pin numbers to confirm vs iCESugar PMOD schematic.
-    - { match: w5500_sclk, signal: eth_clk }
-    - { match: w5500_mosi, signal: eth_mosi }
-    - { match: w5500_miso, signal: eth_miso }
-    - { match: w5500_cs, signal: "eth_cs(0)" }
     # Config-SPI flash pads (SG48 dedicated config pins). The spi_flash
     # padring-entity above (ice_spi_io/SB_IO) already produces pad-level
     # signals -- straight passthrough (buff: false), no additional IO
