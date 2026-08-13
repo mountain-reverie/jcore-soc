@@ -14,9 +14,9 @@ CC := $(CROSS_COMPILE)gcc
 OBJCOPY := $(CROSS_COMPILE)objcopy
 OBJDUMP := $(CROSS_COMPILE)objdump
 CFLAGS := -m2 -mb -O2 -ffreestanding -fno-builtin -nostdlib -Wall \
-          -I. -Ivendor -DITERATIONS=1000 -DGIT_REV=$(GIT_REV)
+          -I. -I.. -Ivendor -DITERATIONS=1000 -DGIT_REV=$(GIT_REV)
 LDSCRIPT := coremark.ld
-OBJS := crt0.o core_portme.o eth_report.o \
+OBJS := crt0.o core_portme.o uart_report.o uart_io.o \
         vendor/core_main.o vendor/core_list_join.o vendor/core_matrix.o \
         vendor/core_state.o vendor/core_util.o
 coremark.elf: $(OBJS) $(LDSCRIPT)
@@ -25,15 +25,16 @@ coremark.bin: coremark.elf
 	$(OBJCOPY) -O binary $< $@
 
 # cosim.bin: Task 8b GHDL end-to-end cosim payload. Links ONLY crt0 +
-# core_portme + eth_report + cosim_main (NOT the CoreMark vendor sources),
+# core_portme + uart_report + uart_io + cosim_main (NOT the CoreMark vendor sources),
 # reusing the same linker script/startup as the real coremark.bin so it
 # boots identically via flash_boot_reader -> SPRAM -> _start -> main.
-COSIM_OBJS := crt0.o core_portme.o eth_report.o cosim_main.o
+COSIM_OBJS := crt0.o core_portme.o uart_report.o uart_io.o cosim_main.o
 cosim.elf: $(COSIM_OBJS) $(LDSCRIPT)
 	$(CC) $(CFLAGS) -T $(LDSCRIPT) -o $@ $(COSIM_OBJS) -lgcc
 cosim.bin: cosim.elf
 	$(OBJCOPY) -O binary $< $@
 
+uart_io.o: ../uart_io.c ../uart_io.h ; $(CC) $(CFLAGS) -c -o $@ ../uart_io.c
 %.o: %.S ; $(CC) $(CFLAGS) -c -o $@ $<
 %.o: %.c ; $(CC) $(CFLAGS) -c -o $@ $<
 clean: ; rm -f *.o vendor/*.o *.elf *.bin
