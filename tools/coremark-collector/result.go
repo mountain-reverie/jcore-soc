@@ -1,15 +1,13 @@
 package main
 
 import (
-	"encoding/binary"
-	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 )
 
 const (
-	Magic         = 0x4B4D434A
-	CollectorPort = 47000
-	resultSize    = 24
+	Magic = 0x4B4D434A
 
 	// ExpectedCRC is the known-good CoreMark crcfinal for the exact
 	// firmware build parameters used by targets/boards/icesugar/rom/coremark:
@@ -49,23 +47,87 @@ type Result struct {
 	ClkHz      uint32
 }
 
-func ParseResult(b []byte) (Result, error) {
-	if len(b) < resultSize {
-		return Result{}, errors.New("short packet")
+// ParseRecord scans a set of lines (as accumulated from the board's serial
+// output between "CMK READY" and "CMK DONE") for the "CMK key=value" fields
+// that make up a complete CoreMark record. Non-"CMK " lines (console noise)
+// and unrecognized "CMK KEY=..." fields (forward compatibility with future
+// firmware) are ignored. All six known fields are required; Cycles == 0 is
+// rejected as an invalid (in-progress or corrupted) result.
+func ParseRecord(lines []string) (Result, error) {
+	fields := map[string]string{}
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		rest, ok := strings.CutPrefix(line, "CMK ")
+		if !ok {
+			continue // console noise
+		}
+		key, value, ok := strings.Cut(rest, "=")
+		if !ok {
+			continue // e.g. "CMK READY" / "CMK DONE", not a key=value field
+		}
+		fields[key] = value
 	}
-	le := binary.LittleEndian
-	r := Result{
-		Magic:      le.Uint32(b[0:]),
-		GitRev:     le.Uint32(b[4:]),
-		CRC:        le.Uint16(b[8:]),
-		Iterations: le.Uint32(b[12:]),
-		Cycles:     le.Uint32(b[16:]),
-		ClkHz:      le.Uint32(b[20:]),
+
+	magic, err := parseHex32(fields, "MAGIC")
+	if err != nil {
+		return Result{}, err
 	}
-	if r.Magic != Magic {
-		return Result{}, errors.New("bad magic")
+	gitrev, err := parseHex32(fields, "GITREV")
+	if err != nil {
+		return Result{}, err
 	}
-	return r, nil
+	crc, err := parseHex32(fields, "CRC")
+	if err != nil {
+		return Result{}, err
+	}
+	iterations, err := parseDecimal(fields, "ITERATIONS")
+	if err != nil {
+		return Result{}, err
+	}
+	cycles, err := parseDecimal(fields, "CYCLES")
+	if err != nil {
+		return Result{}, err
+	}
+	clkhz, err := parseDecimal(fields, "CLKHZ")
+	if err != nil {
+		return Result{}, err
+	}
+	if cycles == 0 {
+		return Result{}, fmt.Errorf("CMK CYCLES=0: invalid result")
+	}
+
+	return Result{
+		Magic:      magic,
+		GitRev:     gitrev,
+		CRC:        uint16(crc),
+		Iterations: iterations,
+		Cycles:     cycles,
+		ClkHz:      clkhz,
+	}, nil
+}
+
+func parseHex32(fields map[string]string, key string) (uint32, error) {
+	v, ok := fields[key]
+	if !ok {
+		return 0, fmt.Errorf("missing CMK %s field", key)
+	}
+	n, err := strconv.ParseUint(v, 0, 32)
+	if err != nil {
+		return 0, fmt.Errorf("CMK %s=%q: %w", key, v, err)
+	}
+	return uint32(n), nil
+}
+
+func parseDecimal(fields map[string]string, key string) (uint32, error) {
+	v, ok := fields[key]
+	if !ok {
+		return 0, fmt.Errorf("missing CMK %s field", key)
+	}
+	n, err := strconv.ParseUint(v, 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("CMK %s=%q: %w", key, v, err)
+	}
+	return uint32(n), nil
 }
 
 // validate checks a parsed, non-zero-cycle Result against the known-good
