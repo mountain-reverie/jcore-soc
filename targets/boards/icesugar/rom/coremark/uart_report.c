@@ -10,6 +10,17 @@
 #include "uart_io.h"
 #include "coremark_result.h"
 
+/* Announce readiness, then block until the host sends 'g'. Any other byte is
+ * discarded so terminal noise (a stray newline, a serial-port probe) cannot
+ * spuriously start a run. */
+void
+wait_for_go(void)
+{
+	uart_puts("CMK READY\r\n");
+	while (uart_getc() != 'g')
+		;
+}
+
 void
 report_result(struct coremark_result *r)
 {

@@ -21,6 +21,12 @@ Original Author: Shay Gal-on
    initial parameters, tun t he benchmark and report the results.
 */
 #include "coremark.h"
+/* jcore: uart handshake --- BEGIN
+   Declares wait_for_go(), gated on the host's 'g' trigger byte, so this
+   board's coremark.elf follows the same run-on-command handshake as
+   cosim_main.c (see core_portme.c:portme_finish() / report_result()). */
+#include "uart_io.h"
+/* jcore: uart handshake --- END */
 
 /* Function: iterate
         Run the benchmark for a specified number of iterations.
@@ -123,6 +129,12 @@ main(int argc, char *argv[])
 #if (MEM_METHOD == MEM_STACK)
     ee_u8 stack_memblock[TOTAL_DATA_SIZE * MULTITHREAD];
 #endif
+    /* jcore: wait for the host 'g' trigger --- BEGIN
+       Placed after declarations (C89) but before any other statement, so
+       this runs identically whichever main() signature MAIN_HAS_NOARGC
+       selected above. */
+    wait_for_go();
+    /* jcore: wait for the host 'g' trigger --- END */
     /* first call any initializations needed */
     portable_init(&(results[0].port), &argc, argv);
     /* First some checks to make sure benchmark will run ok */
