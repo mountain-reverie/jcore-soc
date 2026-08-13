@@ -10,18 +10,28 @@
 # WITH the config-flash MISO pad direction fix (synth.sh step 2b: soc_gen
 # infers pin_spi_miso_pin as an output since ice_spi_io's pin_* ports are
 # uniformly `inout`; corrected to `in` post-regen):
-# ICESTORM_LC 5105/5280 (97%, 175 LC margin), ICESTORM_RAM 17/30,
+# As measured by CI (the authoritative run of this gate):
+# ICESTORM_LC 5078/5280 (96%, 202 LC margin), ICESTORM_RAM 17/30,
 # ICESTORM_DSP 8/8 (SB_MAC16, J1 DSP multiplier), ICESTORM_SPRAM 4/4
-# (SB_SPRAM256KA, spram_128k), clk_sys Fmax 13.24 MHz (PASS at 12.00 MHz
+# (SB_SPRAM256KA, spram_128k), clk_sys Fmax 13.36 MHz (PASS at 12.00 MHz
 # constraint). Any regression pushing ICESTORM_LC over budget or missing
 # 12 MHz timing fails this gate.
 #
+# ABSOLUTE LC IS TOOLCHAIN-DEPENDENT -- compare like with like. The same tree
+# measures 5105/5280 at 13.24 MHz locally against CI's 5078 at 13.36. CI and
+# that local run used the SAME yosys (0.44, git sha1 80ba43d26), so the
+# netlist is identical and the difference is nextpnr LUT/FF packing, not
+# synthesis. Do not read a 20-30 LC move between a local run and a CI run as
+# a regression; re-measure on one toolchain before concluding anything.
+#
 # Measured, not predicted: dropping the W5500 spi2 master and enabling the
-# uart0 receiver moved LC 5093 -> 5105 (+12) and Fmax 14.05 -> 13.24. The
-# removed SPI master was worth roughly 116 LC and the RX FIFO/shifter/baud
-# logic costs roughly 128, so the exchange is very slightly net negative --
-# the opposite of the expectation going in. Recorded here so the next person
-# sizing a change against this budget starts from the real number.
+# uart0 receiver moved LC 5093 -> 5105 (+12) and Fmax 14.05 -> 13.24 --
+# both figures from the SAME local toolchain, master vs branch, so the delta
+# is meaningful even though the absolutes differ from CI's. The removed SPI
+# master was worth roughly 116 LC and the RX FIFO/shifter/baud logic costs
+# roughly 128, so the exchange came out slightly net negative -- the opposite
+# of the expectation going in. Recorded so the next person sizing a change
+# against this budget starts from real numbers rather than a guess.
 # Usage: fit_gate.sh <nextpnr.log> <bitstream-file>
 set -uo pipefail
 LOG="${1:?usage: fit_gate.sh <nextpnr.log> <bitstream-file>}"

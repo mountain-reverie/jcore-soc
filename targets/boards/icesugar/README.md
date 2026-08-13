@@ -187,10 +187,18 @@ and asserts on MAGIC/CRC/ITERATIONS/CLKHZ plus a non-zero cycle count.
 **Firmware**: `rom/uart_io.{c,h}` (shared TX/RX/formatting, host-testable under
 `-DHOST_TEST`), `rom/coremark/uart_report.c` (`report_result()` + `wait_for_go()`).
 
-**Fit**: `ICESTORM_LC 5105/5280` (175 LC free), `clk_sys` Fmax 13.24 MHz against
-the 12.00 MHz constraint. Measured, not predicted: dropping the W5500 SPI master
-and enabling the UART receiver moved LC 5093 -> 5105, i.e. **+12** — the RX
-FIFO/shifter/baud logic costs slightly more than the SPI master it replaced.
+**Fit** (as measured by CI, which runs `fit_gate.sh`): `ICESTORM_LC 5078/5280`
+(202 LC free), `clk_sys` Fmax 13.36 MHz against the 12.00 MHz constraint.
+
+Absolute LC is toolchain-dependent: the same tree measures `5105/5280` at
+13.24 MHz locally. Both used the same yosys (0.44, sha1 `80ba43d26`), so the
+netlist is identical and the gap is nextpnr LUT/FF packing — compare like with
+like before calling a 20-30 LC move a regression.
+
+Measured, not predicted: dropping the W5500 SPI master and enabling the UART
+receiver moved LC 5093 -> 5105 on one local toolchain, master vs branch, i.e.
+**+12** — the RX FIFO/shifter/baud logic costs slightly more than the SPI
+master it replaced.
 
 ## Known Constraints / Status
 
@@ -200,11 +208,12 @@ payload into SPRAM, the J1 executes it, announces `CMK READY`, waits for the
 host's `g`, and returns the full `CMK` result record over the UART. See the
 "UART console + CoreMark result channel" section above.
 
-**Fit status:** `ICESTORM_LC` **5105/5280 (97%, 175 LC free)**, `ICESTORM_RAM`
-17/30, `ICESTORM_DSP` 8/8, `ICESTORM_SPRAM` 4/4, `clk_sys` Fmax 13.24 MHz >=
-12 MHz (fit + timing OK, enforced by `fit_gate.sh`). The part is close to full;
-size any new feature against the 175 LC of headroom, not against the older
-figures quoted below.
+**Fit status (CI):** `ICESTORM_LC` **5078/5280 (96%, 202 LC free)**,
+`ICESTORM_RAM` 17/30, `ICESTORM_DSP` 8/8, `ICESTORM_SPRAM` 4/4, `clk_sys` Fmax
+13.36 MHz >= 12 MHz (fit + timing OK, enforced by `fit_gate.sh`). A local run of
+the same tree reports 5105 at 13.24 MHz — see the toolchain note above. The part
+is close to full; size any new feature against ~200 LC of headroom, not against
+the older figures quoted below.
 
 Retired: the EBR-boot banner testbench (`icesugar_top_tb`). It simulated a boot
 mode this board no longer performs -- `design.yaml` selects `cpus_coremark`,
