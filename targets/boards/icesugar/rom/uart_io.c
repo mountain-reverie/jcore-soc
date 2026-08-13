@@ -4,6 +4,8 @@
 #include "uart_io.h"
 
 #ifdef HOST_TEST
+#include <stdio.h>
+#include <stdlib.h>
 
 char uart_host_tx[4096];
 int uart_host_tx_n;
@@ -31,8 +33,11 @@ int uart_rx_ready(void)
 
 char uart_getc(void)
 {
-	if (!uart_rx_ready())
-		return 0;
+	if (!uart_rx_ready()) {
+		fprintf(stderr, "FATAL: uart_getc() called with empty RX queue; "
+				"test supplied insufficient input\n");
+		exit(1);
+	}
 	return host_rx[host_rx_head++];
 }
 
@@ -82,6 +87,7 @@ void uart_put_hex32(unsigned int v)
 
 void uart_put_dec32(unsigned int v)
 {
+	/* buf[10] sized for exactly 10 decimal digits (4294967295 = 2^32-1). */
 	char buf[10];
 	int n = 0;
 

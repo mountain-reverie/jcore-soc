@@ -54,6 +54,16 @@ int main(void)
 	check(uart_getc() == 'g', "getc returns pushed byte");
 	check(uart_rx_ready() == 0, "rx drains after getc");
 
+	/* RX: push N bytes, read exactly N bytes, queue drains to empty. */
+	uart_host_rx_push('A');
+	uart_host_rx_push('B');
+	uart_host_rx_push('C');
+	check(uart_rx_ready() == 1, "rx_ready after multiple pushes");
+	check(uart_getc() == 'A', "getc first byte");
+	check(uart_getc() == 'B', "getc second byte");
+	check(uart_getc() == 'C', "getc third byte");
+	check(uart_rx_ready() == 0, "queue empty after draining all bytes");
+
 	printf("uart_io OK\n");
 	return 0;
 }
