@@ -54,6 +54,11 @@ FILES=(
   $CPU/core/divider_pkg.vhd
   $CPU/$_CPU_SYNTH_DECODE_PKG
   $CPU/core/datapath_pkg.vhd
+  # tlb_walk: cpu.vhd instantiates work.tlb_walk directly inside the same
+  # PRIV_ARCH generate, so ghdl must analyse it before cpu.vhd for ALL
+  # variants -- the name is resolved at analysis time even when the
+  # generic is false. Must follow datapath_pkg.vhd (it uses datapath_pack).
+  $CPU/core/tlb_walk.vhd
   $CPU/core/cpu.vhd
   $CPU/core/mult.vhd
   $CPU/core/divider.vhd
