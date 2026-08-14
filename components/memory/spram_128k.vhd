@@ -33,6 +33,8 @@ architecture rtl of spram_128k is
   signal cs0, cs1 : std_logic;
   -- byte we -> nibble MASKWREN: byte0->MASKWREN(1:0), byte1->MASKWREN(3:2)
   signal mask_lo, mask_hi : std_logic_vector(3 downto 0);
+  -- per-half WREN: asserted only for an actual write to that half
+  signal wren_lo, wren_hi : std_logic;
   signal dout0_lo, dout0_hi, dout1_lo, dout1_hi : std_logic_vector(15 downto 0);
   signal bank_r : std_logic;
 begin
@@ -43,25 +45,31 @@ begin
   -- low half = bytes 0,1 ; high half = bytes 2,3
   mask_lo <= (we(1), we(1), we(0), we(0));
   mask_hi <= (we(3), we(3), we(2), we(2));
+  wren_lo <= we(0) or we(1);
+  wren_hi <= we(2) or we(3);
 
   -- Bank 0
   b0_lo : SB_SPRAM256KA port map (
-    DATAIN=>dw(15 downto 0), ADDRESS=>word_a, MASKWREN=>mask_lo, WREN=>en,
+    DATAIN=>dw(15 downto 0), ADDRESS=>word_a, MASKWREN=>mask_lo, WREN=>wren_lo,
     CHIPSELECT=>cs0, CLOCK=>clk, STANDBY=>'0', SLEEP=>'0', POWEROFF=>'1', DATAOUT=>dout0_lo);
   b0_hi : SB_SPRAM256KA port map (
-    DATAIN=>dw(31 downto 16), ADDRESS=>word_a, MASKWREN=>mask_hi, WREN=>en,
+    DATAIN=>dw(31 downto 16), ADDRESS=>word_a, MASKWREN=>mask_hi, WREN=>wren_hi,
     CHIPSELECT=>cs0, CLOCK=>clk, STANDBY=>'0', SLEEP=>'0', POWEROFF=>'1', DATAOUT=>dout0_hi);
   -- Bank 1
   b1_lo : SB_SPRAM256KA port map (
-    DATAIN=>dw(15 downto 0), ADDRESS=>word_a, MASKWREN=>mask_lo, WREN=>en,
+    DATAIN=>dw(15 downto 0), ADDRESS=>word_a, MASKWREN=>mask_lo, WREN=>wren_lo,
     CHIPSELECT=>cs1, CLOCK=>clk, STANDBY=>'0', SLEEP=>'0', POWEROFF=>'1', DATAOUT=>dout1_lo);
   b1_hi : SB_SPRAM256KA port map (
-    DATAIN=>dw(31 downto 16), ADDRESS=>word_a, MASKWREN=>mask_hi, WREN=>en,
+    DATAIN=>dw(31 downto 16), ADDRESS=>word_a, MASKWREN=>mask_hi, WREN=>wren_hi,
     CHIPSELECT=>cs1, CLOCK=>clk, STANDBY=>'0', SLEEP=>'0', POWEROFF=>'1', DATAOUT=>dout1_hi);
 
-  -- WREN is gated per-block by CHIPSELECT inside the model, and MASKWREN is 0
-  -- on a pure read, so driving WREN=en is safe (a read cycle has we=0000 ->
-  -- all MASKWREN 0 -> no write). Register the bank to mux read-back at N+1.
+  -- WREN must be asserted ONLY for a real write, not for every enabled cycle.
+  -- Driving WREN=en was safe against corrupting memory (a read has we=0000 ->
+  -- MASKWREN 0 -> no nibble written), but on real SB_SPRAM256KA silicon a read
+  -- requires WREN=0: with WREN=1 the block neither writes nor returns valid
+  -- DATAOUT, so every read came back as zeros on hardware while the behavioral
+  -- model -- which updates DATAOUT regardless of WREN -- read back fine.
+  -- Register the bank to mux read-back at N+1.
   process (clk) is begin
     if rising_edge(clk) then bank_r <= bank; end if;
   end process;
