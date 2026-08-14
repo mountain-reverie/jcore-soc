@@ -96,6 +96,19 @@ if [ "$MODE" = "coremark" ]; then
       8192 \
       > targets/boards/icesugar/flash_image_pkg.vhd
 
+  # flash_boot_reader's own unit testbench. It runs FIRST because it is fast
+  # (~20ms of simulated time) and it isolates the reader from the whole SoC:
+  # when the boot path breaks, this says so in seconds instead of leaving you
+  # to bisect a silent 200ms cosim. Its flash model powers up in Deep
+  # Power-down and ignores everything until it sees the 0xAB wake-up, so it
+  # fails if the reader ever loses that command again.
+  echo "=== flash_boot_tb ==="
+  ghdl -a --std=93 -fexplicit -fsynopsys -C --workdir="$WORK" \
+      targets/boards/icesugar/tb/flash_boot_tb.vhd
+  ghdl -e --std=93 -fexplicit -fsynopsys -C --syn-binding --workdir="$WORK" flash_boot_tb
+  ghdl -r --std=93 -fexplicit -fsynopsys -C --syn-binding --workdir="$WORK" flash_boot_tb \
+      --stop-time=20ms --assert-level=error
+
   echo "=== coremark_cosim_tb ==="
   ghdl -a --std=93 -fexplicit -fsynopsys -C --workdir="$WORK" \
       targets/boards/icesugar/flash_image_pkg.vhd \

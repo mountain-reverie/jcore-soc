@@ -59,7 +59,14 @@ bash sim.sh
 
 **Requires:** GHDL 3.0+, sh2-elf cross-compiler (for ROM compilation)
 
-Builds the cosim payload, generates the flash-slave model's byte array,
+Runs two testbenches. `flash_boot_tb` goes first: it is fast (~20 ms simulated)
+and isolates `flash_boot_reader` from the SoC, so a broken boot path reports in
+seconds instead of surfacing as a silent 200 ms cosim timeout. Its flash model
+powers up in Deep Power-down and ignores everything until the `0xAB` wake-up,
+so the reader cannot lose that command again without failing here.
+
+Then the end-to-end cosim: builds the cosim payload, generates the flash-slave
+model's byte array,
 analyses all VHDL sources with `ghdl -a`, then elaborates and runs
 `coremark_cosim_tb`: config-flash boot -> `flash_boot_reader` streams the
 payload into SPRAM -> the J1 executes it -> the testbench decodes `uart0_tx`,
@@ -90,7 +97,65 @@ Steps:
 5. `nextpnr-ice40 --up5k --package sg48` — place & route on the UP5K.
 6. `icepack` — pack to binary `.bin`.
 
-Output: `targets/boards/icesugar/build/icesugar.bin` (ready to flash with iceprog).
+Output: `targets/boards/icesugar/build/icesugar.bin` (the bitstream; see 3b for
+getting it and the payload onto the board -- `iceprog` does NOT work here, the
+board enumerates as DAPLink/CMSIS-DAP rather than FTDI).
+
+### 3b. Running it on real hardware
+
+`synth.sh` produces `build/icesugar.bin`, the bitstream only. The CoreMark
+payload is a **separate** object that must reach SPI flash at `0x100000`, where
+`flash_boot_reader` streams it into SPRAM (`FLASH_BASE => x"100000"`,
+`PAYLOAD_WORDS => 8192`).
+
+Drag-and-drop **cannot** do this: the iCELink DAPLink volume only writes offset
+0 and rejects a >1 MB image outright (`<iCELink:Overflow>` on the CDC). Use
+`icesprog` (from the vendor repo; needs libusb access to the iCELink HID
+interface) and write one combined image so there is no erase-ordering hazard
+between the two regions:
+
+```bash
+cd targets/boards/icesugar
+bash synth.sh                                    # -> build/icesugar.bin
+make -C rom/coremark coremark.bin                # -> rom/coremark/coremark.bin
+
+python3 - <<'EOF'
+b = open('build/icesugar.bin','rb').read()
+p = open('rom/coremark/coremark.bin','rb').read()
+assert len(b) < 0x100000
+open('build/combined.bin','wb').write(b + b'\xff'*(0x100000-len(b)) + p)
+EOF
+
+icesprog -w -o 0 build/combined.bin              # bitstream @0, payload @0x100000
+icesprog -r -o 0x100000 -l 16 /tmp/rb.bin        # optional: verify the payload
+```
+
+Then collect the result (the collector sends the `g` trigger itself and exits
+non-zero on a CRC mismatch, so it works as a CI gate):
+
+```bash
+go build -o /tmp/cmk ./tools/coremark-collector
+/tmp/cmk -dev /dev/ttyACM0 -timeout 120s
+# coremark git=0x… crc=0x988c iterations=100 cycles=110611250 iters_per_sec=10.85
+```
+
+#### Lab gotchas (each of these cost real debugging time)
+
+* **The steady blue LED is a POWER indicator, not GPIO.** Only the RGB LED on
+  pins 41/40/39 is driven by `gpio_do`. Verify any indicator with a standalone
+  walker bitstream before trusting it as a signal.
+* **A tight-loop UART payload wedges the iCELink bridge** until the board is
+  physically replugged; no host-side reset (DTR/RTS toggling included) clears
+  it. Pace test payloads.
+* **`icesprog -w` reconfigures the FPGA only intermittently.** Confirm the
+  `@cdone:1` line on the CDC before trusting a result; re-issue the write if it
+  is absent, and remember `@cdone:0` alone means configuration FAILED.
+* **J3 (flash) and J5 (UART) are two identical adjacent 2x2 jumpers.** Moving
+  the wrong one kills the UART while configuration still succeeds, which looks
+  exactly like a dead SoC.
+* Consider a udev rule that stops the DAPLink volume from auto-mounting: it is
+  unnecessary once `icesprog` is used, and DAPLink drops the volume on every
+  flash, which produces FAT-fs churn on the host.
 
 ### 4. make icesugar (registered board target)
 
@@ -134,7 +199,7 @@ docker run --rm \
 | yosys (with ghdl plugin) | VHDL → iCE40 JSON synthesis |
 | nextpnr-ice40 | Place & route for UP5K |
 | icepack | ASC → BIN bitstream packing |
-| iceprog | Flash programming (not in CI) |
+| icesprog | Flash programming over the iCELink HID interface (not in CI). `iceprog` is NOT usable: this board is DAPLink, not FTDI. |
 
 ## UART console + CoreMark result channel
 
@@ -160,7 +225,7 @@ board -> host : "CMK READY"        board is waiting for a trigger
 host  -> board: 'g'                start one CoreMark run (other bytes ignored)
 board -> host : "CMK MAGIC=0x..."  one key=value line per field
                 "CMK GITREV=0x..."
-                "CMK CRC=0x..."       crcfinal; a correct run reports 0x0000d340
+                "CMK CRC=0x..."       crcfinal; a correct run reports 0x0000988c
                 "CMK ITERATIONS=..."
                 "CMK CYCLES=..."
                 "CMK CLKHZ=..."
@@ -177,8 +242,12 @@ then CoreMark's `main()` returns and the program parks) — it does not
 re-arm, so a further run needs a board reset (re-flash or power cycle), not
 a second trigger byte over the same connection.
 
-The CRC to check is CoreMark's **crcfinal** (`0xd340`), not `crclist`
-(`0xe714`).
+The CRC to check is CoreMark's **crcfinal** (`0x988c`), not `crclist`
+(`0xe714`). crcfinal accumulates across every iteration, so it changes whenever
+`rom/coremark/Makefile`'s `-DITERATIONS` changes -- it is `0x988c` for the
+current 100 iterations and was `0xd340` when the board ran 1000. Re-derive it
+by compiling the vendored sources natively; `tools/coremark-collector/result.go`
+documents exactly how (and note the host build must be `-m32`).
 
 **Verified in simulation**: `sim.sh` runs the full chain — flash boot, SPRAM
 load, CPU execution, `CMK READY`, the `g` trigger, and the complete record —
@@ -187,8 +256,9 @@ and asserts on MAGIC/CRC/ITERATIONS/CLKHZ plus a non-zero cycle count.
 **Firmware**: `rom/uart_io.{c,h}` (shared TX/RX/formatting, host-testable under
 `-DHOST_TEST`), `rom/coremark/uart_report.c` (`report_result()` + `wait_for_go()`).
 
-**Fit** (as measured by CI, which runs `fit_gate.sh`): `ICESTORM_LC 5078/5280`
-(202 LC free), `clk_sys` Fmax 13.36 MHz against the 12.00 MHz constraint.
+**Fit**: `ICESTORM_LC 5163/5280`, `pin_clk` Fmax 14.20 MHz against the 12.00 MHz
+constraint (local build; CI measured 5078 / 13.36 MHz before the hardware
+bring-up fixes -- see the note below on toolchain dependence).
 
 Absolute LC is toolchain-dependent: the same tree measures `5105/5280` at
 13.24 MHz locally. Both used the same yosys (0.44, sha1 `80ba43d26`), so the
@@ -202,11 +272,36 @@ master it replaced.
 
 ## Known Constraints / Status
 
-The GHDL cosim (`sim.sh`) **passes** -- the J1 SoC is functionally correct
-end to end: it boots from the config SPI flash, `flash_boot_reader` streams the
-payload into SPRAM, the J1 executes it, announces `CMK READY`, waits for the
-host's `g`, and returns the full `CMK` result record over the UART. See the
-"UART console + CoreMark result channel" section above.
+**Validated on real hardware.** 100 iterations in 110,611,250 cycles at 12 MHz
+= 9.22 s, ~0.90 CoreMark/MHz, with `crcfinal = 0x988c` reproducible across six
+consecutive power-ups. That CRC is independently derived by compiling the
+vendored CoreMark sources natively (`-m32`, `ITERATIONS=100`, same seeds) --
+see `tools/coremark-collector/result.go` -- not merely observed from the board.
+
+Getting there required fixing seven bugs that the GHDL cosim could not see,
+because in each case a behavioural model and the silicon disagreed:
+
+| Bug | Why simulation missed it |
+|-----|--------------------------|
+| soc_gen wired `ice_spi_io`'s SB_IO to internal signals instead of the pads, so the FPGA could not read flash at all and the J1 executed empty memory | the netlist is correct in simulation; only the pad binding differs |
+| `flash_boot_reader` never sent the `0xAB` wake-up (the iCE40 leaves the flash in Deep Power-down after configuration, Lattice TN1248) | the TB flash model had no power-down state |
+| `spram_128k` asserted `WREN` on reads; real `SB_SPRAM256KA` needs `WREN=0` to read | `sb_spram256ka_sim.vhd` updates `DATAOUT` regardless of `WREN` |
+| `ice_clkgen` clocked the CPU from the PLL at 39.75 MHz, not 12 MHz | simulation uses an ideal clock; the PLL is not modelled |
+| `bootram_infer_coremark` read on the falling edge, creating a half-cycle critical path | timing, not function |
+| `uart_put_dec32` used `/10`/`%10`; the record stalled at the first decimal field | the host build has a working divider |
+| `mult_ice40dsp` added the **accumulator** instead of zero in three carry adders (`TOPADDSUB_UPPERINPUT='0'`), corrupting every MACH | `sb_mac16_sim.vhd` says it outright: "not modelled, zeroed" |
+
+The lesson worth keeping: **a GHDL-only gate cannot validate this board.** The
+cosim passed throughout all of the above. The firmware now prints `DIV`/`MUL`
+self-check lines (`core_portme.c:portable_init`) comparing hardware arithmetic
+against host-computed references on every run, and a hardware smoke test --
+"does the board report the expected CRC" -- is the only thing that catches this
+class of bug.
+
+The cosim itself still **passes** and remains the fast functional gate: the SoC
+boots from config SPI flash, `flash_boot_reader` streams the payload into
+SPRAM, the J1 executes it, announces `CMK READY`, waits for the host's `g`, and
+returns the full `CMK` record over the UART.
 
 **Fit status (CI):** `ICESTORM_LC` **5078/5280 (96%, 202 LC free)**,
 `ICESTORM_RAM` 17/30, `ICESTORM_DSP` 8/8, `ICESTORM_SPRAM` 4/4, `clk_sys` Fmax
