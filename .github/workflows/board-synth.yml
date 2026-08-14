@@ -273,7 +273,15 @@ jobs:
           d="$(bash targets/asic/gf180_j4mmu/filelist.sh | grep 'decode_body\.vhd$')"
           test -n "$d" || { echo "ERROR: filelist.sh has no decode_body.vhd entry" >&2; exit 1; }
           test -f "$d" || { echo "ERROR: $d (named by filelist.sh) does not exist -- prep_sources.sh should have built it" >&2; exit 1; }
-          grep -qi ldtlb "$d" || { echo "ERROR: filelist.sh's decode_body.vhd ($d) lacks LDTLB -- synth would build the base (no-MMU) decoder" >&2; exit 1; }
+          # Marker for "this is the J4/MMU decoder, not the base one". This used
+          # to grep for LDTLB, which stopped discriminating when the TLB-install
+          # encodings were retired (jcore-cpu 1cbb4d9): the hardware TSB walker
+          # is now the sole installer, so ldtlb appears in NEITHER decoder and
+          # the check fired on a perfectly good MMU build. PTEH is a durable
+          # replacement -- LDC Rm,PTEH is MMU-only and was deliberately KEPT
+          # when the STC reads were retired, because the hypervisor's guest
+          # refill and the fault handlers still write that CSR.
+          grep -qi pteh "$d" || { echo "ERROR: filelist.sh's decode_body.vhd ($d) lacks PTEH -- synth would build the base (no-MMU) decoder" >&2; exit 1; }
           echo "OK: filelist.sh's decode_body.vhd ($d) includes the sh4 overlay (LDTLB present)"
 
       - name: Per-macro GF180 synth-only stats

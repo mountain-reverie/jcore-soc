@@ -11,7 +11,7 @@ package cache_pack is
 
   -- * * * * * start of configurable i-cache capacity ----
   -- standard i-cache capacity ----
-  constant cache_index_bits : natural := 6; -- 8k byte cache
+  constant cache_index_bits : natural := 6; -- 2k byte cache (gf180 target-local override)
   -- + other configuration
   -- + constant CACHE_INDEX_BITS        : natural := 7;  -- 4k byte cache
   -- + constant CACHE_INDEX_BITS        : natural := 9;  -- 16k byte cache
@@ -30,9 +30,16 @@ package cache_pack is
     pa_tag : std_logic_vector(CACHE_PA_TAG_WIDTH - 1 downto 0);
     at     : std_logic;
     c      : std_logic; -- PTE C-bit (cacheable); meaningful only when at='1'
+    -- '1' iff the TLB lookup for THIS access hit. Meaningful only when at='1'.
+    -- pa_tag/c are undefined on a miss, so a fetch presented with at='1' and
+    -- hit='0' carries no translation and must not be SERVICED at all -- in
+    -- particular not by the uncached bypass, which is where such a fetch
+    -- actually lands (see icache_cacheable_mux). I side only; the D side has
+    -- no equivalent hold-off and its producers tie this '1'.
+    hit : std_logic;
   end record mmu_cache_i_t;
 
-  constant mmu_cache_i_reset    : mmu_cache_i_t := (pa_tag => (others => '0'), at => '0', c => '0');
+  constant mmu_cache_i_reset    : mmu_cache_i_t := (pa_tag => (others => '0'), at => '0', c => '0', hit => '0');
   constant cache_index_msb      : natural       := CACHE_LINE_WIDTH_BITS + CACHE_INDEX_BITS - 1;
   constant cache_line_width     : natural       := 2 ** CACHE_LINE_WIDTH_BITS;
   constant cache_line_mem_words : natural       := 2 ** (CACHE_LINE_WIDTH_BITS - CACHE_MEM_WIDTH_BITS);
@@ -194,8 +201,6 @@ package cache_pack is
   type icacheccl_reg_t is record
     state      : icache_state_t;
     ma0        : std_logic_vector(27 downto 0);
-    ma0_at     : std_logic;
-    ma0_pa_tag : std_logic_vector(CACHE_PA_TAG_WIDTH - 1 downto 0);
     a_prev     : icache_i_t;
     a_prev_v   : std_logic;
     c_hitstate : std_logic;
@@ -218,8 +223,6 @@ package cache_pack is
   (
     IDLE,                                      -- state
     (others  => '0'),                          -- ma0
-    '0',                                       -- ma0_at
-    (others  => '0'),                          -- ma0_pa_tag
     ((others => '0'), '0', MMU_CACHE_I_RESET), -- a_prev
     '0',                                       -- a_prev_v
     '0',                                       -- c_hitkp
@@ -472,11 +475,8 @@ package cache_pack is
     state         : dcache_state_t;
     state_del1    : dcache_state_t;
     ma0           : std_logic_vector(27 downto 0);
-    ma0_at        : std_logic;
-    ma0_pa_tag    : std_logic_vector(CACHE_PA_TAG_WIDTH - 1 downto 0);
     a_prev        : cpu_data_o_t;
     a_prev_v      : std_logic;
-    a_prev_mmu    : mmu_cache_i_t;
     sa_al         : std_logic_vector(CACHE_REGION_WIDTH - CACHE_LINE_WIDTH_BITS - 1 downto 0);
     sa_en_state   : std_logic;
     saout_al1     : std_logic_vector(CACHE_REGION_WIDTH - CACHE_LINE_WIDTH_BITS - 1 downto 0);
@@ -506,12 +506,9 @@ package cache_pack is
     IDLE,                                    -- state
     IDLE,                                    -- state_del1
     (others       => '0'),                   -- ma0
-    '0',                                     -- ma0_at
-    (others       => '0'),                   -- ma0_pa_tag
     ('0', (others => '0'), '0', '0',
       (others     => '0'), (others => '0')), -- a_prev
     '0',                                     -- a_prev_v
-    MMU_CACHE_I_RESET,                       -- a_prev_mmu
     (others       => '0'),                   -- sa_al
     '0',                                     -- sa_en_state
     (others       => '0'),                   -- saout_al1
@@ -649,9 +646,6 @@ package cache_pack is
   end component icache_ram;
 
   component icache is
-    generic (
-      priv_arch : boolean := false
-    );
     port (
       clk125 : in    std_logic;
       clk200 : in    std_logic;
@@ -671,9 +665,6 @@ package cache_pack is
   end component icache;
 
   component icache_ccl is
-    generic (
-      priv_arch : boolean := false
-    );
     port (
       clk : in    std_logic;
       rst : in    std_logic;
@@ -754,9 +745,6 @@ package cache_pack is
   end component dcache_ram;
 
   component dcache is
-    generic (
-      priv_arch : boolean := false
-    );
     port (
       clk125 : in    std_logic;
       clk200 : in    std_logic;
@@ -781,9 +769,6 @@ package cache_pack is
   end component dcache;
 
   component dcache_ccl is
-    generic (
-      priv_arch : boolean := false
-    );
     port (
       clk : in    std_logic;
       rst : in    std_logic;
