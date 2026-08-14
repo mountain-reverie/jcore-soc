@@ -13,7 +13,7 @@ const (
 	// firmware build parameters used by targets/boards/icesugar/rom/coremark:
 	// vendor CoreMark's default TOTAL_DATA_SIZE (2*1000 = 2000, so
 	// PERFORMANCE_RUN: seed1=0, seed2=0, seed3=0x66) and the board's fixed
-	// ITERATIONS=1000 (see coremark/Makefile: -DITERATIONS=1000, and
+	// ITERATIONS=100 (see coremark/Makefile: -DITERATIONS=100, and
 	// coremark/core_portme.c: seed4_volatile = ITERATIONS).
 	//
 	// This is NOT the commonly-quoted "CoreMark 1.0 crclist" constant
@@ -28,14 +28,24 @@ const (
 	//
 	// Confirmed by natively compiling the vendored CoreMark sources
 	// (core_main.c/core_list_join.c/core_matrix.c/core_state.c/core_util.c)
-	// against a minimal Linux core_portme with ITERATIONS=1000 and default
+	// against a minimal Linux core_portme with ITERATIONS=100 and default
 	// TOTAL_DATA_SIZE=2000 (matching the board build exactly): the run
 	// printed seedcrc=0xe9f5 (known_id=3, the "2K performance run", size
 	// 666-per-algorithm after the /3 split), crclist=0xe714 (matches
 	// list_known_crc[3], confirming the vendored copy is bit-identical to
-	// upstream CoreMark 1.0), but crcfinal=0xd340 for the full 1000
-	// iterations, deterministic and reproducible across repeated runs.
-	ExpectedCRC uint16 = 0xd340
+	// upstream CoreMark 1.0), plus crcmatrix=0x1fd7 and crcstate=0x8e3a --
+	// all three canonical -- and crcfinal=0x988c for 100 iterations,
+	// deterministic and reproducible across repeated runs. The host build
+	// must be -m32: core_portme.h types ee_ptr_int as ee_u32, so a 64-bit
+	// build truncates the pointer in align_mem().
+	//
+	// Was 0xd340 when the board ran 1000 iterations. crcfinal accumulates
+	// per iteration, so this constant MUST be re-derived whenever
+	// coremark/Makefile's -DITERATIONS changes.
+	//
+	// Cross-checked against hardware: six consecutive runs on an iCESugar
+	// report exactly this value (and an identical 110,611,250 cycles).
+	ExpectedCRC uint16 = 0x988c
 )
 
 type Result struct {
