@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -114,9 +115,10 @@ func printResult(r Result, asJSON bool) {
 // lineReader accumulates raw serial reads into CRLF-terminated lines. It is
 // hand-rolled rather than bufio.Scanner because the serial fd is configured
 // with VMIN=0/VTIME>0 (see serial.go): a read with no data available
-// returns (0, nil), and bufio.Scanner retries internally on that case
-// without ever returning to the caller -- which would defeat polling the
-// overall deadline in main's loop.
+// returns (0, io.EOF), which bufio.Scanner would report as end of stream --
+// ending the scan on the first idle 100ms window rather than waiting for the
+// board. Handling the raw reads here also keeps main's loop free to poll its
+// overall deadline between reads.
 type lineReader struct {
 	f   *os.File
 	buf []byte
@@ -138,7 +140,12 @@ func (l *lineReader) next() (string, error) {
 
 	chunk := make([]byte, 256)
 	n, err := l.f.Read(chunk)
-	if err != nil {
+	// A VTIME timeout with no data is a 0-byte read, and os.File.Read reports
+	// that as io.EOF rather than (0, nil) -- on a serial line it means "the
+	// board has not said anything in the last 100ms", not end of stream. Only
+	// a genuine error (e.g. the device disappearing) is fatal; an idle line
+	// falls through to the caller's deadline poll.
+	if err != nil && !(n == 0 && err == io.EOF) {
 		return "", err
 	}
 	if n > 0 {
