@@ -23,6 +23,8 @@ end entity;
 
 architecture rtl of ice_clkgen is
 
+  -- NOTE: the PLL below is deliberately NOT used for clk_out. See the
+  -- "12 MHz passthrough" comment block further down before re-wiring it.
   component SB_PLL40_2_PAD is
     generic (
       DIVR                : std_logic_vector(3 downto 0) := "0000";
@@ -42,41 +44,38 @@ architecture rtl of ice_clkgen is
       LOCK          : out std_logic);
   end component;
 
-  signal clk_cpu  : std_logic;
-  signal pll_lock : std_logic;
   signal por      : std_logic_vector(3 downto 0) := (others => '1');
 
 begin
 
-  pll: SB_PLL40_2_PAD
-    generic map (
-      FEEDBACK_PATH       => "SIMPLE",
-      PLLOUT_SELECT_PORTB => "GENCLK",
-      DIVR                => "0000",     -- 0
-      DIVF                => "0110100",  -- 52
-      DIVQ                => "100",      -- 4
-      FILTER_RANGE        => "001")      -- 1
-    port map (
-      PACKAGEPIN    => clk_in,
-      PLLOUTGLOBALA => clk_cpu,
-      PLLOUTCOREA   => open,
-      PLLOUTGLOBALB => clk_eth,
-      PLLOUTCOREB   => open,
-      RESETB        => '1',
-      BYPASS        => '0',
-      LOCK          => pll_lock);
+  -- 12 MHz passthrough (see the entity header): clk_out MUST be the 12 MHz
+  -- oscillator reference, not a PLL output.
+  --
+  -- This previously instantiated SB_PLL40_2_PAD and took clk_out from
+  -- PLLOUTGLOBALA, described as a "12 MHz fixed reference passthrough". It is
+  -- not one. Both PLL output ports come off the same VCO, so with
+  -- DIVR=0/DIVF=52/DIVQ=4 port A emitted 12*53/16 = 39.75 MHz -- and since the
+  -- component declaration omitted PLLOUT_SELECT_PORTA, it defaulted to GENCLK
+  -- rather than anything passthrough-like. The J1 SoC closes timing at about
+  -- 12.7 MHz, so clocking it at 39.75 MHz left it completely dead on hardware
+  -- while every constraint still "passed" (nextpnr was told 12 MHz).
+  --
+  -- Ethernet: clk_eth is unused by this board's design.yaml (pad_ring maps it
+  -- to `open`). An Ethernet variant needs a real PLL for clk_eth AND a 12 MHz
+  -- clk_out, which one SB_PLL40_2_PAD cannot provide -- the reference is
+  -- consumed by the PAD primitive. Feed SB_PLL40_CORE from a regular input
+  -- instead, so the raw reference stays available for clk_out.
+  clk_out <= clk_in;
+  clk_eth <= clk_in;
 
-  clk_out <= clk_cpu;
-
-  process (clk_cpu)
+  process (clk_in)
   begin
-    if rising_edge(clk_cpu) then
+    if rising_edge(clk_in) then
       por <= por(2 downto 0) & '0';
     end if;
   end process;
-  -- Reset is released only once the POR shift has drained AND the PLL has
-  -- locked: rst asserted = POR-active OR not-locked (i.e. POR AND LOCK gates
-  -- the release). Cheaper than resetting the shift register on !lock.
-  rst_out <= por(3) or (not pll_lock);
+
+  -- No PLL, so no LOCK to gate on: release once the POR shift has drained.
+  rst_out <= por(3);
 
 end architecture;
