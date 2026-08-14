@@ -32,7 +32,12 @@ use ieee.numeric_std.all;
 entity flash_boot_reader is
   generic (
     FLASH_BASE    : std_logic_vector(23 downto 0) := x"100000";
-    PAYLOAD_WORDS : natural := 8192);
+    PAYLOAD_WORDS : natural := 8192;
+    -- Cycles to wait after the 0xAB wake-up before the first real command.
+    -- The flash needs >=10us (Lattice TN1248 / W25Q tRES1); 1024 cycles is
+    -- 85us at 12 MHz, i.e. ample margin, and costs nothing -- it happens once
+    -- at boot. Simulation overrides this to keep testbenches short.
+    WAKE_CYCLES   : natural := 1024);
   port (
     clk : in std_logic; rst : in std_logic;
 
@@ -53,13 +58,22 @@ end entity;
 
 architecture rtl of flash_boot_reader is
 
-  type state_t is (S_IDLE, S_CMDADDR, S_DUMMY, S_DATA, S_DONE);
+  type state_t is (S_IDLE, S_WAKE, S_WAKEWAIT, S_CMDADDR, S_DUMMY, S_DATA, S_DONE);
   signal state : state_t := S_IDLE;
 
   -- SPI bit-banger: each SPI bit takes two clk cycles (phase='0' -> drive
   -- mosi / sck low ("setup"), phase='1' -> sck high ("sample/edge")).
   signal phase     : std_logic := '0';
-  signal bits_left : natural range 0 to PAYLOAD_WORDS * 32 := 0;
+  -- bits_left doubles as the S_WAKEWAIT delay counter (see S_WAKE), so it has
+  -- to span whichever of the two uses is larger -- a small PAYLOAD_WORDS must
+  -- not make the wake-up delay overflow its range.
+  function max2(a, b : natural) return natural is
+  begin
+    if a > b then return a; else return b; end if;
+  end function;
+  constant COUNT_MAX : natural := max2(PAYLOAD_WORDS * 32, WAKE_CYCLES);
+
+  signal bits_left : natural range 0 to COUNT_MAX := 0;
   signal shift_out : std_logic_vector(31 downto 0) := (others => '0'); -- CMD+ADDR shifter
 
   signal rx_byte      : std_logic_vector(7 downto 0) := (others => '0');
@@ -101,16 +115,69 @@ begin
           ----------------------------------------------------------------
           when S_IDLE =>
             if start = '1' then
-              addr24    := FLASH_BASE;
-              shift_out <= x"0B" & addr24;
-              bits_left <= 32;
+              -- Wake the flash before anything else: after configuration the
+              -- iCE40 puts it into Deep Power-down (0xB9, Lattice TN1248), and
+              -- in that state it ignores every command -- a read issued here
+              -- returns zeros forever, so the CPU would boot an empty payload.
+              shift_out <= x"AB" & x"000000";
+              bits_left <= 8;
               phase     <= '0';
               cs_r      <= '0';
               sck_r     <= '0';
               word_idx  <= 0;
               busy_r    <= '1';
               done_r    <= '0';
+              state     <= S_WAKE;
+            end if;
+
+          ----------------------------------------------------------------
+          when S_WAKE =>
+            -- shift out the 8-bit 0xAB Release-from-Power-down command
+            if phase = '0' then
+              mosi_r <= shift_out(31);
+              sck_r  <= '0';
+              phase  <= '1';
+            else
+              sck_r     <= '1';
+              shift_out <= shift_out(30 downto 0) & '0';
+              bits_left <= bits_left - 1;
+              phase     <= '0';
+              if bits_left = 1 then
+                -- Leave CS asserted for now and drop it in S_WAKEWAIT, one
+                -- cycle later: raising CS in this same cycle would make it
+                -- change at the exact instant sck rises, and a slave watching
+                -- for a CS edge would miss it (the level is already high when
+                -- it looks).
+                --
+                -- The delay reuses bits_left as its counter and phase as its
+                -- "first cycle" flag rather than adding a counter of its own:
+                -- this board has ~200 LC of headroom on the UP5K and a
+                -- dedicated wake counter does not fit.
+                bits_left <= WAKE_CYCLES;
+                phase     <= '0';
+                state     <= S_WAKEWAIT;
+              end if;
+            end if;
+
+          ----------------------------------------------------------------
+          when S_WAKEWAIT =>
+            -- first cycle here: the wake-up only takes effect on CS rising
+            if phase = '0' then
+              sck_r <= '0';
+              cs_r  <= '1';
+              phase <= '1';
+            end if;
+
+            if bits_left = 0 then
+              addr24    := FLASH_BASE;
+              shift_out <= x"0B" & addr24;
+              bits_left <= 32;
+              phase     <= '0';
+              cs_r      <= '0';
+              sck_r     <= '0';
               state     <= S_CMDADDR;
+            else
+              bits_left <= bits_left - 1;
             end if;
 
           ----------------------------------------------------------------

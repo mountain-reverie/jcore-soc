@@ -74,28 +74,53 @@ begin
   -- expects.
   ----------------------------------------------------------------------------
   flash_model : process
-    variable cmd_addr    : std_logic_vector(31 downto 0);
+    variable cmd         : std_logic_vector(7 downto 0);
+    variable addr_bits   : std_logic_vector(23 downto 0);
     variable addr        : natural;
     variable start_word  : natural;
     variable word_val    : std_logic_vector(31 downto 0);
     variable byte_val    : std_logic_vector(7 downto 0);
+    -- see coremark_cosim_tb: the flash powers up in Deep Power-down as far as
+    -- user logic is concerned, and ignores everything until it sees 0xAB.
+    variable awake       : boolean := false;
   begin
-    -- wait for CS to go low (start of a transaction)
-    wait until d_cs_n = '0';
+    loop
+      -- wait for CS to go low (start of a transaction)
+      wait until d_cs_n = '0';
 
-    -- shift in 32 bits (cmd+addr) MSB-first, sampling mosi on sck rising edges
-    cmd_addr := (others => '0');
-    for k in 0 to 31 loop
-      wait until rising_edge(d_sck);
-      cmd_addr := cmd_addr(30 downto 0) & d_mosi;
-    end loop;
+      -- 8-bit command, MSB-first
+      cmd := (others => '0');
+      for k in 0 to 7 loop
+        wait until rising_edge(d_sck);
+        cmd := cmd(6 downto 0) & d_mosi;
+      end loop;
+
+      if not awake then
+        if cmd = x"AB" then
+          awake := true;
+        end if;
+        d_miso <= '0';
+        wait until d_cs_n = '1';
+        next;
+      end if;
+
+      assert cmd = x"0B"
+        report "flash_model: expected Fast-Read (0x0B) after wake-up"
+        severity failure;
+
+      -- 24-bit address, MSB-first
+      addr_bits := (others => '0');
+      for k in 0 to 23 loop
+        wait until rising_edge(d_sck);
+        addr_bits := addr_bits(22 downto 0) & d_mosi;
+      end loop;
 
     -- 8 dummy clocks
     for k in 0 to 7 loop
       wait until rising_edge(d_sck);
     end loop;
 
-    addr := to_integer(unsigned(cmd_addr(23 downto 0))) - to_integer(unsigned(FLASH_BASE));
+    addr := to_integer(unsigned(addr_bits)) - to_integer(unsigned(FLASH_BASE));
     start_word := addr / 4;
 
     -- stream out words starting at start_word, MSB-first, big-endian byte
@@ -113,8 +138,7 @@ begin
       end loop;
       exit when d_cs_n = '1';
     end loop;
-
-    wait;
+    end loop;
   end process;
 
   ----------------------------------------------------------------------------
