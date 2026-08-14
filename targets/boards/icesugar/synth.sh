@@ -30,18 +30,13 @@ LD_LIBRARY_PATH='' perl tools/v2p < components/misc/gpio2.vhm > components/misc/
 # 2. soc_gen: regenerate the SoC + pcf.
 make icesugar TARGET=soc_gen
 
-# 2b. soc_gen direction-inference fixup (Task 8): ice_spi_io's pin_* ports are
-# uniformly `inout` (they wrap a shared SB_IO PACKAGE_PIN primitive), so
-# soc_gen's bare-signal pin-direction inference can't tell MISO (input-only,
-# OUTPUT_ENABLE tied '0' inside ice_spi_io) apart from CS#/SCK/MOSI
-# (outputs), and it infers pin_spi_miso_pin as an OUTPUT. Fix the generated
-# pad_ring.vhd port direction (and correspondingly flip the assignment
-# direction) so nextpnr sees a real input pad instead of an undriven output.
-# See task-8-report.md for the full analysis.
-sed -i \
-  -e 's/pin_spi_miso_pin : out std_logic;/pin_spi_miso_pin : in std_logic;/' \
-  -e 's/pin_spi_miso_pin <= spi_miso_pin;/spi_miso_pin <= pin_spi_miso_pin;/' \
-  targets/boards/icesugar/pad_ring.vhd
+# 2b. (was: a sed fixup of pin_spi_miso_pin's direction in the generated
+# pad_ring.vhd.) No longer needed: design.yaml now declares the config-SPI pads
+# as entity-pads, so soc_gen emits them as `inout` and binds ice_spi_io's ports
+# straight to them. The old hack corrected the port DIRECTION but left the real
+# problem in place -- the SB_IOs were wired to internal signals rather than the
+# pads, so they were not the pad buffers at all and the FPGA could not read the
+# flash.
 
 # 3. file list.
 source targets/boards/icesugar/filelist.sh   # defines FILES=( ... )

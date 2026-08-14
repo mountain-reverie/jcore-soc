@@ -20,10 +20,10 @@ entity pad_ring is
         pin_ledr_n : out std_logic;
         pin_ser_rx : in std_logic;
         pin_ser_tx : out std_logic;
-        pin_spi_cs_pin : out std_logic;
-        pin_spi_miso_pin : out std_logic;
-        pin_spi_mosi_pin : out std_logic;
-        pin_spi_sck_pin : out std_logic
+        pin_spi_cs_pin : inout std_logic;
+        pin_spi_miso_pin : inout std_logic;
+        pin_spi_mosi_pin : inout std_logic;
+        pin_spi_sck_pin : inout std_logic
     );
 end;
 architecture impl of pad_ring is
@@ -35,10 +35,6 @@ architecture impl of pad_ring is
     signal fl_sck : std_logic;
     signal gpio_do : std_logic_vector(2 downto 0);
     signal reset : std_logic;
-    signal spi_cs_pin : std_logic;
-    signal spi_miso_pin : std_logic;
-    signal spi_mosi_pin : std_logic;
-    signal spi_sck_pin : std_logic;
     signal uart0_rx : std_logic;
     signal uart0_tx : std_logic;
 begin
@@ -67,10 +63,10 @@ begin
             d_miso => fl_miso,
             d_mosi => fl_mosi,
             d_sck => fl_sck,
-            pin_cs_n => spi_cs_pin,
-            pin_miso => spi_miso_pin,
-            pin_mosi => spi_mosi_pin,
-            pin_sck => spi_sck_pin
+            pin_cs_n => pin_spi_cs_pin,
+            pin_miso => pin_spi_miso_pin,
+            pin_mosi => pin_spi_mosi_pin,
+            pin_sck => pin_spi_sck_pin
         );
     clk <= pin_clk;
     pin_ledb_n <= not gpio_do(2);
@@ -78,8 +74,4 @@ begin
     pin_ledr_n <= not gpio_do(0);
     uart0_rx <= pin_ser_rx;
     pin_ser_tx <= uart0_tx;
-    pin_spi_cs_pin <= spi_cs_pin;
-    pin_spi_miso_pin <= spi_miso_pin;
-    pin_spi_mosi_pin <= spi_mosi_pin;
-    pin_spi_sck_pin <= spi_sck_pin;
 end;

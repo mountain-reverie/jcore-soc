@@ -157,7 +157,21 @@ func topInstStmt(re *elaborate.ResolvedEntity, res *elaborate.Resolution) *vhdl.
 	}
 	for _, p := range re.Ports {
 		if res != nil && p.Kind == elaborate.KindSignal && res.EntityBoundPads[p.GlobalSignal] {
-			for _, bit := range entityPadBits(res, p.GlobalSignal) {
+			bits := entityPadBits(res, p.GlobalSignal)
+			if len(bits) == 0 {
+				// Scalar entity-bound pad: the net IS the base name, so there is
+				// no numeric suffix to index by and entityPadBits finds nothing.
+				// The pad port is the entity port, unindexed. Without this the
+				// port map came out EMPTY -- the entity's pad ports were left
+				// unconnected, which on iCESugar meant ice_spi_io's SB_IOs never
+				// reached the flash pins and the board could not boot.
+				inst.PortMap = append(inst.PortMap, &vhdl.AssocElement{
+					Formal: lc(p.Name),
+					Actual: &vhdl.Ident{Name: "pin_" + p.GlobalSignal},
+				})
+				continue
+			}
+			for _, bit := range bits {
 				inst.PortMap = append(inst.PortMap, &vhdl.AssocElement{
 					Formal: lc(p.Name) + "(" + bit.idx + ")",
 					Actual: &vhdl.Ident{Name: "pin_" + bit.net},
