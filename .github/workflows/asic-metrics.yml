@@ -18,6 +18,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: filelist core-source drift guard
+        # targets/*/filelist.sh are hand-written -- they have to be, because
+        # ghdl needs a topological analyse order and build_core.mk is an
+        # unordered make set. The ORDER cannot be generated, but MEMBERSHIP
+        # can be checked, and that is what actually breaks: core/tlb_walk.vhd
+        # was added upstream, all three filelists missed it, and every synth
+        # died with `unit "tlb_walk" not found in library "work"` on a plain
+        # submodule bump. Seconds to check.
+        run: tools/tests/filelist_core_drift.sh
+
       - name: cache_pkg_2k.vhd drift guard (2KB cache target-local override)
         # Asserts targets/asic/gf180_j4mmu/cache_pkg_2k.vhd differs from the
         # submodule's components/cpu/cache/cache_pkg.vhd in exactly one line
