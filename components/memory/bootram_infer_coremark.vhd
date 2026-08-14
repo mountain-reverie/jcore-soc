@@ -45,22 +45,47 @@ architecture inferred of bootram_infer_coremark is
   signal d_word : word_t := (others => '0');
   signal i_word : word_t := (others => '0');
   signal i_half : std_logic := '0';
+
+  -- N+1 handshake bookkeeping (see the timing contract note below).
+  signal r_db_ack, r_ib_ack : std_logic := '0';
+  signal db_go, ib_go       : std_logic;
 begin
+
+  -- Each request must produce exactly ONE ack pulse: the CPU holds en asserted
+  -- from the cycle it issues a request until the cycle it samples ack, so
+  -- without qualifying on "not yet acked" a request would re-trigger every
+  -- cycle -- and, for a write, store twice.
+  db_go <= db_i.en and not r_db_ack;
+  ib_go <= ibus_i.en and not r_ib_ack;
+
   -- synthesis translate_off
   assert BOOT_DEPTH <= WORDS
     report "boot_image_coremark_pkg BOOT_DEPTH exceeds boot RAM depth; image truncated"
     severity warning;
   -- synthesis translate_on
-  -- Data port (read/write) and instruction port (read-only), both on falling
-  -- edge so registered output is valid the same cycle ack=en is asserted,
-  -- matching memory_fpga's 0-wait contract (bus delays are FALSE).
+  -- Data port (read/write) and instruction port (read-only), both clocked on
+  -- the RISING edge, with the ack delayed one cycle (N+1) to match.
+  --
+  -- This used to read on the FALLING edge with a combinational ack=en, so the
+  -- CPU issued a request at rising edge N, the intervening falling edge clocked
+  -- the data, and the CPU sampled it at rising edge N+1. That gave everything
+  -- between this RAM's output register and the CPU datapath only HALF a clock
+  -- period. On the UP5K that half-cycle negedge->posedge path was the design's
+  -- critical path -- 42.3 ns against a 41.67 ns budget (26.5 ns of it routing),
+  -- i.e. Fmax 11.8 MHz against a 12 MHz requirement. Reading on the rising edge
+  -- and acking at N+1 gives the same logic a FULL period instead, at the cost
+  -- of one wait state on boot-ROM accesses (this RAM holds only the reset
+  -- vector table, so the throughput cost is nil).
+  --
+  -- Same fix shape as the ULX3S J4 shared_ram change: eliminate the half-cycle
+  -- rather than fight the routing.
   process(clk)
     variable di : integer;
   begin
-    if falling_edge(clk) then
+    if rising_edge(clk) then
       -- data port
       di := to_integer(unsigned(db_i.a(c_addr_width - 1 downto 2)));
-      if db_i.en = '1' and db_i.wr = '1' then
+      if db_go = '1' and db_i.wr = '1' then
         if db_i.we(0) = '1' then mem(di)(7 downto 0)   <= db_i.d(7 downto 0);   end if;
         if db_i.we(1) = '1' then mem(di)(15 downto 8)  <= db_i.d(15 downto 8);  end if;
         if db_i.we(2) = '1' then mem(di)(23 downto 16) <= db_i.d(23 downto 16); end if;
@@ -74,19 +99,21 @@ begin
       -- instruction port
       i_word <= mem(to_integer(unsigned(ibus_i.a(c_addr_width - 1 downto 2))));
       i_half <= ibus_i.a(1);
+
+      r_db_ack <= db_go;
+      r_ib_ack <= ib_go;
     end if;
   end process;
 
-  -- Timing contract (matches memory_fpga, boot-mem bus delays are FALSE): ack
-  -- is combinational = en, while d_word/i_word are registered from the falling
-  -- edge. The CPU asserts en+address at a rising edge, the intervening falling
-  -- edge clocks the data, and the CPU samples it at the NEXT rising edge (when
-  -- ack, asserted since the request, is still seen). Data is NOT valid on the
-  -- same rising edge en first rises.
+  -- Timing contract: data and ack are registered from the SAME rising edge, so
+  -- the cycle in which the CPU sees ack='1' is the cycle in which d_word/i_word
+  -- are already stable -- the CPU samples them at the following rising edge,
+  -- giving the path a full period. (Identical to dev_ddr_spram_boot's N+1
+  -- response bookkeeping.)
   db_o.d   <= d_word;
-  db_o.ack <= db_i.en;
+  db_o.ack <= r_db_ack;
 
   -- big-endian halfword select: a(1)='0' -> high half (bits 31:16)
   ibus_o.d   <= i_word(31 downto 16) when i_half = '0' else i_word(15 downto 0);
-  ibus_o.ack <= ibus_i.en;
+  ibus_o.ack <= r_ib_ack;
 end architecture;
