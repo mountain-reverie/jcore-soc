@@ -89,20 +89,33 @@ void uart_put_hex32(unsigned int v)
 		uart_putc(digits[(v >> shift) & 0xFu]);
 }
 
+/* Division-free decimal conversion: repeated subtraction against a table of
+   powers of ten, rather than v/10 and v%10.
+   The obvious /10, %10 form makes gcc emit __udivsi3, and on this J1 the
+   record stalled at exactly the first decimal field ("CMK ITERATIONS=") while
+   every preceding hex field -- pure shifts and masks -- printed fine. Decimal
+   output is a handful of values at the end of a benchmark run, so trading a
+   library division for at most 9 compares per digit costs nothing here. */
 void uart_put_dec32(unsigned int v)
 {
-	/* buf[10] sized for exactly 10 decimal digits (4294967295 = 2^32-1). */
-	char buf[10];
-	int n = 0;
+	static const unsigned int pow10[10] = {
+		1000000000u, 100000000u, 10000000u, 1000000u, 100000u,
+		10000u, 1000u, 100u, 10u, 1u
+	};
+	int i;
+	int started = 0;
 
-	if (v == 0u) {
-		uart_putc('0');
-		return;
+	for (i = 0; i < 10; i++) {
+		unsigned int digit = 0u;
+
+		while (v >= pow10[i]) {
+			v -= pow10[i];
+			digit++;
+		}
+		/* suppress leading zeros, but always emit the units digit */
+		if (digit != 0u || started || i == 9) {
+			uart_putc((char)('0' + digit));
+			started = 1;
+		}
 	}
-	while (v > 0u) {
-		buf[n++] = (char)('0' + (v % 10u));
-		v /= 10u;
-	}
-	while (n > 0)
-		uart_putc(buf[--n]);
 }
