@@ -82,11 +82,25 @@ pins:
     - { match: ledr_n, out: { name: "gpio_do(0)", invert: true } }
     - { match: ledg_n, out: { name: "gpio_do(1)", invert: true } }
     - { match: ledb_n, out: { name: "gpio_do(2)", invert: true } }
-    # Config-SPI flash pads (SG48 dedicated config pins). The spi_flash
-    # padring-entity above (ice_spi_io/SB_IO) already produces pad-level
-    # signals -- straight passthrough (buff: false), no additional IO
-    # buffer inference needed.
-    - { match: spi_cs_pin, signal: true, buff: false }
-    - { match: spi_sck_pin, signal: true, buff: false }
-    - { match: spi_mosi_pin, signal: true, buff: false }
-    - { match: spi_miso_pin, signal: true, buff: false }
+    # Config-SPI flash pads (SG48 dedicated config pins), bound directly to
+    # the spi_flash padring-entity's inout ports.
+    #
+    # These MUST be entity-pad, not `buff: false`. With buff: false soc_gen
+    # declares an internal signal per pad and emits a passthrough assignment
+    # between it and the top-level port, so ice_spi_io's SB_IO PACKAGE_PIN
+    # lands on an internal wire and yosys inserts its own buffers at the real
+    # pins -- the SB_IOs are then not the pad drivers at all and the PIN_TYPE /
+    # OUTPUT_ENABLE behaviour never reaches the hardware. Measured effect: the
+    # flash was unreadable from the FPGA, so flash_boot_reader loaded nothing,
+    # the payload never reached SPRAM and the J1 executed empty memory -- a
+    # completely dead board that still passed cosim and the fit gate.
+    #
+    # entity-pad makes the pad port itself the entity port (BufEntity, inout),
+    # which is what the ULX3S sdram_d pads already do. It also removes the need
+    # for synth.sh's sed fixup of pin_spi_miso_pin's direction: that hack was a
+    # symptom of soc_gen inferring a direction for a bidirectional pad it was
+    # never told was bidirectional.
+    - { match: spi_cs_pin, signal: spi_cs_pin, entity-pad: true }
+    - { match: spi_sck_pin, signal: spi_sck_pin, entity-pad: true }
+    - { match: spi_mosi_pin, signal: spi_mosi_pin, entity-pad: true }
+    - { match: spi_miso_pin, signal: spi_miso_pin, entity-pad: true }
