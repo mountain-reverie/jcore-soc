@@ -1,5 +1,6 @@
 library ieee;
 use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
 
 -- iCESugar clock/reset: the UP5K has a single PLL bel, which we use here (as
 -- SB_PLL40_2_PAD) to share the 12 MHz oscillator pin (pin 35) between the CPU
@@ -44,7 +45,16 @@ architecture rtl of ice_clkgen is
       LOCK          : out std_logic);
   end component;
 
-  signal por      : std_logic_vector(3 downto 0) := (others => '1');
+  -- Power-on reset counter. Counts UP from 0 and holds rst_out asserted
+  -- until it saturates -- deliberately NOT a register preloaded with ones.
+  -- iCE40 flip-flops power up to 0 and have no init-to-1 capability, so the
+  -- previous 4-bit shift register initialised to "1111" could come out of
+  -- configuration already drained, leaving the SoC with NO reset pulse at
+  -- all. The CPU survives that (it just starts fetching) and gpio2 survives
+  -- it (its ack is unconditional), but uartlite does not: it accepts a bus
+  -- cycle only on a rising edge of en, and with its state never reset that
+  -- edge never arrives, so the first store to the UART hangs the CPU forever.
+  signal por_cnt  : unsigned(7 downto 0) := (others => '0');
 
 begin
 
@@ -71,11 +81,13 @@ begin
   process (clk_in)
   begin
     if rising_edge(clk_in) then
-      por <= por(2 downto 0) & '0';
+      if por_cnt /= x"ff" then
+        por_cnt <= por_cnt + 1;
+      end if;
     end if;
   end process;
 
-  -- No PLL, so no LOCK to gate on: release once the POR shift has drained.
-  rst_out <= por(3);
+  -- No PLL, so no LOCK to gate on: release once the counter saturates.
+  rst_out <= '0' when por_cnt = x"ff" else '1';
 
 end architecture;
