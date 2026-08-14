@@ -9,6 +9,7 @@
 #include "coremark.h"
 #include "core_portme.h"
 #include "coremark_result.h"
+#include "uart_io.h"
 
 /* Porting : Seed values
         SEED_METHOD == SEED_VOLATILE (core_portme.h): core_util.c's
@@ -58,11 +59,34 @@ barebones_clock(void)
 
 static CORETIMETYPE start_time_val, stop_time_val;
 
+/* Progress indication on the board's RGB LED (gpio0, active-high here -- the
+   pads invert). A CoreMark run at 12 MHz takes minutes, so without this the
+   board looks identical whether it is working or hung.
+     amber (red+green) = timed run in progress
+     green             = run finished
+   Deliberately in start_time/stop_time rather than the report path so the
+   indication brackets exactly the timed portion. */
+#define LED_OFF   0x0u
+#define LED_AMBER 0x3u   /* gpio_do(0)=red | gpio_do(1)=green */
+#define LED_GREEN 0x2u
+
+/* board.h cannot be included here: CoreMark's headers already pull in the
+   ROM's local inttypes.h, and board.h's <inttypes.h> then redefines the fixed
+   width types. gpio0's data register is addressed directly instead. */
+#define GPIO0_VALUE (*(volatile unsigned int *)0xabcd0000u)
+
+static void
+led_set(unsigned v)
+{
+    GPIO0_VALUE = v;
+}
+
 /* Function : start_time
         Called right before starting the timed portion of the benchmark. */
 void
 start_time(void)
 {
+    led_set(LED_AMBER);
     GETMYTIME(&start_time_val);
 }
 
@@ -72,6 +96,7 @@ void
 stop_time(void)
 {
     GETMYTIME(&stop_time_val);
+    led_set(LED_GREEN);
 }
 
 /* Function : get_time
@@ -105,6 +130,59 @@ portable_init(core_portable *p, int *argc, char *argv[])
 {
     (void)argc;
     (void)argv;
+
+    /* Divide self-check. gcc turns / and % into libgcc __udivsi3/__sdivsi3,
+       built from the SH-2 div0u/div1 step instructions, and CoreMark itself
+       divides in five places -- so if the J1 gets these wrong every result is
+       silently wrong. Printed in hex (decimal printing would itself divide).
+       Reference values from the host: see divtest.c's twin. */
+    {
+        volatile unsigned int u_a = 1000000u, u_b = 10u;
+        volatile unsigned int u_c = 0xFFFFFFFFu, u_d = 3u;
+        volatile int          s_a = -1000000, s_b = 7;
+        unsigned int i, sq = 0u, sr = 0u;
+
+        uart_puts("\r\nDIV u1="); uart_put_hex32(u_a / u_b);
+        uart_puts(" u2=");          uart_put_hex32(u_a % u_b);
+        uart_puts(" u3=");          uart_put_hex32(u_c / u_d);
+        uart_puts(" u4=");          uart_put_hex32(u_c % 7u);
+        uart_puts("\r\nDIV s1="); uart_put_hex32((unsigned int)(s_a / s_b));
+        uart_puts(" s2=");          uart_put_hex32((unsigned int)(s_a % s_b));
+        for (i = 1u; i <= 1000u; i++) {
+            sq += 0x12345678u / i;
+            sr += 0x12345678u % i;
+        }
+        uart_puts("\r\nDIV sq="); uart_put_hex32(sq);
+        uart_puts(" sr=");          uart_put_hex32(sr);
+        uart_puts("\r\n");
+    }
+
+    /* Multiply self-check. gcc lowers a constant-divisor % into a
+       reciprocal dmulu.l (32x32->64), so a wrong MULTIPLIER shows up as a
+       wrong modulo. This board is the only one binding mult(ice40dsp) -- the
+       SB_MAC16 DSP multiplier -- so check both halves explicitly. */
+    {
+        volatile unsigned int m1 = 0xFFFFFFFFu, m2 = 0xFFFFFFFFu;
+        volatile unsigned int m3 = 0x12345678u, m4 = 0x9ABCDEF0u;
+        volatile unsigned int m5 = 0x0000FFFFu, m6 = 0x00010001u;
+        unsigned long long p;
+        unsigned int i, acc = 0u;
+
+        p = (unsigned long long)m1 * m2;
+        uart_puts("MUL a_hi="); uart_put_hex32((unsigned int)(p >> 32));
+        uart_puts(" a_lo=");    uart_put_hex32((unsigned int)p);
+        p = (unsigned long long)m3 * m4;
+        uart_puts("\r\nMUL b_hi="); uart_put_hex32((unsigned int)(p >> 32));
+        uart_puts(" b_lo=");    uart_put_hex32((unsigned int)p);
+        p = (unsigned long long)m5 * m6;
+        uart_puts("\r\nMUL c_hi="); uart_put_hex32((unsigned int)(p >> 32));
+        uart_puts(" c_lo=");    uart_put_hex32((unsigned int)p);
+        for (i = 1u; i <= 1000u; i++)
+            acc += (unsigned int)(((unsigned long long)0x9E3779B9u * i) >> 32);
+        uart_puts("\r\nMUL acc="); uart_put_hex32(acc);
+        uart_puts("\r\n");
+    }
+
     p->portable_id = 1;
 }
 
