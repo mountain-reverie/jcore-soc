@@ -38,8 +38,10 @@ def test_canonical_is_version_invariant_sort_key():
     long = "u_ucache_ram.tag.rows:1.genram_3x8x64.mem.subword_gen:1.sram_i"
     short = "u_ucache_ram.tag.subword_gen:1.sram_i"
     bracket = "u_ucache_ram.tag.subword_gen[0].sram_i"
-    assert canonical(long) == canonical(short) == ((0, 0), (3, 1))
-    assert canonical(bracket) == ((0, 0), (3, 0))
+    # (kind_rank, index) pairs: tag=1, subword=4 (rank 0 is the u_[di]cache
+    # side token, absent from these single-cache per-macro paths)
+    assert canonical(long) == canonical(short) == ((1, 0), (4, 1))
+    assert canonical(bracket) == ((1, 0), (4, 0))
     # same relative order (both are "the first tag lane")
     assert canonical(short) > canonical(bracket)  # 1 > 0, but rank-0 in each list
 
@@ -68,6 +70,48 @@ def test_remap_is_noop_when_names_already_match():
     cfg = json.loads(json.dumps(CFG))
     mods, n = remap_config(cfg, net)
     assert (mods, n) == (0, 0)
+
+
+# chip_top: one MACROS entry holds BOTH caches' tag SRAMs, whose remaining
+# coordinates are identical (`tag0` lane 1 vs `tag` lane 1). The u_dcache /
+# u_icache token is what keeps those apart -- without it the pairing sees
+# duplicate sort keys and refuses, which is why chip_top used to skip the
+# rewrite entirely. The netlist here is chip_core.v (pre-synthesis, no wrapper),
+# so the config's post-synthesis `u_soc.` prefix has to be re-applied.
+CHIP_TOP_CFG = {
+    "MACROS": {
+        "gf180mcu_fd_ip_sram__sram64x8m8wm1": {
+            "instances": {
+                "u_soc.ddr_ram_mux.u_dcache.u_dcache_ram.tag0.rows:1.genram_3x8x64.mem.subword_gen:1.sram_i":
+                    {"location": [452.0, 1006.88], "orientation": "N"},
+                "u_soc.ddr_ram_mux.u_icache.u_ucache_ram.tag.rows:1.genram_3x8x64.mem.subword_gen:1.sram_i":
+                    {"location": [452.0, 3544.24], "orientation": "N"},
+            },
+        },
+    },
+}
+
+CHIP_CORE_NETLIST = r"""
+module soc (a, b);
+  gf180mcu_fd_ip_sram__sram64x8m8wm1 \ddr_ram_mux.u_icache.u_ucache_ram.tag.subword_gen[0].sram_i  (.CLK(x));
+  gf180mcu_fd_ip_sram__sram64x8m8wm1 \ddr_ram_mux.u_dcache.u_dcache_ram.tag0.subword_gen[0].sram_i  (.CLK(y));
+endmodule
+"""
+
+
+def test_chip_top_prefix_and_icache_dcache_are_not_confused():
+    cfg = json.loads(json.dumps(CHIP_TOP_CFG))
+    mods, n = remap_config(cfg, CHIP_CORE_NETLIST, "u_soc.")
+    assert (mods, n) == (1, 2)
+    insts = cfg["MACROS"]["gf180mcu_fd_ip_sram__sram64x8m8wm1"]["instances"]
+    # every key carries the wrapper prefix ...
+    assert all(k.startswith("u_soc.") for k in insts)
+    # ... and each cache KEPT ITS OWN location (the netlist lists icache first,
+    # so a prefix-only fix that ignored the side token would swap these)
+    assert insts["u_soc.ddr_ram_mux.u_dcache.u_dcache_ram.tag0.subword_gen[0].sram_i"]["location"] \
+        == [452.0, 1006.88]
+    assert insts["u_soc.ddr_ram_mux.u_icache.u_ucache_ram.tag.subword_gen[0].sram_i"]["location"] \
+        == [452.0, 3544.24]
 
 
 def test_remap_errors_on_count_mismatch():

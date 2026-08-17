@@ -295,11 +295,29 @@ fi
 # macros without placed vendor SRAM (boot_mem). See
 # tools/asic/fix_macro_paths.py.
 # chip_core places all 17 SRAMs by their exact names taken from the committed
-# flat netlist (frozen, like top/soc.v) -- no version drift, and the tag SRAMs'
-# semantic coordinates collide in the pairing heuristic, so skip the rewrite.
-case "$MACRO" in chip_core|chip_top) _skip_fmp=1 ;; *) _skip_fmp=0 ;; esac
+# flat netlist (frozen, like top/soc.v) -- no version drift, so skip the rewrite.
+#
+# chip_top DOES need it, contrary to what this comment used to claim. Its
+# netlist is NOT frozen: metrics/gf180_die.sh REGENERATES chip_core.v on every
+# CI run, with whatever yosys the runner's OSS CAD Suite ships (0.68 as of the
+# 2026-07-28 pin) rather than the 0.44 that produced the committed copy -- and
+# the generate-block labels in the SRAM instance paths are exactly what varies
+# between those versions. Measured: the 2026-08-09 local run passed
+# OpenROAD.CheckMacroInstances with the committed netlist, while CI failed it
+# on all 17 macros with the config's paths reported "not found".
+# The prefix is chip_top.sv's wrapper instance name: the config places macros
+# by their post-synthesis path (`u_soc.` + the chip_core path), and LibreLane's
+# yosys joins the flattened hierarchy with a dot.
+case "$MACRO" in chip_core) _skip_fmp=1 ;; *) _skip_fmp=0 ;; esac
+_fmp_prefix=""
+_fmp_netv="$NETV"
+if [ "$MACRO" = "chip_top" ]; then
+  _fmp_prefix="--prefix=u_soc."
+  _fmp_netv="$MDIR/../chip_core/chip_core.v"
+fi
 if [ "$_skip_fmp" = 0 ] && grep -q 'gf180mcu_fd_ip_sram__' "$MERGED" 2>/dev/null; then
-  python3 "$ROOT/tools/asic/fix_macro_paths.py" "$MERGED" "$NETV" \
+  python3 "$ROOT/tools/asic/fix_macro_paths.py" ${_fmp_prefix:+"$_fmp_prefix"} \
+    "$MERGED" "$_fmp_netv" \
     || { echo "ERROR: fix_macro_paths failed for $MACRO" >&2; exit 1; }
 fi
 
