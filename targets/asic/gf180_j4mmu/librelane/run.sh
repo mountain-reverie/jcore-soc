@@ -86,6 +86,22 @@ OL_TIMEOUT="${OL_TIMEOUT:-3600}"
 # LEF/GDS/area out without a real timing-closure effort. Override
 # (OL_TO=<step> or OL_TO=  for full signoff) when a macro DOES need to run to
 # completion (e.g. the sdram_ctrl smoke test, which closes timing cleanly).
+#
+# EXCEPTION -- chip_top: that macro runs LibreLane's "Chip" flow (meta.flow in
+# chip_top/config.json), whose step list has NO Magic.WriteLEF at all. Passing
+# the Classic default to it makes LibreLane quit at config-load time, in
+# seconds, before it builds anything:
+#   ERROR  Failed to process 'Magic.WriteLEF': no step(s) with ID
+#          'Magic.WriteLEF' found in flow. Did you mean: 'Magic.DRC'?
+# That is exactly what the gf180-die-area CI job hit on EVERY master run from
+# 2026-08-11 (the first push after the job was pointed at chip_top) onwards --
+# the by-hand runs that produced the 12.92 mm2 number passed
+# OL_TO=OpenROAD.DetailedRouting explicitly (chip_top/README.md), CI did not.
+# DetailedRouting is the Chip-flow equivalent stop point: routed layout + area
+# in hand, still short of the ungated signoff checkers.
+if [ "$MACRO" = "chip_top" ]; then
+  OL_TO="${OL_TO:-OpenROAD.DetailedRouting}"
+fi
 OL_TO="${OL_TO:-Magic.WriteLEF}"
 # OL_SKIP: comma/space-separated LibreLane step ids to skip outright (passed
 # as repeated `--skip`). OpenROAD.IRDropReport hard-fails with [PSM-0069]
