@@ -34,8 +34,17 @@ SRAM_MODULE_RE = re.compile(r"gf180mcu_fd_ip_sram__")
 # semantic tokens (anchored, per '.'-split token). Accept `:N` or `[N]` index
 # forms -- yosys 0.44 emits `subword_gen:1` (1-based colon), newer yosys emits
 # `subword_gen[0]` (0-based bracket); both must map to the same macro.
-_KIND_ORDER = {"tag": 0, "ram": 1, "col": 2, "sub": 3}
+_KIND_ORDER = {"side": 0, "tag": 1, "ram": 2, "col": 3, "sub": 4}
+_SIDE_RANK = {"d": 0, "i": 1}
 _TOKEN_RES = [
+    # Which L1 cache owns the macro. Only whole-chip configs (chip_top) place
+    # icache AND dcache macros in one MACROS entry, and there the remaining
+    # coordinates COLLIDE -- the dcache's `tag0.subword_gen:1` and the
+    # icache's `tag.subword_gen:1` are both "tag lane 1 of the first tag
+    # array". Without this token the pairing sees duplicate sort keys and
+    # refuses to run at all. Per-macro cache configs have no such token in
+    # their paths, which is harmless: they only ever hold one cache.
+    ("side", re.compile(r"^u_([di])cache$")),                 # u_dcache / u_icache
     ("tag", re.compile(r"^tag(\d*)$")),                       # tag / tag0 / tag1
     ("ram", re.compile(r"^ram[:\[](\d+)\]?$")),               # data bank
     ("col", re.compile(r"^col_gen[:\[](\d+)\]?$")),           # data column
@@ -56,7 +65,10 @@ def canonical(path):
         for kind, rx in _TOKEN_RES:
             m = rx.match(tok)
             if m:
-                idx = int(m.group(1)) if m.group(1) else 0
+                if kind == "side":
+                    idx = _SIDE_RANK[m.group(1)]
+                else:
+                    idx = int(m.group(1)) if m.group(1) else 0
                 key.append((_KIND_ORDER[kind], idx))
                 break
     return tuple(key)
@@ -69,9 +81,17 @@ def netlist_instances(netlist_text, module):
     return [m.group(1) for m in rx.finditer(netlist_text)]
 
 
-def remap_config(cfg, netlist_text):
+def remap_config(cfg, netlist_text, prefix=""):
     """Rewrite cfg['MACROS'][sram].instances keys to the netlist's actual names.
-    Returns (n_modules_fixed, n_instances_remapped). Raises on a real mismatch."""
+    Returns (n_modules_fixed, n_instances_remapped). Raises on a real mismatch.
+
+    `prefix` is prepended to every name taken from the netlist. It exists for
+    chip_top, whose config places macros by their path in the FINAL synthesized
+    chip (`u_soc.ddr_ram_mux...`) while the netlist we can read here is the
+    pre-synthesis chip_core.v, one wrapper level down (`ddr_ram_mux...`).
+    LibreLane's own yosys flattens `soc u_soc (...)` by joining with a dot, so
+    prefixing with the wrapper's instance name reproduces the post-synthesis
+    name exactly -- verified against chip_top/runs/smoke's passing netlist."""
     fixed_mods = 0
     remapped = 0
     for module, mv in cfg.get("MACROS", {}).items():
@@ -103,6 +123,7 @@ def remap_config(cfg, netlist_text):
         new_insts = {}
         changed = False
         for (path, place), name in zip(cfg_sorted, net_sorted):
+            name = prefix + name
             new_insts[name] = place
             if name != path:
                 changed = True
@@ -115,15 +136,23 @@ def remap_config(cfg, netlist_text):
 
 def main(argv=None):
     argv = argv if argv is not None else sys.argv[1:]
-    if len(argv) != 2:
-        sys.exit("usage: fix_macro_paths.py <merged_config.json> <netlist.v>")
-    cfg_path, net_path = argv
+    prefix = ""
+    rest = []
+    for a in argv:
+        if a.startswith("--prefix="):
+            prefix = a.split("=", 1)[1]
+        else:
+            rest.append(a)
+    if len(rest) != 2:
+        sys.exit("usage: fix_macro_paths.py [--prefix=<inst.>] "
+                 "<merged_config.json> <netlist.v>")
+    cfg_path, net_path = rest
     cfg = json.loads(Path(cfg_path).read_text())
     if not any(SRAM_MODULE_RE.search(m) for m in cfg.get("MACROS", {})):
         print("fix_macro_paths: no vendor-SRAM MACROS -- nothing to do.")
         return 0
     net = Path(net_path).read_text()
-    mods, n = remap_config(cfg, net)
+    mods, n = remap_config(cfg, net, prefix)
     if n:
         Path(cfg_path).write_text(json.dumps(cfg, indent=2) + "\n")
         print(f"fix_macro_paths: remapped {n} SRAM placement(s) across {mods} "
