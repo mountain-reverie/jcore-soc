@@ -310,7 +310,9 @@ fi
 # yosys joins the flattened hierarchy with a dot.
 case "$MACRO" in chip_core) _skip_fmp=1 ;; *) _skip_fmp=0 ;; esac
 _fmp_prefix=""
-_fmp_netv="$NETV"
+# NETV is only set on the per-macro path above; chip_top/chip_core reach here
+# with it unset, and this script runs under `set -u`.
+_fmp_netv="${NETV:-}"
 if [ "$MACRO" = "chip_top" ]; then
   _fmp_prefix="--prefix=u_soc."
   _fmp_netv="$MDIR/../chip_core/chip_core.v"
