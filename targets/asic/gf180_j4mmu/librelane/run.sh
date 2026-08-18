@@ -97,10 +97,24 @@ OL_TIMEOUT="${OL_TIMEOUT:-3600}"
 # 2026-08-11 (the first push after the job was pointed at chip_top) onwards --
 # the by-hand runs that produced the 12.92 mm2 number passed
 # OL_TO=OpenROAD.DetailedRouting explicitly (chip_top/README.md), CI did not.
-# DetailedRouting is the Chip-flow equivalent stop point: routed layout + area
-# in hand, still short of the ungated signoff checkers.
+# KLayout.Render (step 60 of the Chip flow) is the stop point: routed layout,
+# area, GDS and the layout PNG in hand, still short of the ungated signoff
+# checkers. Enumerated from the pinned image itself --
+#   docker run --rm --entrypoint python3 $OL_IMAGE -c \
+#     "from librelane.flows import Flow; print([s.id for s in Flow.factory.get('Chip').Steps])"
+# -- which puts the four fatal ones (Checker.{Setup,Hold,MaxSlew,MaxCap}
+# Violations) at 78-81, comfortably AFTER Render, so stopping here still dodges
+# them exactly as the Classic default does. OpenROAD.IRDropReport (57) and
+# Checker.PowerGridViolations (28) fall inside the range and are handled by the
+# chip_top OL_SKIP below.
+#
+# It used to stop at OpenROAD.DetailedRouting (45), which is where the by-hand
+# 12.92 mm2 runs stopped (chip_top/README.md). That works but silently produces
+# NO layout render -- KLayout.Render never runs, so gf180_die.sh finds no .png
+# and the gf180-padded-die-png artifact upload warns and uploads nothing. The
+# first green CI run (2026-08-18, 12.9168 mm2, 0 DRC) hit exactly that.
 if [ "$MACRO" = "chip_top" ]; then
-  OL_TO="${OL_TO:-OpenROAD.DetailedRouting}"
+  OL_TO="${OL_TO:-KLayout.Render}"
 fi
 OL_TO="${OL_TO:-Magic.WriteLEF}"
 # OL_SKIP: comma/space-separated LibreLane step ids to skip outright (passed

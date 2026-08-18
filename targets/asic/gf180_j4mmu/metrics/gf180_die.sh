@@ -48,10 +48,13 @@ COMMIT="${COMMIT:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}"
 # Wall-clock cap handed to run.sh (its own default is 3600s), which the single
 # chip_top P&R needs: measured 2026-08-09 at 7280s (2h01m) through detailed
 # routing on a developer workstation -- 75,661 instances, 12.92 mm2, 0 route
-# DRC. 3h leaves headroom for a slower CI runner; GitHub's 6h job limit is the
-# backstop, and one chip_top run fits it far more comfortably than the six
-# macro legs plus pad ring this replaced.
-export OL_TIMEOUT="${OL_TIMEOUT:-10800}"
+# DRC. The first green CI run (2026-08-18) took 1h52m to the same point on a
+# github-hosted runner. The stop point has since moved from DetailedRouting to
+# KLayout.Render, which adds RCX, post-PNR STA, both StreamOuts and the render
+# itself, so the cap goes to 4h to keep the same kind of headroom; GitHub's 6h
+# job limit is the backstop, and one chip_top run fits it far more comfortably
+# than the six macro legs plus pad ring this replaced.
+export OL_TIMEOUT="${OL_TIMEOUT:-14400}"
 
 latest_metrics_json() {
   local run_root="$1" final
