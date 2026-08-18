@@ -402,6 +402,12 @@ jobs:
           # segfaulting yosys and a crashing standalone `ghdl --version`. Pin to
           # a known-good date so CI is reproducible; bump deliberately.
           osscadsuite-version: '2026-07-28'
+          # The action resolves the download URL through the releases API. That
+          # call is UNAUTHENTICATED by default and shares the runner's public IP
+          # quota with everyone else on that host, which failed this job outright
+          # on 2026-08-17: "API rate limit exceeded for 172.182.224.113". The
+          # job's own token lifts it to the authenticated quota.
+          github-token: ${{ github.token }}
       - name: Verify yosys + ghdl available
         run: |
           yosys --version
