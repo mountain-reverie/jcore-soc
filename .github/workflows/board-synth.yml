@@ -474,6 +474,18 @@ jobs:
           path: metrics-die/gf180-padded-die.png
           if-no-files-found: warn
 
+      # The signed-off layout itself. ~10s of MB, so it is a downloadable
+      # artifact rather than anything the dashboard consumes; upload-artifact
+      # zips it. This is what makes a layout-vs-layout comparison against
+      # other GF180 designs (e.g. KianV's published chip_top.gds) possible.
+      - name: Upload padded-die GDS (chip_top layout)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gf180-padded-die-gds
+          path: metrics-die/gf180-padded-die.gds
+          if-no-files-found: warn
+
       # Fail the job if the P&R produced nothing, now that everything above has
       # published whatever WAS produced (the dashboard series stays alive either
       # way). Without this the job reported success for nine days while every
