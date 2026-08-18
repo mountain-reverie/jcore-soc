@@ -128,6 +128,22 @@ else
   echo "note: chip_top produced no .png (run stopped before KLayout.Render)" >&2
 fi
 
+# The GDS from the same run. Both StreamOut steps precede KLayout.Render in the
+# Chip flow, so a run that produced the render produced these too. KLayout's
+# stream is preferred over Magic's: config.yaml-equivalent
+# PRIMARY_GDSII_STREAMOUT_TOOL for this target is klayout, and it is the one
+# that carries the vendor SRAM GDS through. Kept OUT of the metrics JSON -- it
+# is a build artifact, not a measurement.
+CHIPTOP_GDS="$(find "$LIBRELANE_DIR/chip_top/runs" -name '*.klayout.gds' 2>/dev/null | head -1)"
+[ -z "$CHIPTOP_GDS" ] && \
+  CHIPTOP_GDS="$(find "$LIBRELANE_DIR/chip_top/runs" -name '*.gds' 2>/dev/null | head -1)"
+if [ -n "$CHIPTOP_GDS" ]; then
+  echo "=== gf180_die.sh: collecting GDS $CHIPTOP_GDS ($(du -h "$CHIPTOP_GDS" | cut -f1)) ==="
+  cp "$CHIPTOP_GDS" "$OUT_DIR/gf180-padded-die.gds" || echo "WARN: GDS copy failed" >&2
+else
+  echo "note: chip_top produced no .gds (run stopped before the StreamOut steps)" >&2
+fi
+
 # --- 4. emit canonical die metrics ---------------------------------------
 echo "=== gf180_die.sh: emitting canonical die metrics ==="
 python3 tools/asic/emit_die_metrics.py \
