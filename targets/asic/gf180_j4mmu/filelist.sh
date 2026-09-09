@@ -47,6 +47,16 @@ fi
 FILES=(
   $CPU/cpu2j0_pkg.vhd
   $CPU/core/components_pkg.vhd
+  # PMU (jcore-cpu e8a5a4e). perf_pkg.vhd declares package perf_pack, which
+  # core/cpu.vhd (line 10) and core/datapath_pkg.vhd both `use` unconditionally,
+  # so it must precede BOTH -- and datapath_pkg.vhd is analyzed further down, so
+  # the package has to come up here with the other dependency-free packages.
+  # perf.vhd needs nothing but perf_pack, and cpu.vhd instantiates it as
+  # `entity work.perf` -- a DIRECT entity instantiation, so ghdl must have it
+  # analyzed for EVERY variant, not only the PRIV_ARCH ones that reach the
+  # generate: same rule as core/tlb.vhd and core/tlb_walk.vhd below.
+  $CPU/core/perf_pkg.vhd
+  $CPU/core/perf.vhd
   # tlb: cpu.vhd directly instantiates work.tlb (entity inst. in the PRIV_ARCH
   # generate), so ghdl needs it analyzed before cpu.vhd for ALL variants.
   $CPU/core/tlb.vhd
